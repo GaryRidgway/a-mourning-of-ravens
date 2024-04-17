@@ -1,0 +1,88 @@
+body {
+    margin: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.poem-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    transform: translateZ(0);
+    --line-font-size: 24;
+    --base-font-size: 16;
+    --mod-mult: calc(var(--line-font-size) / var(--base-font-size));
+
+    .positioner {
+        width: 0px;
+        height: 0px;
+        position: absolute;
+        --padmod: calc(60px * var(--mod-mult));
+        --adj_box_width: calc(var(--box_width) + var(--padmod));
+        perspective: 200px;
+    }
+
+    .scrollbox {
+        width: var(--adj_box_width);
+        height: var(--angle_height);
+        position: absolute;
+        left: calc(-1* var(--adj_box_width)* 0.5);
+        top: calc(-1* var(--angle_height)* 0.5);
+        transform-origin: center center;
+        perspective: 200px;
+        transform: translateZ(0) rotate(var(--angle));
+        overflow-y: scroll;
+        overflow-x: hidden;
+    }
+
+    .poem-scroller {
+        position: relative;
+        display: block;
+        width: var(--box_width);
+        height: var(--angle_height);
+        padding: calc(var(--angle_height)* 0.5) 0;
+    }
+
+    poem {
+        position: relative;
+        display: block;
+        width: var(--adj_box_width);
+        height: var(--adj_box_width);
+        transform-origin: top right;
+        perspective: 100px;
+        left: calc((var(--poem-no) - 1)* var(--rolling-x));
+        top: calc((var(--poem-no) - 1)* var(--rolling-y));
+        transform: translateZ(0) translateX(calc(var(--padmod) * -0.5)) rotate(calc(var(--angle)* -1));
+    }
+
+    stanza {
+        position: absolute;
+        top: 0;
+        left: 0;
+        
+        // Nifty!
+        // https://stackoverflow.com/questions/43203673/make-text-not-copyable-html
+        connector[data-unselectable] {
+        -webkit-touch-callout: none; /* iOS Safari */
+        -webkit-user-select: none; /* Safari */
+        -khtml-user-select: none; /* Konqueror HTML */
+        -moz-user-select: none; /* Old versions of Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+        user-select: none; /* Non-prefixed version, currently supported by Chrome, Edge, Opera and Firefox */
+        &:after {
+            content: attr(data-unselectable);
+        }
+        }
+    }
+
+    line {
+        font-family: "Cinzel", serif;
+        display: block;
+        text-wrap: nowrap;
+        font-size: calc(var(--line-font-size) * 1px);
+    }
+}

@@ -2,30 +2,89 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Slider 2D</title>
+    <title>A Mourning of Ravens</title>
 
     <!-- Add css files fromt the dist folder here -->
+    <link type="text/css" rel="stylesheet" href="./dist/css/poem.css">
     <link type="text/css" rel="stylesheet" href="./dist/css/reset.css">
 </head>
 
 <body>
-
-    <svg id="svgc" width="100%" height="100%">
-        <defs>
-          <mask id="hole">
-            <rect fill="white" height="100%" width="100%"></rect>
-            <circle r="100" cx="105" cy="105" fill="black" />
-          </mask>
-        </defs>
-      
-        <circle id="donut" r="100" cx="105" cy="105" stroke="#b6c1d2" stroke-width="4" fill="#b6c1d2" mask="url(#hole)" />
-      
-      </svg>
-      
-      <div id="controls">
-        <input type="range" min="-202" max="202" value="0" class="slider" id="eclipse">
+  <div class="poem-container">
+    <div class="positioner">
+      <div class="scrollbox">
+  
+        <div class="poem-scroller">
+          <div class='poems'>
+            
+          <poem id='poem'>
+            <stanza>
+              <line><connector>a mourning</connector> of ravens</line>
+              <line>a knight of crows</line>
+              <line>pieces in parcel</line>
+              <line>delivered when <connector>sewn</connector></line>
+            </stanza>
+            <stanza>
+              <line><connector data-unselectable="sewn"></connector> together in rage</line>
+              <line>in the throes of her death</line>
+              <line>an immortal unmooring</line>
+              <line>her decay from the <connector>weft</connector></line>
+            </stanza>
+            <stanza>
+              <line><connector data-unselectable="weft"></connector> threads pulled taught</line>
+              <line>by far actors in glory</line>
+              <line>torn woven, to woken</line>
+              <line>born wingless, born <connector>soaring</connector></line>
+            </stanza>
+            <stanza>
+              <line><connector data-unselectable="soaring"></connector> hopes brought to cradle</line>
+              <line>at the birth of a dawn</line>
+              <line>death’s toll uncollected</line>
+              <line>yet her debt carries <connector>on</connector></line>
+            </stanza>
+            <stanza>
+              <line><connector data-unselectable="on"></connector> words tasting bitter</line>
+              <line>lay the shroud over grief</line>
+              <line>knowing only of chance</line>
+              <line>the gambler refuses <connector>release</connector></line>
+            </stanza>
+            <stanza>
+              <line><connector data-unselectable="release"></connector> her to my heart</line>
+              <line>the gambler strains</line>
+              <line>but death has moved on</line>
+              <line>and the wingless <connector>remains</connector></line>
+            </stanza>
+            <stanza>
+              <line><connector data-unselectable="remains"></connector> of a memory</line>
+              <line>lay bare in caldera</line>
+              <line>to remake from remembering</line>
+              <line>is to kill in the <connector>errors</connector></line>
+            </stanza>
+            <stanza>
+              <line><connector data-unselectable="errors"></connector> made of clay</line>
+              <line>and of bones of the broken</line>
+              <line>in knights made of ego</line>
+              <line>each grief goes as <connector>token</connector></line>
+            </stanza>
+            <stanza>
+              <line><connector data-unselectable="token"></connector> words of dark comfort</line>
+              <line>as she waits for return</line>
+              <line>so the knights bring back pieces</line>
+              <line>and parcels in <connector>turn</connector></line>
+            </stanza>
+            <stanza>
+              <line><connector data-unselectable="turn"></connector> your eyes to the stars</line>
+              <line>as the night holds a warning</line>
+              <line>let the gambler decay</line>
+              <line>for it saves her <connector>a mourning</connector></line>
+            </stanza>
+          </poem>
+          </div>
+        </div>
       </div>
-
+    </div>
+  </div>
+  
 
 <!-- vvv Add scripts here from dist folder vvv -->
 <script src="./dist/js/main.min.js"></script>
