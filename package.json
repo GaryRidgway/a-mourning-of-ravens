@@ -1,7 +1,7 @@
 {
-  "name": "moonmath",
+  "name": "A Mourning of Ravens",
   "version": "1.0.0",
-  "description": "Some cool svg patterns",
+  "description": "Poetry",
   "main": "index.js",
   "scripts": {
     "compile:sass": "node-sass ./src/scss/ -o ./dist/css",
