@@ -6,8 +6,11 @@ document.addEventListener("DOMContentLoaded", function(event) {
     const scrollbox = poem_container.querySelector('.scrollbox');
     const scroller = scrollbox.querySelector('.poem-scroller');
     const poem = document.getElementById("poem");
+    const poemsEl = scrollbox.querySelector(".poems");
+    const status = document.getElementById("status");
     const stanzas = poem.childElementCount;
     const rounding_precision = 3;
+    const totalPoems = 2;
     let poems = 1;
 
     const rollingOffset = {
@@ -57,12 +60,12 @@ document.addEventListener("DOMContentLoaded", function(event) {
     poem_container.style.setProperty("--box_height", Math.hypot(maxDims.x, maxDims.full_height) + 'px');
     viewport_hypot();
 
-    const extra_poems = 0;
-    for (i=0; i < extra_poems; i++) {
-        const new_poem = poem.cloneNode(true);
-        scroller.appendChild( new_poem );
-        poemSetup(new_poem);
-    }
+
+    // for (i=0; i < totalPoems-1; i++) {
+    //     const new_poem = poem.cloneNode(true);
+    //     poemsEl.appendChild( new_poem );
+    //     poemSetup(new_poem);
+    // }
 
     function reportWindowSize() {
         viewport_hypot();
@@ -99,4 +102,33 @@ document.addEventListener("DOMContentLoaded", function(event) {
     }
 
     window.onresize = reportWindowSize;
+
+    scrollbox.addEventListener("scroll", (event) => {
+        let inside = isInViewport(poem.children[0], poem_container);
+        if (inside) {
+            status.innerHTML = 'IN';
+        }
+        else {
+            status.innerHTML = 'OUT';
+        }
+      });
 });
+
+// https://www.quora.com/How-do-I-find-out-if-an-element-in-a-browser-touches-another-element-in-JavaScript#:~:text=You%20can%20use%20the%20getBoundingClientRect()%20method%20in%20JavaScript%20to,element%20relative%20to%20the%20viewport.
+function isInViewport(elem, container) {
+
+	// Get the bounding box of the first element 
+    const rect1 = elem.getBoundingClientRect(); 
+    
+    // Get the bounding box of the second element 
+    const rect2 = container.getBoundingClientRect(); 
+    
+    // Check if the two elements overlap 
+    const overlap = !(rect1.right < rect2.left ||  
+                    rect1.left > rect2.right ||  
+                    rect1.bottom < rect2.top ||  
+                    rect1.top > rect2.bottom); 
+    
+    // Log the result 
+    return overlap;
+};

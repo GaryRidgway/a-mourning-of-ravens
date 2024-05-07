@@ -86,3 +86,11 @@ body {
         font-size: calc(var(--line-font-size) * 1px);
     }
 }
+
+#status {
+    position: fixed;
+    top: 0;
+    right: 0;
+    padding: 15px 25px;
+    background: #cccccc;
+}
