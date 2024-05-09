@@ -24,7 +24,7 @@ body {
     font-family: Cinzel;
 
     span {
-        padding: calc(var(--line-font-size)* 0.2px);
+        padding: 0 calc(var(--line-font-size)* 0.2px);
     }
 
     .stanza {
@@ -64,21 +64,21 @@ body {
     left: -9999px;
     top: -9999px;
 
-    // .connector {
-    //     background-color: var(--connector-hl);
-    // }
+    .connector {
+        background-color: var(--connector-hl);
+    }
 
-    // .terminator {
-    //     background-color: var(--terminator-hl);
-    // }
+    .terminator {
+        background-color: var(--terminator-hl);
+    }
 
-    // #most-line-characters {
-    //     background: rgb(214, 96, 235);
-    // }
+    #most-line-characters {
+        background: rgb(214, 96, 235);
+    }
 
-    // #least-line-characters {
-    //     background: rgb(182, 251, 193);
-    // }
+    #least-line-characters {
+        background: rgb(182, 251, 193);
+    }
 }
 
 #poem-container { 
@@ -88,6 +88,9 @@ body {
 
     .stanza {
         position: absolute;
+        --offset-diff: calc(var(--prev-connector-offset, 0px) - var(--connector-offset, 0px));
+        left: calc(var(--prev-left-offset, 0px)* 1px);
+        top: calc(var(--prev-top-offset, 0px)* 1px);
     }
 
     #anchor {

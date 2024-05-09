@@ -16,4 +16,14 @@ const maxScaling = 2.2;
 
 const mainScaling = 1.3;
 
+const defaultCascadeOptions = {
+    rolloverOffset: {
+        left: 0,
+        top: 0
+    },
+    flow: 0,
+    iterationMax: null,
+    estop: false
+};
+
 let anchorStanza;

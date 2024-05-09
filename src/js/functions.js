@@ -163,9 +163,20 @@ function placeFirstStanza(stanza) {
     return anchorStanza;
 }
 
-function placeStanza(stanza) {
+function placeStanza(stanza, options = null) {
     const clonedStanza = stanza.cloneNode(true);
     anchorStanza.append(clonedStanza);
+
+    if (options !== null) {
+        if (
+            options.leftOffset && 
+            options.topOffset
+        ) {
+            clonedStanza.style.setProperty('--prev-left-offset', parseFloat(options.leftOffset));
+            clonedStanza.style.setProperty('--prev-top-offset', parseFloat(options.topOffset));
+        }
+    }
+
     return clonedStanza;
 }
 
@@ -184,49 +195,121 @@ function isInViewport(element) {
     );
 }
 
-function cascadeRender(stanza, index, flow = 0, estop = false) {
-    console.log('Getting Stanza ' + index + '.')
+function cascadeRender(stanza, index, options = defaultCascadeOptions) {
+    let newIterationMax = null;
+    if(options.iterationMax !== null) {
+        newIterationMax = {
+            'iteration': options.iterationMax['iteration']+1,
+            'max': options.iterationMax['max']
+        }
+
+        if (newIterationMax.iteration >= newIterationMax.max) {
+            return;
+        }
+    }
     const connector = stanza.querySelector('.connector');
     const terminator = stanza.querySelector('.terminator');
 
-    if (isInViewport(connector) && flow < 1) {
-        console.log('Stanza ' + index + ' CONNECTOR is visible.')
+    // CONNECTOR.
+    if (isInViewport(connector) && options.flow < 1) {
+        console.log('Stanza ' + index + ' CONNECTOR is visible.');
         const conIndex = index - 1;
         const conStanza = fetchStanza(conIndex);
-        // placeStanza(conStanza);
-        if (estop) {
+        const rolledLeftOffset = -options.rolloverOffset.left - conStanza.dataset.leftOffset;
+        const connectorTopOffsetDiff = conStanza.dataset.connectorTopOffset - stanza.dataset.connectorTopOffset;
+        const rolledTopOffset = -options.rolloverOffset.top - conStanza.dataset.topOffset + connectorTopOffsetDiff;
+
+        const newConStanza = placeStanza(
+            conStanza,
+            {
+                leftOffset: rolledLeftOffset,
+                topOffset: rolledTopOffset,
+            }
+        );
+        if (options.estop) {
             return;
         }
-        cascadeRender(conStanza, conIndex, -1, true);
+
+        cascadeRender(
+            newConStanza,
+            conIndex,
+            {
+                rolloverOffset: {
+                    left: parseFloat(newConStanza.dataset.leftOffset),
+                    top: parseFloat(newConStanza.dataset.topOffset)
+                },
+                flow: -1,
+                iterationMax: newIterationMax,
+                estop: options.estop
+            }
+        );
     }
-    if (isInViewport(terminator) && flow > -1) {
-        console.log('Stanza ' + index + ' TERMINATOR is visible.')
+
+    // TERMINATOR.
+    if (isInViewport(terminator) && options.flow > -1) {
+
+        console.log('Stanza ' + index + ' CONNECTOR is visible.');
         const terIndex = index + 1;
         const terStanza = fetchStanza(terIndex);
-        placeStanza(terStanza);
-        if (estop) {
+        const rolledLeftOffset = options.rolloverOffset.left + stanza.dataset.leftOffset;
+        const connectorTopOffsetDiff =  parseFloat(terStanza.dataset.connectorTopOffset) - parseFloat(stanza.dataset.connectorTopOffset);
+        const rolledTopOffset = options.rolloverOffset.top + parseFloat(stanza.dataset.topOffset) + connectorTopOffsetDiff;
+
+        const newTerStanza = placeStanza(
+            terStanza,
+            {
+                leftOffset: rolledLeftOffset,
+                topOffset: rolledTopOffset,
+            }
+        );
+        if (options.estop) {
             return;
         }
-        cascadeRender(terStanza, terIndex, 1, true);
+        cascadeRender(
+            newTerStanza,
+            terIndex,
+            {
+                rolloverOffset: {
+                    left: parseFloat(newTerStanza.dataset.leftOffset),
+                    top: parseFloat(newTerStanza.dataset.topOffset)
+                },
+                flow: 1,
+                iterationMax: newIterationMax,
+                estop: options.estop
+            }
+        );
     }
 }
 
 function setStanzaOffsetTuples() {
     poemStaging.childNodes.forEach((stanza, index) => {
+        const stanzaBB = stanza.getBoundingClientRect();
+
+        const connector = stanza.querySelector('.connector');
+        const connectorBB = connector.getBoundingClientRect();
+
         const terminator = stanza.querySelector('.terminator');
         const terminatorBB = terminator.getBoundingClientRect();
-        const stanzaBB = stanza.getBoundingClientRect();
-        console.log('______________');
-        console.log('Stanza ' + index);
-        console.log(stanzaBB.left);
-        console.log(terminatorBB.left);
     
-        const left = terminatorBB.left - stanzaBB.left;
+        const left = terminatorBB.left - connectorBB.left;
+        const top = terminatorBB.top - connectorBB.top;
+        const connectorTopOffset = stanzaBB.top - connectorBB.top;
 
-        console.log(terminatorBB.left - stanzaBB.left);
-        const top = terminatorBB.top - stanzaBB.top;
+        // console.log('______________');
+        // console.log('Stanza ' + index);
+        // console.log('left');
+        // console.log(connectorBB.left);
+        // console.log(terminatorBB.left);
+
+        // console.log(terminatorBB.left - connectorBB.left);
+        // console.log('top');
+        // console.log(connectorBB.top);
+        // console.log(terminatorBB.top);
+
+        // console.log(terminatorBB.top - connectorBB.top);
 
         stanza.setAttribute('data-left-offset', left);
         stanza.setAttribute('data-top-offset', top);
+        stanza.setAttribute('data-connector-top-offset', connectorTopOffset);
     });
 }
