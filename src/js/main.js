@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", function () {
       iterationMax: 
       {
         'iteration': 0,
-        'max': 2
+        'max': 3
       },
       estop: false
     }

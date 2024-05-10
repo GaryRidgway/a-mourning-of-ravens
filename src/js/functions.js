@@ -172,8 +172,9 @@ function placeStanza(stanza, options = null) {
             options.leftOffset && 
             options.topOffset
         ) {
-            clonedStanza.style.setProperty('--prev-left-offset', parseFloat(options.leftOffset));
-            clonedStanza.style.setProperty('--prev-top-offset', parseFloat(options.topOffset));
+            clonedStanza.style.setProperty('--left-offset', parseFloat(options.leftOffset));
+            clonedStanza.style.setProperty('--top-offset', parseFloat(options.topOffset));
+            clonedStanza.style.setProperty('--top-offset-diff', parseFloat(options.topOffsetDiff));
         }
     }
 
@@ -212,18 +213,19 @@ function cascadeRender(stanza, index, options = defaultCascadeOptions) {
 
     // CONNECTOR.
     if (isInViewport(connector) && options.flow < 1) {
-        console.log('Stanza ' + index + ' CONNECTOR is visible.');
         const conIndex = index - 1;
         const conStanza = fetchStanza(conIndex);
-        const rolledLeftOffset = -options.rolloverOffset.left - conStanza.dataset.leftOffset;
-        const connectorTopOffsetDiff = conStanza.dataset.connectorTopOffset - stanza.dataset.connectorTopOffset;
-        const rolledTopOffset = -options.rolloverOffset.top - conStanza.dataset.topOffset + connectorTopOffsetDiff;
+        const rolledLeftOffset = -options.rolloverOffset.left - parseFloat(conStanza.dataset.leftOffset);
 
+
+        const rolledTopOffset_sansDiff = options.rolloverOffset.top + parseFloat(stanza.dataset.topOffset);
+        const rolledTopOffset = -rolledTopOffset_sansDiff;
+ 
         const newConStanza = placeStanza(
             conStanza,
             {
                 leftOffset: rolledLeftOffset,
-                topOffset: rolledTopOffset,
+                topOffset: rolledTopOffset
             }
         );
         if (options.estop) {
@@ -247,13 +249,11 @@ function cascadeRender(stanza, index, options = defaultCascadeOptions) {
 
     // TERMINATOR.
     if (isInViewport(terminator) && options.flow > -1) {
-
-        console.log('Stanza ' + index + ' CONNECTOR is visible.');
         const terIndex = index + 1;
         const terStanza = fetchStanza(terIndex);
-        const rolledLeftOffset = options.rolloverOffset.left + stanza.dataset.leftOffset;
-        const connectorTopOffsetDiff =  parseFloat(terStanza.dataset.connectorTopOffset) - parseFloat(stanza.dataset.connectorTopOffset);
-        const rolledTopOffset = options.rolloverOffset.top + parseFloat(stanza.dataset.topOffset) + connectorTopOffsetDiff;
+        const rolledLeftOffset = options.rolloverOffset.left + parseFloat(stanza.dataset.leftOffset);
+        const rolledTopOffset_sansDiff = options.rolloverOffset.top + parseFloat(stanza.dataset.topOffset);
+        const rolledTopOffset = rolledTopOffset_sansDiff;
 
         const newTerStanza = placeStanza(
             terStanza,
@@ -270,8 +270,8 @@ function cascadeRender(stanza, index, options = defaultCascadeOptions) {
             terIndex,
             {
                 rolloverOffset: {
-                    left: parseFloat(newTerStanza.dataset.leftOffset),
-                    top: parseFloat(newTerStanza.dataset.topOffset)
+                    left: parseFloat(stanza.dataset.leftOffset),
+                    top: parseFloat(stanza.dataset.topOffset),
                 },
                 flow: 1,
                 iterationMax: newIterationMax,
@@ -294,19 +294,6 @@ function setStanzaOffsetTuples() {
         const left = terminatorBB.left - connectorBB.left;
         const top = terminatorBB.top - connectorBB.top;
         const connectorTopOffset = stanzaBB.top - connectorBB.top;
-
-        // console.log('______________');
-        // console.log('Stanza ' + index);
-        // console.log('left');
-        // console.log(connectorBB.left);
-        // console.log(terminatorBB.left);
-
-        // console.log(terminatorBB.left - connectorBB.left);
-        // console.log('top');
-        // console.log(connectorBB.top);
-        // console.log(terminatorBB.top);
-
-        // console.log(terminatorBB.top - connectorBB.top);
 
         stanza.setAttribute('data-left-offset', left);
         stanza.setAttribute('data-top-offset', top);

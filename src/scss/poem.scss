@@ -52,10 +52,11 @@ body {
 
     .connector,
     .terminator {
+        height: 100%;
         text-align: left;
-        display: inline-block;
-        // font-family: 'Cinzel decorative';
-        // text-transform: uppercase;
+        display: flex;
+        justify-content: center;
+        align-items: center;
     }
 }
 
@@ -88,9 +89,8 @@ body {
 
     .stanza {
         position: absolute;
-        --offset-diff: calc(var(--prev-connector-offset, 0px) - var(--connector-offset, 0px));
-        left: calc(var(--prev-left-offset, 0px)* 1px);
-        top: calc(var(--prev-top-offset, 0px)* 1px);
+        left: calc(var(--left-offset, 0px)* 1px);
+        top: calc(var(--top-offset, 0px)* 1px);
     }
 
     #anchor {
