@@ -174,7 +174,6 @@ function placeStanza(stanza, options = null) {
         ) {
             clonedStanza.style.setProperty('--left-offset', parseFloat(options.leftOffset));
             clonedStanza.style.setProperty('--top-offset', parseFloat(options.topOffset));
-            clonedStanza.style.setProperty('--top-offset-diff', parseFloat(options.topOffsetDiff));
         }
     }
 
@@ -196,88 +195,108 @@ function isInViewport(element) {
     );
 }
 
-function cascadeRender(stanza, index, options = defaultCascadeOptions) {
+
+    // const conIndex = index - 1;
+
+
+ 
+    //     const newConStanza = placeStanza(
+    //         conStanza,
+    //         {
+    //             leftOffset: rolledLeftOffset,
+    //             topOffset: rolledTopOffset
+    //         }
+    //     );
+
+function render(prevStanza, direction = 1, options = defaultRenderOptions) {
+    let passedOptions = options;
+    const prevStanzaIndex = parseInt(prevStanza.dataset.stanzaNumber);
+    const stanza = fetchStanza(prevStanzaIndex + direction);
+
+    
+    const refStanza = direction < 0 ? stanza : prevStanza;
+    const rolledLeftOffset = direction * (options.leftOffset + parseFloat(refStanza.dataset.leftOffset));
+
+    const rolledTopOffset_sansDiff = options.topOffset + parseFloat(prevStanza.dataset.topOffset);
+    const rolledTopOffset = direction * rolledTopOffset_sansDiff;
+
+
+    passedOptions = {
+        leftOffset: rolledLeftOffset,
+        topOffset: rolledTopOffset
+    }
+
+    const newStanza = placeStanza(
+        stanza,
+        passedOptions
+    );
+
+    return {
+        stanza: newStanza,
+        options: passedOptions
+    };
+}
+
+function cascadeRender(
+    stanza,
+    index,
+    cascadeOptions = defaultCascadeOptions,
+    renderOptions = defaultRenderOptions
+) {
     let newIterationMax = null;
-    if(options.iterationMax !== null) {
+    if(cascadeOptions.iterationMax !== null) {
         newIterationMax = {
-            'iteration': options.iterationMax['iteration']+1,
-            'max': options.iterationMax['max']
+            'iteration': cascadeOptions.iterationMax['iteration']+1,
+            'max': cascadeOptions.iterationMax['max']
         }
 
         if (newIterationMax.iteration >= newIterationMax.max) {
             return;
         }
     }
+
     const connector = stanza.querySelector('.connector');
     const terminator = stanza.querySelector('.terminator');
 
+    let passes = [];
+
     // CONNECTOR.
-    if (isInViewport(connector) && options.flow < 1) {
-        const conIndex = index - 1;
-        const conStanza = fetchStanza(conIndex);
-        const rolledLeftOffset = -options.rolloverOffset.left - parseFloat(conStanza.dataset.leftOffset);
-
-
-        const rolledTopOffset_sansDiff = options.rolloverOffset.top + parseFloat(stanza.dataset.topOffset);
-        const rolledTopOffset = -rolledTopOffset_sansDiff;
- 
-        const newConStanza = placeStanza(
-            conStanza,
-            {
-                leftOffset: rolledLeftOffset,
-                topOffset: rolledTopOffset
-            }
-        );
-        if (options.estop) {
-            return;
-        }
-
-        cascadeRender(
-            newConStanza,
-            conIndex,
-            {
-                rolloverOffset: {
-                    left: parseFloat(newConStanza.dataset.leftOffset),
-                    top: parseFloat(newConStanza.dataset.topOffset)
-                },
-                flow: -1,
-                iterationMax: newIterationMax,
-                estop: options.estop
-            }
-        );
+    if (isInViewport(connector) && cascadeOptions.flow < 1) {
+        passes.push(-1);
     }
 
     // TERMINATOR.
-    if (isInViewport(terminator) && options.flow > -1) {
-        const terIndex = index + 1;
-        const terStanza = fetchStanza(terIndex);
-        const rolledLeftOffset = options.rolloverOffset.left + parseFloat(stanza.dataset.leftOffset);
-        const rolledTopOffset_sansDiff = options.rolloverOffset.top + parseFloat(stanza.dataset.topOffset);
-        const rolledTopOffset = rolledTopOffset_sansDiff;
+    if (isInViewport(terminator) && cascadeOptions.flow > -1) {
+        passes.push(1);
+    }
 
-        const newTerStanza = placeStanza(
-            terStanza,
-            {
-                leftOffset: rolledLeftOffset,
-                topOffset: rolledTopOffset,
+    if (passes.length > 0) {
+        passes.forEach((direction) => {
+            const conIndex = index + direction;
+            const newConStanzaRefs = render(
+                stanza,
+                direction,
+                renderOptions
+            );
+    
+            const newConStanza = newConStanzaRefs.stanza;
+            const newConStanzaRenderOptions = newConStanzaRefs.options;
+    
+            if (cascadeOptions.estop) {
+                return;
             }
-        );
-        if (options.estop) {
-            return;
-        }
-        cascadeRender(
-            newTerStanza,
-            terIndex,
-            {
-                rolloverOffset: {
-                    left: parseFloat(stanza.dataset.leftOffset),
-                    top: parseFloat(stanza.dataset.topOffset),
+    
+            cascadeRender(
+                newConStanza,
+                conIndex,
+                {
+                    flow: direction,
+                    iterationMax: newIterationMax ? newIterationMax : null,
+                    estop: cascadeOptions.estop
                 },
-                flow: 1,
-                iterationMax: newIterationMax,
-                estop: options.estop
-            }
-        );
+                newConStanzaRenderOptions
+            );
+        });
     }
 }
 
