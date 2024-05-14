@@ -5,8 +5,8 @@ body {
 }
 
 :root {
-    // --connector-hl: #9cd49c;
-    --connector-hl: #f5ed79;
+    // --initiator-hl: #9cd49c;
+    --initiator-hl: #f5ed79;
     // --terminator-hl: #e28c8c;
     --terminator-hl: #8cb6e2;
     --stanza-width: ;
@@ -50,7 +50,7 @@ body {
         }
     }
 
-    .connector,
+    .initiator,
     .terminator {
         height: 100%;
         text-align: left;
@@ -65,8 +65,8 @@ body {
     left: -9999px;
     top: -9999px;
 
-    .connector {
-        background-color: var(--connector-hl);
+    .initiator {
+        background-color: var(--initiator-hl);
     }
 
     .terminator {

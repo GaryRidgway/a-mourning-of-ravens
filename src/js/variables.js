@@ -28,3 +28,4 @@ const defaultRenderOptions = {
 }
 
 let anchorStanza;
+let nonRenderedConnectors = [];

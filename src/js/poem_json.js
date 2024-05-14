@@ -1,6 +1,6 @@
 const poem_json = [
     {
-        connector: "a mourning",
+        initiator: "a mourning",
         0: "of ravens",
         1: "a knight of crows",
         2: "pieces in parcel",
@@ -8,7 +8,7 @@ const poem_json = [
         terminator: "sewn"
     },
     {
-        connector: "sewn",
+        initiator: "sewn",
         0: "together in rage",
         1: "in the throes of her death",
         2: "an immortal unmooring",
@@ -16,7 +16,7 @@ const poem_json = [
         terminator: "weft"
     },
     {
-        connector: "weft",
+        initiator: "weft",
         0: "threads pulled taught",
         1: "by far actors in glory",
         2: "torn woven, to woken",
@@ -24,7 +24,7 @@ const poem_json = [
         terminator: "soaring"
     },
     {
-        connector: "soaring",
+        initiator: "soaring",
         0: "hopes brought to cradle",
         1: "at the birth of a dawn",
         2: "death’s toll uncollected",
@@ -32,7 +32,7 @@ const poem_json = [
         terminator: "on"
     },
     {
-        connector: "on",
+        initiator: "on",
         0: "words tasting bitter",
         1: "lay the shroud over grief",
         2: "knowing only of chance",
@@ -40,7 +40,7 @@ const poem_json = [
         terminator: "release"
     },
     {
-        connector: "release",
+        initiator: "release",
         0: "her to my heart",
         1: "the gambler strains",
         2: "but death has moved on",
@@ -48,7 +48,7 @@ const poem_json = [
         terminator: "remains"
     },
     {
-        connector: "remains",
+        initiator: "remains",
         0: "of a memory",
         1: "lay bare in caldera",
         2: "to remake from remembering",
@@ -56,7 +56,7 @@ const poem_json = [
         terminator: "errors"
     },
     {
-        connector: "errors",
+        initiator: "errors",
         0: "made of clay",
         1: "and of bones of the broken",
         2: "in knights made of ego",
@@ -64,7 +64,7 @@ const poem_json = [
         terminator: "token"
     },
     {
-        connector: "token",
+        initiator: "token",
         0: "words of dark comfort",
         1: "as she waits for return",
         2: "so the knights bring back pieces",
@@ -72,7 +72,7 @@ const poem_json = [
         terminator: "turn"
     },
     {
-        connector: "turn",
+        initiator: "turn",
         0: "your eyes to the stars",
         1: "as the night holds a warning",
         2: "let the gambler decay",

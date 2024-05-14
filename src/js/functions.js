@@ -3,12 +3,12 @@ function pairSpaceAndScale() {
     const allLines = poemStaging.querySelectorAll('.stanza .line');
     const numAllLines = allLines.length;
     allLines.forEach((line, index) => {
-        const hasConnector = line.querySelectorAll('.connector').length > 0;
+        const hasInitiator = line.querySelectorAll('.initiator').length > 0;
         const hasTerminator = line.querySelectorAll('.terminator').length > 0;
         let charCount = parseInt(line.getAttribute('data-char-count'));
 
         let pairIndex = null;
-        if (hasConnector) {
+        if (hasInitiator) {
             pairIndex = (index - 1 + numAllLines) % numAllLines;
         }
         else if (hasTerminator) {
@@ -71,7 +71,7 @@ function stanzaContents(stanzaNumber) {
     for (let i = 0; i < 4; i++) {
         let line = '';
         if (i === 0) {
-            line += '<span class="connector">' + stanzaData["connector"] + '</span>';
+            line += '<span class="initiator">' + stanzaData["initiator"] + '</span>';
         }
         line += lineTextFormat(stanzaData[i.toString()]);
         if (i === 3) {
@@ -146,10 +146,18 @@ function randomStanzaIndex() {
     return getRandomInt(stanzaCount);
 }
 
-function fetchStanza(index) {
+function fetchStanza(index, selector) {
     const realIndex = (index + stanzaCount) % stanzaCount;
-    const stagedStanza = document.querySelector('#poem-staging [data-stanza-number="' + realIndex + '"');
-    return stagedStanza;
+    const stanza = document.querySelector(selector + ' [data-stanza-number="' + realIndex + '"');
+    return stanza;
+}
+
+function fetchStagedStanza(index) {
+    return fetchStanza(index, '#poem-staging');
+}
+
+function fetchRenderedStanza(index) {
+    return fetchStanza(index, '#poem-container');
 }
 
 function placeFirstStanza(stanza) {
@@ -195,41 +203,44 @@ function isInViewport(element) {
     );
 }
 
+function render(prevStanza, direction = 1) {
+    // console.log('-------START RENDER-------');
 
-    // const conIndex = index - 1;
-
-
- 
-    //     const newConStanza = placeStanza(
-    //         conStanza,
-    //         {
-    //             leftOffset: rolledLeftOffset,
-    //             topOffset: rolledTopOffset
-    //         }
-    //     );
-
-function render(prevStanza, direction = 1, options = defaultRenderOptions) {
-    let passedOptions = options;
     const prevStanzaIndex = parseInt(prevStanza.dataset.stanzaNumber);
-    const stanza = fetchStanza(prevStanzaIndex + direction);
+    const stanza = fetchStagedStanza(prevStanzaIndex + direction);
 
-    
     const refStanza = direction < 0 ? stanza : prevStanza;
-    const rolledLeftOffset = direction * (options.leftOffset + parseFloat(refStanza.dataset.leftOffset));
+    const styleStanza = fetchRenderedStanza(prevStanzaIndex);
+    // console.log(styleStanza);
 
-    const rolledTopOffset_sansDiff = options.topOffset + parseFloat(prevStanza.dataset.topOffset);
-    const rolledTopOffset = direction * rolledTopOffset_sansDiff;
+    ////////
+    let passedOptions = defaultRenderOptions;
 
+    passedOptions.leftOffset = direction * parseFloat(refStanza.dataset.leftOffset);
+    passedOptions.topOffset = direction * parseFloat(refStanza.dataset.topOffset);
 
-    passedOptions = {
-        leftOffset: rolledLeftOffset,
-        topOffset: rolledTopOffset
+    const prevHasLeftOffset = styleStanza.style.getPropertyValue('--left-offset');
+    if (prevHasLeftOffset.length > 0) {
+        passedOptions.leftOffset = parseFloat(prevHasLeftOffset) + passedOptions.leftOffset;
     }
+
+    const prevHasTopOffset = styleStanza.style.getPropertyValue('--top-offset');
+    if (prevHasTopOffset.length > 0) {
+        passedOptions.topOffset = parseFloat(prevHasTopOffset) + passedOptions.topOffset;
+    }
+
+    // console.log(passedOptions.leftOffset);
+    // console.log(passedOptions.topOffset);
 
     const newStanza = placeStanza(
         stanza,
         passedOptions
     );
+
+    // console.log('******* stanza *******');
+    // console.log(newStanza);
+
+    // console.log('--------END RENDER--------');
 
     return {
         stanza: newStanza,
@@ -255,46 +266,55 @@ function cascadeRender(
         }
     }
 
-    const connector = stanza.querySelector('.connector');
+    const initiator = stanza.querySelector('.initiator');
     const terminator = stanza.querySelector('.terminator');
 
-    let passes = [];
-
-    // CONNECTOR.
-    if (isInViewport(connector) && cascadeOptions.flow < 1) {
-        passes.push(-1);
+    // INITIATOR.
+    // isInViewport(terminator)
+    if (cascadeOptions.flow < 1) {
+        nonRenderedConnectors.push(
+            {
+                direction: -1,
+                element: initiator
+            }
+        );
     }
 
     // TERMINATOR.
-    if (isInViewport(terminator) && cascadeOptions.flow > -1) {
-        passes.push(1);
+    if (cascadeOptions.flow > -1) {
+        nonRenderedConnectors.push(
+            {
+                direction: 1,
+                element: terminator
+            }
+        );
     }
 
-    if (passes.length > 0) {
-        passes.forEach((direction) => {
-            const conIndex = index + direction;
-            const newConStanzaRefs = render(
+    if (nonRenderedConnectors.length > 0) {
+        nonRenderedConnectors.forEach((connector) => {
+            const conIndex = index + connector.direction;
+            const newStanzaRefs = render(
                 stanza,
-                direction,
+                connector.direction,
                 renderOptions
             );
     
-            const newConStanza = newConStanzaRefs.stanza;
-            const newConStanzaRenderOptions = newConStanzaRefs.options;
+            const newStanza = newStanzaRefs.stanza;
+            const newStanzaRenderOptions = newStanzaRefs.options;
     
             if (cascadeOptions.estop) {
                 return;
             }
     
             cascadeRender(
-                newConStanza,
+                newStanza,
                 conIndex,
                 {
-                    flow: direction,
+                    flow: connector.direction,
                     iterationMax: newIterationMax ? newIterationMax : null,
                     estop: cascadeOptions.estop
                 },
-                newConStanzaRenderOptions
+                newStanzaRenderOptions
             );
         });
     }
@@ -304,18 +324,18 @@ function setStanzaOffsetTuples() {
     poemStaging.childNodes.forEach((stanza, index) => {
         const stanzaBB = stanza.getBoundingClientRect();
 
-        const connector = stanza.querySelector('.connector');
-        const connectorBB = connector.getBoundingClientRect();
+        const initiator = stanza.querySelector('.initiator');
+        const initiatorBB = initiator.getBoundingClientRect();
 
         const terminator = stanza.querySelector('.terminator');
         const terminatorBB = terminator.getBoundingClientRect();
     
-        const left = terminatorBB.left - connectorBB.left;
-        const top = terminatorBB.top - connectorBB.top;
-        const connectorTopOffset = stanzaBB.top - connectorBB.top;
+        const left = terminatorBB.left - initiatorBB.left;
+        const top = terminatorBB.top - initiatorBB.top;
+        const initiatorTopOffset = stanzaBB.top - initiatorBB.top;
 
         stanza.setAttribute('data-left-offset', left);
         stanza.setAttribute('data-top-offset', top);
-        stanza.setAttribute('data-connector-top-offset', connectorTopOffset);
+        stanza.setAttribute('data-initiator-top-offset', initiatorTopOffset);
     });
 }

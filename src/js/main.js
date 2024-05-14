@@ -9,20 +9,20 @@ document.addEventListener("DOMContentLoaded", function () {
   setStanzaOffsetTuples();
 
   const startStanzaIndex = randomStanzaIndex();
-  const startStanza = fetchStanza(startStanzaIndex);
+  const startStanza = fetchStagedStanza(startStanzaIndex);
   const anchorStanza = placeFirstStanza(startStanza);
 
-  cascadeRender(
-    anchorStanza.querySelector('.stanza'),
-    startStanzaIndex,
-    {
-      flow: 0,
-      iterationMax: 
-      {
-        'iteration': 0,
-        'max': 2
-      },
-      estop: false
-    }
-  );
+  // cascadeRender(
+  //   anchorStanza.querySelector('.stanza'),
+  //   startStanzaIndex,
+  //   {
+  //     flow: 0,
+  //     iterationMax: 
+  //     {
+  //       'iteration': 0,
+  //       'max': 6
+  //     },
+  //     estop: false
+  //   }
+  // );
 });
