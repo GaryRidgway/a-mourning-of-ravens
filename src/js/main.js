@@ -10,7 +10,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const startStanzaIndex = randomStanzaIndex();
   const startStanza = fetchStagedStanza(startStanzaIndex);
-  const anchorStanza = placeFirstStanza(startStanza);
+  placeFirstStanza(startStanza);
 
   cascadeRender();
 });
