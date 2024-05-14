@@ -21,5 +21,5 @@ const defaultRenderOptions = {
     topOffset: 0,
 }
 
-let anchorStanza;
+let anchor;
 let nonRenderedConnectors = {};

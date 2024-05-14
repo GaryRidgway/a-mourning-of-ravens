@@ -1,14 +1,11 @@
 // Functions.
 function placeFirstStanza(stanza) {
 
-    anchorStanza = document.createElement("div");
-    anchorStanza.setAttribute('id', 'anchor');
+    anchor = document.createElement("div");
+    anchor.setAttribute('id', 'anchor');
     const firstStanza = placeStanza(stanza);
     firstStanza.setAttribute('id', 'anchor-stanza');
-    poemContainer.append(anchorStanza);
-
-    // First stanza Unique ID.
-    const FSUID = firstStanza.getAttribute('uid');
+    poemContainer.append(anchor);
 
     addNonRenderedConnector(firstStanza, -1);
     addNonRenderedConnector(firstStanza, 1);
@@ -30,10 +27,10 @@ function placeStanza(stanza, options = null) {
                 options.leftOffset < 0 &&
                 options.topOffset < 0
             ) {
-                anchorStanza.prepend(clonedStanza);
+                anchor.prepend(clonedStanza);
             }
             else {
-                anchorStanza.append(clonedStanza);
+                anchor.append(clonedStanza);
             }
 
             clonedStanza.style.setProperty('--left-offset', parseFloat(options.leftOffset));
@@ -41,7 +38,7 @@ function placeStanza(stanza, options = null) {
         }
     }
     else {
-        anchorStanza.append(clonedStanza);
+        anchor.append(clonedStanza);
     }
 
     return clonedStanza;
@@ -104,7 +101,7 @@ function addNonRenderedConnector(stanza, direction) {
 }
 
 function cascadeRender(options) {
-    if (typeof anchorStanza !== 'undefined') {
+    if (typeof anchor !== 'undefined') {
 
         const connectorKeys = Object.keys(nonRenderedConnectors);
         if (connectorKeys.length > 0) {

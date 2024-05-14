@@ -14,5 +14,5 @@ document.addEventListener("DOMContentLoaded", function () {
 
   cascadeRender();
 
-  
+  scrollInit();
 });
