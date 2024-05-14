@@ -16,16 +16,10 @@ const maxScaling = 2.2;
 
 const mainScaling = 1.3;
 
-const defaultCascadeOptions = {
-    flow: 0,
-    iterationMax: null,
-    estop: false
-};
-
 const defaultRenderOptions = {
     leftOffset: 0,
     topOffset: 0,
 }
 
 let anchorStanza;
-let nonRenderedConnectors = [];
+let nonRenderedConnectors = {};

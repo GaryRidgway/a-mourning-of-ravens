@@ -12,17 +12,5 @@ document.addEventListener("DOMContentLoaded", function () {
   const startStanza = fetchStagedStanza(startStanzaIndex);
   const anchorStanza = placeFirstStanza(startStanza);
 
-  // cascadeRender(
-  //   anchorStanza.querySelector('.stanza'),
-  //   startStanzaIndex,
-  //   {
-  //     flow: 0,
-  //     iterationMax: 
-  //     {
-  //       'iteration': 0,
-  //       'max': 6
-  //     },
-  //     estop: false
-  //   }
-  // );
+  cascadeRender();
 });

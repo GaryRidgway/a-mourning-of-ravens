@@ -146,9 +146,14 @@ function randomStanzaIndex() {
     return getRandomInt(stanzaCount);
 }
 
-function fetchStanza(index, selector) {
+function fetchStanza(index, selector, uid = null) {
     const realIndex = (index + stanzaCount) % stanzaCount;
-    const stanza = document.querySelector(selector + ' [data-stanza-number="' + realIndex + '"');
+    const baseSelector = selector + ' [data-stanza-number="' + realIndex + '"]';
+    let uidSelector = '';
+    if (uid !== null) {
+        uidSelector = '[uid="' + uid + '"]';
+    }
+    const stanza = document.querySelector(baseSelector + uidSelector);
     return stanza;
 }
 
@@ -156,8 +161,8 @@ function fetchStagedStanza(index) {
     return fetchStanza(index, '#poem-staging');
 }
 
-function fetchRenderedStanza(index) {
-    return fetchStanza(index, '#poem-container');
+function fetchRenderedStanza(index, uid) {
+    return fetchStanza(index, '#poem-container', uid);
 }
 
 function placeFirstStanza(stanza) {
@@ -168,27 +173,45 @@ function placeFirstStanza(stanza) {
     firstStanza.setAttribute('id', 'anchor-stanza');
     poemContainer.append(anchorStanza);
 
-    return anchorStanza;
+    // First stanza Unique ID.
+    const FSUID = firstStanza.getAttribute('uid');
+
+    addNonRenderedConnector(firstStanza, -1);
+    addNonRenderedConnector(firstStanza, 1);
+
+    return firstStanza;
 }
 
 function placeStanza(stanza, options = null) {
     const clonedStanza = stanza.cloneNode(true);
-    anchorStanza.append(clonedStanza);
+    clonedStanza.setAttribute('uid', UID());
 
     if (options !== null) {
         if (
             options.leftOffset && 
             options.topOffset
         ) {
+
+            if (
+                options.leftOffset < 0 &&
+                options.topOffset < 0
+            ) {
+                anchorStanza.prepend(clonedStanza);
+            }
+            else {
+                anchorStanza.append(clonedStanza);
+            }
+
             clonedStanza.style.setProperty('--left-offset', parseFloat(options.leftOffset));
             clonedStanza.style.setProperty('--top-offset', parseFloat(options.topOffset));
         }
     }
+    else {
+        anchorStanza.append(clonedStanza);
+    }
 
     return clonedStanza;
 }
-
-
 
 // https://gist.github.com/jjmu15/8646226
 // Determine if an element is in the visible viewport.
@@ -210,7 +233,7 @@ function render(prevStanza, direction = 1) {
     const stanza = fetchStagedStanza(prevStanzaIndex + direction);
 
     const refStanza = direction < 0 ? stanza : prevStanza;
-    const styleStanza = fetchRenderedStanza(prevStanzaIndex);
+    const styleStanza = fetchRenderedStanza(prevStanzaIndex, getUID(prevStanza));
     // console.log(styleStanza);
 
     ////////
@@ -248,76 +271,123 @@ function render(prevStanza, direction = 1) {
     };
 }
 
-function cascadeRender(
-    stanza,
-    index,
-    cascadeOptions = defaultCascadeOptions,
-    renderOptions = defaultRenderOptions
-) {
-    let newIterationMax = null;
-    if(cascadeOptions.iterationMax !== null) {
-        newIterationMax = {
-            'iteration': cascadeOptions.iterationMax['iteration']+1,
-            'max': cascadeOptions.iterationMax['max']
+function addNonRenderedConnector(stanza, direction) {
+    const uid = getUID(stanza) + '[' + direction + ']';
+    const connectorVisible = isInViewport(fetchConnector(stanza, direction));
+
+    nonRenderedConnectors[uid] = {
+        stanza: stanza,
+        direction, direction,
+        visible: connectorVisible
+    };
+}
+
+function getUID(stanza) {
+    const uid = stanza.getAttribute('uid');
+    if (uid !== null) {
+        return stanza.getAttribute('uid');
+    }
+    else {
+        console.error('________________________');
+        console.log(stanza);
+        console.error('Above stanza has no UID.');
+    }
+}
+
+function cascadeRender(options) {
+    if (typeof anchorStanza !== 'undefined') {
+
+        const connectorKeys = Object.keys(nonRenderedConnectors);
+        if (connectorKeys.length > 0) {
+
+            let connectorKeys = checkForVisibleConnectors();
+
+            if (connectorKeys.length > 0){
+                // While loop ( CAUTION!!: spooky ).
+
+                let iterations = 0;
+
+                while(connectorKeys.length > 0 && cascadeContinueIterating(iterations, options)) {
+                    connectorKeys.forEach((connectorKey) => {
+                        const connectorStanza = nonRenderedConnectors[connectorKey];
+                        const connector = fetchConnector(connectorStanza.stanza, connectorStanza.direction);
+                        
+                        if(!isInViewport(connector)) {
+                            connectorStanza.visible = false;
+                            console.log('Set connector "' + connectorKey + '" `visible` to `false`.');
+                        }
+                        else {
+                            const newStanza = render(connectorStanza.stanza, connectorStanza.direction);
+                            addNonRenderedConnector(newStanza.stanza, connectorStanza.direction);
+                            delete nonRenderedConnectors[connectorKey];
+                        }
+                    });
+
+                    connectorKeys = checkForVisibleConnectors();
+                    iterations++;
+                }
+            }
         }
-
-        if (newIterationMax.iteration >= newIterationMax.max) {
-            return;
+        else {
+            console.error('There are no non-rendered elements.');
         }
     }
-
-    const initiator = stanza.querySelector('.initiator');
-    const terminator = stanza.querySelector('.terminator');
-
-    // INITIATOR.
-    // isInViewport(terminator)
-    if (cascadeOptions.flow < 1) {
-        nonRenderedConnectors.push(
-            {
-                direction: -1,
-                element: initiator
-            }
-        );
+    else {
+        console.error('There is no anchor stanza to cascade from.');
     }
+}
 
-    // TERMINATOR.
-    if (cascadeOptions.flow > -1) {
-        nonRenderedConnectors.push(
-            {
-                direction: 1,
-                element: terminator
+function cascadeContinueIterating(iterations, options = null) {
+    if(options !== null) {
+        if(Object.hasOwn(options, 'iterationMax')) {
+            const iterationMax = options.iterationMax;
+            if (iterations < iterationMax) {
+                return true;
             }
-        );
+            else {
+                return false;
+            }
+        }
+        else {
+            return true;
+        }
     }
+    else {
+        return true
+    }
+}
 
-    if (nonRenderedConnectors.length > 0) {
-        nonRenderedConnectors.forEach((connector) => {
-            const conIndex = index + connector.direction;
-            const newStanzaRefs = render(
-                stanza,
-                connector.direction,
-                renderOptions
-            );
-    
-            const newStanza = newStanzaRefs.stanza;
-            const newStanzaRenderOptions = newStanzaRefs.options;
-    
-            if (cascadeOptions.estop) {
-                return;
+function fetchConnector(stanza, direction) {
+    if (direction < 0) {
+        return stanza.querySelector('.initiator');
+    }
+    else if (direction > 0) {
+        return stanza.querySelector('.terminator');
+    }
+    console.error('Improper direction declared.');
+}
+
+function checkForVisibleConnectors() {
+    const connectorKeys = Object.keys(nonRenderedConnectors);
+
+    if (connectorKeys.length > 0) {
+        const connectors = [];
+        connectorKeys.forEach((key) => {
+            const connector = nonRenderedConnectors[key];
+            if ( connector.visible === true ) {
+                connectors.push(key);
             }
-    
-            cascadeRender(
-                newStanza,
-                conIndex,
-                {
-                    flow: connector.direction,
-                    iterationMax: newIterationMax ? newIterationMax : null,
-                    estop: cascadeOptions.estop
-                },
-                newStanzaRenderOptions
-            );
         });
+
+        return connectors;
     }
+    else {
+        return [];
+    }
+}
+
+function UID() {
+    return Date.now().toString(36) + Math.random().toString(36).substring(2, 12).padStart(12, 0);
 }
 
 function setStanzaOffsetTuples() {
