@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   docStyle.setProperty('--stanza-width', (widestStanza * mainScaling) + 'px');
 
-  setStanzaOffsetTuples();
+  setStanzaOffsets();
 
   const startStanzaIndex = randomStanzaIndex();
   const startStanza = fetchStagedStanza(startStanzaIndex);
@@ -15,4 +15,6 @@ document.addEventListener("DOMContentLoaded", function () {
   cascadeRender();
 
   scrollInit();
+
+  placePoemCenter();
 });

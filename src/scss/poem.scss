@@ -14,6 +14,10 @@ body {
     --base-font-size: 16;
     --base-line-height: calc(var(--base-font-size) * 1.2px);
     --mod-mult: calc(var(--line-font-size) / var(--base-font-size));
+
+    --dot-color: #298dff;
+    --dot-size: 20px;
+    --dot-border-size: 4px;
 }
 
 #poem-container,
@@ -41,6 +45,10 @@ body {
             letter-spacing: var(--char-spacing, inherit);
             font-size: calc(var(--char-scaling, inherit) * var(--base-font-size));
             padding-bottom: 4px;
+
+            &:last-child {
+                padding-bottom: 0;
+            }
 
             // &:after {
             //   content: "";
@@ -86,6 +94,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    overflow: hidden;
 
     .stanza {
         position: absolute;
@@ -94,7 +103,12 @@ body {
     }
 
     #anchor {
+        --left-main-offset: 0;
+        --top-main-offset: 0;
         position: relative;
+        left: calc(var(--left-main-offset) * 1px);
+        top: calc(var(--top-main-offset) * 1px);
+        display: flex;
 
         &-stanza {
             position: relative;

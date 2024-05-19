@@ -96,3 +96,13 @@ function checkForVisibleConnectors() {
 function UID() {
     return Date.now().toString(36) + Math.random().toString(36).substring(2, 12).padStart(12, 0);
 }
+
+
+//https://byjus.com/maths/angle-between-two-lines/#:~:text=Problem%20With%20Solution
+function lineSlope(pointData) {
+    return (pointData[1].y - pointData[0].y)  / (pointData[1].x - pointData[0].x);
+}
+
+function angleFromSlopes(slope1, slope2){
+    return Math.atan((slope2 - slope1 ) / ( 1 + slope1*slope2));
+}

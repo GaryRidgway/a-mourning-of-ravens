@@ -2,6 +2,7 @@
 function placeFirstStanza(stanza) {
 
     anchor = document.createElement("div");
+    anchorStyle = anchor.style;
     anchor.setAttribute('id', 'anchor');
     const firstStanza = placeStanza(stanza);
     firstStanza.setAttribute('id', 'anchor-stanza');
@@ -161,4 +162,10 @@ function cascadeContinueIterating(iterations, options = null) {
     else {
         return true
     }
+}
+
+function placePoemCenter() {
+    const poemContainerCenter = document.createElement("div");
+    poemContainerCenter.classList.add('center-dot');
+    poemContainer.append(poemContainerCenter);
 }

@@ -22,4 +22,21 @@ const defaultRenderOptions = {
 }
 
 let anchor;
+let anchorStyle;
 let nonRenderedConnectors = {};
+
+const scrollZoneData = {
+    container: null,
+    el: null,
+    buffer: null,
+    prevX: 0,
+    prevY: 0,
+    dims: {},
+    total: {
+        x: 0,
+        y: 0
+    }
+};
+
+let slope = 1;
+const scrollSpeedMultiplier = -0.2;

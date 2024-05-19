@@ -1,0 +1,56 @@
+.center-dot {
+    position: absolute;
+    width: var(--dot-size);
+    height: var(--dot-size);
+    left: calc(50% - (var(--dot-size) * 0.5));
+    top: calc(50% - (var(--dot-size) * 0.5));
+    border-radius: 50%;
+    background: var(--dot-color);
+    opacity: 0.6;
+
+    .svg-container {
+        position:absolute;
+        left: 0;
+        top: 0;
+    }
+
+    svg {
+        // position: absolute;
+        width: 100%;
+        height: 100%;
+        // left: 100px;
+    }
+
+    #poem-container > & {
+        --pc-size: calc(var(--dot-size) + var(--dot-border-size) * 2);
+        background: transparent;
+        width: var(--dot-size);
+        height: var(--dot-size);
+        left: calc(50% - (var(--pc-size) * 0.5));
+        top: calc(50% - (var(--pc-size) * 0.5));
+        border: 4px solid var(--dot-color);
+        opacity: 0.8;
+    }
+}
+
+#scroll-zone-container {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: absolute;
+}
+
+#scroll-zone {
+    --pad: 70px;
+    position: absolute;
+    width: calc(100% + var(--pad));
+    height: calc(100% + var(--pad));
+    left: 0;
+    top: 0;
+    overflow: scroll;
+
+    #scroll-zone-buffer {
+        width: 150dvw;
+        height: 150dvh;
+    }
+}
