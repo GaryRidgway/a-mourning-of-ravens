@@ -1,80 +1,24 @@
 function scrollInit() {
     createScrollZone();
-    anchor.childNodes.forEach((stanza) => {
-        const centerDot = document.createElement("div");
-        centerDot.classList.add('center-dot');
-        stanza.prepend(centerDot);
-    });
+    if (debug) {
+        anchor.childNodes.forEach((stanza) => {
+            const centerDot = document.createElement("div");
+            centerDot.classList.add('center-dot');
+            stanza.prepend(centerDot);
+    
+            const bounds = document.createElement("div");
+            bounds.classList.add('bounds');
+            stanza.prepend(bounds);
+    
+            const boundsTri = document.createElement("div");
+            boundsTri.classList.add('bounds-tri');
+            bounds.prepend(boundsTri);
+        });
+    }
+    
+    calcStartScrollPos();
 
-    // const dots = anchor.querySelectorAll('.center-dot');
-    // console.log(dots);
-
-//     dots.forEach((dot, index) => {
-//         if (index+1 !== dots.length) {
-//             const startDot = dot.getBoundingClientRect();
-//             const startDotOffsets = {
-//                 left: startDot.left,
-//                 top: startDot.top
-//             }
-
-//             const endDot = dots[index+1].getBoundingClientRect();
-//             const endDotOffsets = {
-//                 left: endDot.left,
-//                 top: endDot.top
-//             }
-//             console.log(dot, dots[index+1])
-
-//             const dotDiffs = {
-//                 x: endDotOffsets.left - startDotOffsets.left,
-//                 y: endDotOffsets.top - startDotOffsets.top
-//             }
-
-//             const viewBox = '0 0 ' + dotDiffs.x + ' ' + dotDiffs.y;
-//             const svgContainer = document.createElement('div');
-//             svgContainer.classList.add('svg-container');
-//             svgContainer.style.width = dotDiffs.x + 'px';
-//             console.log(dotDiffs.y);
-//             svgContainer.style.height = dotDiffs.y + 'px';
-//             svgContainer.innerHTML = '\
-//             <svg xmlns="http://www.w3.org/2000/svg">\
-//                 <line x1="0" y1="0" x2="'+dotDiffs.x+'" y2="'+dotDiffs.y+'" stroke="black"></line>\
-//                 Sorry, your browser does not support inline SVG.\
-//             </svg>';
-
-
-//             // const dotLineSVG = document.createElement('svg');
-//             // dotLineSVG.setAttribute('viewBox', '0 0 100 100');
-//             // dotLineSVG.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-//             // dotLineSVG.setAttribute('width', dotDiffs.x);
-//             // dotLineSVG.setAttribute('height', dotDiffs.y);
-
-//             // <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="
-//             //     position: absolute;
-//             //     width: 100px;
-//             //     height: 100px;
-//             //     left: 100px;
-//             // "><line x1="0" y1="80" x2="100" y2="20" stroke="black"></line></svg>
-
-
-//             // const dotLine = document.createElement('line');
-//             // dotLine.setAttribute('x1', '0');
-//             // dotLine.setAttribute('y1', '80');
-//             // dotLine.setAttribute('x2', '100');
-//             // dotLine.setAttribute('y2', '20');
-//             // dotLine.setAttribute('stroke', 'black');
-
-//             // dotLineSVG.append(dotLine);
-//             // svgContainer.append(dotLineSVG);
-//             dot.append(svgContainer);
-
-
-// //   <line x1="0" y1="80" x2="100" y2="20" stroke="black" />
-
-// //   <!-- If you do not specify the stroke
-// //        color the line will not be visible -->
-
-//         }
-//     });
+    setCurrentScrollStanza(startStanza, true);
 }
 
 function createScrollZone() {
@@ -96,25 +40,25 @@ function createScrollZone() {
     }
 
     setScrollZone(
+        // Multiply by 0.16 to put it in the center.
         scrollZoneData.dims.x * 0.16,
         scrollZoneData.dims.y * 0.16,
         false
     );
 
     scrollZoneData.el.onscroll = function (e) {
-        setScrollZone(
-            scrollZoneData.dims.x * 0.16,
-            scrollZoneData.dims.y * 0.16
-        );
-        setAnchorOffsets();
-        // console.log(
-        //     '[' +
-        //     scrollZoneData.total.x +
-        //     ', ' +
-        //     scrollZoneData.total.y +
-        //     ']'
-        // )
+        scrollTick(e);
     }
+}
+
+function scrollTick(e) {
+    setScrollZone(
+        // Multiply by 0.16 to put it in the center.
+        scrollZoneData.dims.x * 0.16,
+        scrollZoneData.dims.y * 0.16
+    );
+    setAnchorOffsets();
+    checkStanzaScroll()
 }
 
 function setScrollZone(x, y, addToTotal = true) {
@@ -133,10 +77,60 @@ function setScrollZone(x, y, addToTotal = true) {
             x: scrollZoneData.total.x + maxScroll,
             y: scrollZoneData.total.y + maxScroll
         }
+
+        currentScrollValue += maxScroll;
     }
 }
 
 function setAnchorOffsets() {
-    anchorStyle.setProperty('--left-main-offset', (scrollZoneData.total.x/slope) * scrollSpeedMultiplier);
-    anchorStyle.setProperty('--top-main-offset', (scrollZoneData.total.y) * scrollSpeedMultiplier);
+    anchorStyle.setProperty('--left-main-offset', (scrollZoneData.total.x) * -1);
+    anchorStyle.setProperty('--top-main-offset', (scrollZoneData.total.y*slope) * -1);
+}
+
+function calcStartScrollPos() {
+    const startData = startStanza.dataset;
+    const startTerminatorWidth = parseFloat(startData.terminatorWidth);
+    const startFullWidth = startTerminatorWidth + parseFloat(startData.scrollWidth);
+    startScrollPos = startFullWidth/2;
+}
+
+function setCurrentScrollStanza(stanza, isFirst = false) {
+    const newCurrentScrollStanza = {};
+    const data = stanza.dataset;
+    newCurrentScrollStanza.target = stanza;
+    newCurrentScrollStanza.slope = parseFloat(data.slope);
+    newCurrentScrollStanza.scrollWidth = parseFloat(data.scrollWidth);
+    
+    let newCurrentScrollValue = 0;
+    console.log(newCurrentScrollValue);
+
+    if (isFirst) {
+        newCurrentScrollValue = startScrollPos;
+    }
+    else {
+        if (currentScrollValue < 0) {
+            const normalizedValue = currentScrollValue + newCurrentScrollStanza.scrollWidth;
+            newCurrentScrollValue = normalizedValue % newCurrentScrollStanza.scrollWidth;
+        }
+        else {
+            const normalizedValue = currentScrollValue + currentScrollStanza.scrollWidth;
+            newCurrentScrollValue = normalizedValue % currentScrollStanza.scrollWidth;
+        }
+    }
+    console.log(newCurrentScrollStanza.target);
+
+    currentScrollValue = newCurrentScrollValue;
+    slope = parseFloat(newCurrentScrollStanza.slope);
+    currentScrollStanza = newCurrentScrollStanza;
+}
+
+function checkStanzaScroll() {
+    if (currentScrollValue > currentScrollStanza.scrollWidth) {
+        console.log('greater');
+        console.log(currentScrollValue);
+    }
+    else if (currentScrollValue < 0) {
+        console.log('lesser');
+        console.log(currentScrollValue);
+    }
 }

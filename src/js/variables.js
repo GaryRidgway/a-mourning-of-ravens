@@ -7,6 +7,7 @@ const docStyle = document.documentElement.style;
 let widestStanza = 0;
 let leastChars = 100000000000000;
 let mostChars = 0;
+let fullScrollWidth = 0;
 
 const minSpacing = -1;
 const maxSpacing = 2;
@@ -23,6 +24,8 @@ const defaultRenderOptions = {
 
 let anchor;
 let anchorStyle;
+let startStanza;
+let startScrollPos;
 let nonRenderedConnectors = {};
 
 const scrollZoneData = {
@@ -39,4 +42,13 @@ const scrollZoneData = {
 };
 
 let slope = 1;
-const scrollSpeedMultiplier = -0.2;
+const scrollSpeedMultiplier = 0.2;
+
+const debug = false;
+
+
+
+// Scroll stanza variables.
+let currentScrollStanzaIndex;
+let currentScrollValue = 0;
+let currentScrollStanza;

@@ -155,7 +155,18 @@ function setStanzaOffsets() {
         stanza.setAttribute('data-left-offset', left);
         stanza.setAttribute('data-top-offset', top);
         stanza.setAttribute('data-initiator-top-offset', initiatorTopOffset);
-        slope = SSlope;
+        stanza.setAttribute('data-terminator-width', (TPD[1].x - TPD[0].x));
+        const slopeData = [
+            SPD[0], {
+                x: SPD[1].x - TPD[1].x,
+                y: SPD[1].y - TPD[1].y,
+            }
+        ]
+        stanza.setAttribute('data-slope', lineSlope(slopeData));
+        stanza.setAttribute('data-scroll-width-begin', fullScrollWidth);
+        const scrollWidth = SPD[1].x - TPD[1].x;
+        fullScrollWidth += scrollWidth;
+        stanza.setAttribute('data-scroll-width', scrollWidth);
     });
 }
 

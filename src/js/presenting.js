@@ -4,14 +4,14 @@ function placeFirstStanza(stanza) {
     anchor = document.createElement("div");
     anchorStyle = anchor.style;
     anchor.setAttribute('id', 'anchor');
-    const firstStanza = placeStanza(stanza);
-    firstStanza.setAttribute('id', 'anchor-stanza');
+    startStanza = placeStanza(stanza);
+    startStanza.setAttribute('id', 'anchor-stanza');
     poemContainer.append(anchor);
 
-    addNonRenderedConnector(firstStanza, -1);
-    addNonRenderedConnector(firstStanza, 1);
+    addNonRenderedConnector(startStanza, -1);
+    addNonRenderedConnector(startStanza, 1);
 
-    return firstStanza;
+    return startStanza;
 }
 
 function placeStanza(stanza, options = null) {

@@ -9,12 +9,14 @@ document.addEventListener("DOMContentLoaded", function () {
   setStanzaOffsets();
 
   const startStanzaIndex = randomStanzaIndex();
-  const startStanza = fetchStagedStanza(startStanzaIndex);
+  startStanza = fetchStagedStanza(startStanzaIndex);
   placeFirstStanza(startStanza);
 
   cascadeRender();
 
   scrollInit();
 
-  placePoemCenter();
+  if(debug) {
+    placePoemCenter();
+  }
 });
