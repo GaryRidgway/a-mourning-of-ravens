@@ -25,6 +25,7 @@ const defaultRenderOptions = {
 let anchor;
 let anchorStyle;
 let startStanza;
+let startStanzaSlope;
 let startScrollPos;
 let nonRenderedConnectors = {};
 
@@ -51,4 +52,4 @@ const debug = true;
 // Scroll stanza variables.
 let currentScrollStanzaIndex;
 let currentScrollValue = 0;
-let currentScrollStanza;
+let currentScrollStanzaData;
