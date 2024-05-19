@@ -45,8 +45,10 @@ const scrollZoneData = {
 let slope = 1;
 const scrollSpeedMultiplier = 0.2;
 
+// Debug.
 const debug = true;
-
+const debugV = true;
+const debugStringLength = 30;
 
 
 // Scroll stanza variables.

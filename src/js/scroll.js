@@ -1,4 +1,8 @@
 function scrollInit() {
+    if(debugV) {
+        dbp('scrollInit()') 
+    }
+
     createScrollZone();
     if (debug) {
         anchor.childNodes.forEach((stanza) => {
@@ -16,12 +20,16 @@ function scrollInit() {
         });
     }
 
-    calcStartScrollPos();
-
     setCurrentScrollStanza(startStanza, true);
+
+    calcStartScrollPos();
 }
 
 function createScrollZone() {
+    if(debugV) {
+        dbp('createScrollZone()') 
+    }
+
     scrollZoneData.container = document.createElement("div");
     scrollZoneData.container.id = 'scroll-zone-container';
     poemContainer.append(scrollZoneData.container);
@@ -52,6 +60,10 @@ function createScrollZone() {
 }
 
 function scrollTick(e) {
+    if(debugV) {
+        dbp('scrollTick()') 
+    }
+
     setScrollZone(
         // Multiply by 0.16 to put it in the center.
         scrollZoneData.dims.x * 0.16,
@@ -62,6 +74,10 @@ function scrollTick(e) {
 }
 
 function setScrollZone(x, y, addToTotal = true) {
+    if(debugV) {
+        dbp('setScrollZone()') 
+    }
+
     scrollZoneData.prevX = scrollZoneData.el.scrollLeft;
     scrollZoneData.prevY = scrollZoneData.el.scrollTop;
     scrollZoneData.el.scrollLeft = x;
@@ -83,29 +99,52 @@ function setScrollZone(x, y, addToTotal = true) {
 }
 
 function setAnchorOffsets() {
+    if(debugV) {
+        dbp('setAnchorOffsets()') 
+    }
+
     anchorStyle.setProperty('--left-main-offset', (scrollZoneData.total.x) * -1);
     anchorStyle.setProperty('--top-main-offset', (scrollZoneData.total.y*slope) * -1);
 }
 
 function calcStartScrollPos() {
+    if(debug) {
+        dbp('calcStartScrollPos()') 
+    }
+
     const startData = startStanza.dataset;
     const startTerminatorWidth = parseFloat(startData.terminatorWidth);
     const startFullWidth = startTerminatorWidth + parseFloat(startData.scrollWidth);
+    console.log(startTerminatorWidth, parseFloat(startData.scrollWidth));
     startScrollPos = startFullWidth/2;
 
-    const startStanzaLastLineChildNodes = startStanza.childNodes[startStanza.childNodes.length-1].childNodes;
+    calcAnchorOffset();
+}
+
+function calcAnchorOffset() {
+    if(debugV) {
+        dbp('calcAnchorOffset()') 
+    }
+
+    const currentStanza = currentScrollStanzaData.target;
+    const startStanzaLastLineChildNodes = currentStanza.childNodes[currentStanza.childNodes.length-1].childNodes;
     const startStanzaTerminator = startStanzaLastLineChildNodes[startStanzaLastLineChildNodes.length-1];
     const startStanzaTerminatorHeight = startStanzaTerminator.getBoundingClientRect().height;
-    const startStanzaMid = startStanza.getBoundingClientRect().height/2;
+    const startStanzaMid = currentStanza.getBoundingClientRect().height/2;
 
     // y = mx+b;
-    const y = parseFloat(startStanza.dataset.slope)*startScrollPos + startStanzaTerminatorHeight;
-    console.log(startStanzaMid+startStanzaTerminatorHeight);
-    console.log(y);
+    console.log(parseFloat(currentStanza.dataset.slope), currentScrollValue, startStanzaTerminatorHeight);
+    const y = parseFloat(currentStanza.dataset.slope)*startScrollPos + startStanzaTerminatorHeight;
+    // console.log(startStanzaMid+startStanzaTerminatorHeight);
+    // console.log(y);
     anchorStyle.setProperty('--start-offset', (startStanzaMid + startStanzaTerminatorHeight - y));
 }
 
 function setCurrentScrollStanza(stanza, isFirst = false) {
+    if(debugV) {
+        dbp('setCurrentScrollStanza()') 
+    }
+
     const newCurrentScrollStanza = {};
     const data = stanza.dataset;
     newCurrentScrollStanza.target = stanza;
@@ -124,24 +163,31 @@ function setCurrentScrollStanza(stanza, isFirst = false) {
             newCurrentScrollValue = normalizedValue % newCurrentScrollStanza.scrollWidth;
         }
         else {
-            const normalizedValue = currentScrollValue + currentScrollStanza.scrollWidth;
-            newCurrentScrollValue = normalizedValue % currentScrollStanza.scrollWidth;
+            const normalizedValue = currentScrollValue + currentScrollStanzaData.scrollWidth;
+            newCurrentScrollValue = normalizedValue % currentScrollStanzaData.scrollWidth;
         }
     }
-    console.log(newCurrentScrollStanza.target);
 
     currentScrollValue = newCurrentScrollValue;
     slope = parseFloat(newCurrentScrollStanza.slope);
-    currentScrollStanza = newCurrentScrollStanza;
+    currentScrollStanzaData = newCurrentScrollStanza;
+
+    calcAnchorOffset();
 }
 
 function checkStanzaScroll() {
-    if (currentScrollValue > currentScrollStanza.scrollWidth) {
+    if(debugV) {
+        dbp('checkStanzaScroll()') 
+    }
+
+    if (currentScrollValue > currentScrollStanzaData.scrollWidth) {
         console.log('greater');
         console.log(currentScrollValue);
+        setCurrentScrollStanza(currentScrollStanzaData.target.nextSibling);
     }
     else if (currentScrollValue < 0) {
         console.log('lesser');
         console.log(currentScrollValue);
+        setCurrentScrollStanza(currentScrollStanzaData.target.previousSibling);
     }
 }
