@@ -44,7 +44,7 @@ const scrollZoneData = {
 let slope = 1;
 const scrollSpeedMultiplier = 0.2;
 
-const debug = false;
+const debug = true;
 
 
 

@@ -98,8 +98,8 @@ body {
 
     .stanza {
         position: absolute;
-        left: calc(var(--left-offset, 0px)* 1px);
-        top: calc(var(--top-offset, 0px)* 1px);
+        left: calc((var(--left-offset, 0px)* 1px));
+        top: calc((var(--top-offset, 0px)* 1px));
     }
 
     #anchor {
@@ -107,7 +107,9 @@ body {
         --top-main-offset: 0;
         position: relative;
         left: calc(var(--left-main-offset) * 1px);
-        top: calc(var(--top-main-offset) * 1px);
+        // top: calc(var(--top-main-offset) * 1px + 0 * 1px);
+        top: calc(var(--top-main-offset) * 1px + var(--start-offset) * 1px);
+
         display: flex;
 
         &-stanza {

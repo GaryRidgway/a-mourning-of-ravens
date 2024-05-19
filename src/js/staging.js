@@ -167,6 +167,8 @@ function setStanzaOffsets() {
         const scrollWidth = SPD[1].x - TPD[1].x;
         fullScrollWidth += scrollWidth;
         stanza.setAttribute('data-scroll-width', scrollWidth);
+        stanza.style.setProperty('--svg-width', scrollWidth);
+        stanza.style.setProperty('--svg-height', SPD[1].y - TPD[1].y);
     });
 }
 

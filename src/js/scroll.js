@@ -15,7 +15,7 @@ function scrollInit() {
             bounds.prepend(boundsTri);
         });
     }
-    
+
     calcStartScrollPos();
 
     setCurrentScrollStanza(startStanza, true);
@@ -92,6 +92,17 @@ function calcStartScrollPos() {
     const startTerminatorWidth = parseFloat(startData.terminatorWidth);
     const startFullWidth = startTerminatorWidth + parseFloat(startData.scrollWidth);
     startScrollPos = startFullWidth/2;
+
+    const startStanzaLastLineChildNodes = startStanza.childNodes[startStanza.childNodes.length-1].childNodes;
+    const startStanzaTerminator = startStanzaLastLineChildNodes[startStanzaLastLineChildNodes.length-1];
+    const startStanzaTerminatorHeight = startStanzaTerminator.getBoundingClientRect().height;
+    const startStanzaMid = startStanza.getBoundingClientRect().height/2;
+
+    // y = mx+b;
+    const y = parseFloat(startStanza.dataset.slope)*startScrollPos + startStanzaTerminatorHeight;
+    console.log(startStanzaMid+startStanzaTerminatorHeight);
+    console.log(y);
+    anchorStyle.setProperty('--start-offset', (startStanzaMid + startStanzaTerminatorHeight - y));
 }
 
 function setCurrentScrollStanza(stanza, isFirst = false) {
