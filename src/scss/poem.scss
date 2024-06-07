@@ -103,12 +103,12 @@ body {
     }
 
     #anchor {
-        --left-main-offset: 0;
-        --top-main-offset: 0;
+        --left-active-offset: 0;
+        --top-active-offset: 0;
         position: relative;
-        left: calc(var(--left-main-offset) * 1px);
-        // top: calc(var(--top-main-offset) * 1px + 0 * 1px);
-        top: calc(var(--top-main-offset) * 1px + var(--start-offset) * 1px);
+        left: calc(var(--left-active-offset, 0) * 1px);
+        // top: calc(var(--top-active-offset) * 1px + 0 * 1px);
+        top: calc(var(--top-active-offset, 0) * 1px + var(--static-offset, 0) * 1px);
 
         display: flex;
 
