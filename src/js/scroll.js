@@ -80,6 +80,8 @@ function scrollTick(e) {
 
     // Check to see if we have changed stanzas.
     const useBigB = checkStanzaScroll();
+
+
     setAnchorOffsets(null, useBigB);
 }
 
@@ -125,11 +127,18 @@ function setAnchorOffsets(usedSlope = null, useBigB = 0) {
         dbp('setAnchorOffsets()') 
     }
 
+    // Anchor bounding box
     const aBB = anchor.getBoundingClientRect();
+
+    // Anchor bounding box width offset.
     const aBBWO = aBB.width/2;
+
+    // Anchor bounding box height offset.
     const aBBHO = aBB.height/2;
 
+    // Set the left active offset css value.
     anchorStyle.setProperty('--left-active-offset', (scrollZoneData.total.x * -1 + aBBWO));
+
     let newTopActiveOffset = (scrollZoneData.total.x * curSlope * -1 + aBBHO);
 
     if (useBigB !== 0) {
@@ -141,7 +150,6 @@ function setAnchorOffsets(usedSlope = null, useBigB = 0) {
     currentTopActiveOffset = newTopActiveOffset;
     // anchorStyle.setProperty('--top-active-offset', 'calc(' + newTopActiveOffset + ' + ' + bigB + ')');
     anchorStyle.setProperty('--top-active-offset', 'calc(' + newTopActiveOffset + ')');
-
 }
 
 // Sets what stanza is the current stanza.
@@ -217,7 +225,7 @@ function checkStanzaScroll() {
         changingStanza = -1;
     }
 
-    // Else if we have passed below the start of the current stanza.
+    // Else if we have passed below the start of the current stanza...
     else if (currentScrollValue < 0) {
         dbp('lesser');
         console.log(parseFloat(currentScrollStanzaData.target.previousSibling.dataset.scrollWidth));
