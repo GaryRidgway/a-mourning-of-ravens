@@ -121,10 +121,18 @@ function setScrollZone(x, y, addToTotal = true) {
     }
 }
 
+// Set the offsets for the poem, mimicing a diagonal scroll.
+//
+// The left aftive offset is what is changed for horizontal scroll
+// and it will always be a function of the current scroll value,
+// (Ex. scrollZoneData.total.x * theSlope + anOffset)
+//
+// The top active offset is a bit more complicated because
+// the slopes of the different stanzas change.
 function setAnchorOffsets(usedSlope = null, useBigB = 0) {
     const curSlope = usedSlope !== null? usedSlope : slope;
     if(debugV) {
-        dbp('setAnchorOffsets()') 
+        dbp('setAnchorOffsets()');
     }
 
     // Anchor bounding box
