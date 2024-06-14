@@ -54,7 +54,7 @@ const debugStringLength = 30;
 // Scroll stanza variables.
 let currentScrollStanzaIndex;
 let currentScrollValue = 0;
-let currentScrollOffset = 0;
+// let currentScrollOffset = 0;
 let currentScrollStanzaData;
 let bigB = 0;
 let currentTopActiveOffset = 0;

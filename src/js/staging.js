@@ -125,28 +125,19 @@ function stanzaCountLineChars(stanza) {
 
 function setStanzaOffsets() {
     poemStaging.childNodes.forEach((stanza, index) => {
-        // console.log('|________________________________________|');
-        // console.log('|______________STANZA [ ' + index + ' ]______________|');
-        // console.log('|________________________________________|');
         const stanzaBB = stanza.getBoundingClientRect();
-        // console.log('|--------| Stanza  Bounding Box |--------|');
         const SPD = getDiagonalOfBB(stanzaBB);
         const SSlope = lineSlope(SPD);
-        // console.log((angleFromSlopes(SSlope, 0) * (180/Math.PI)) + 'Degrees');
 
         const initiator = stanza.querySelector('.initiator');
         const initiatorBB = initiator.getBoundingClientRect();
-        // console.log('|-------| Initiator Bounding Box |-------|');
         const IPD = getDiagonalOfBB(initiatorBB);
         const ISlope = lineSlope(IPD);
-        // console.log((angleFromSlopes(ISlope, 0) * (180/Math.PI)) + 'Degrees');
 
         const terminator = stanza.querySelector('.terminator');
         const terminatorBB = terminator.getBoundingClientRect();
-        // console.log('|------| Terminator  Bounding Box |------|');
         const TPD = getDiagonalOfBB(terminatorBB);
         const TSlope = lineSlope(TPD);
-        // console.log((angleFromSlopes(TSlope, 0) * (180/Math.PI)) + 'Degrees');
     
         const left = terminatorBB.left - initiatorBB.left;
         const top = terminatorBB.top - initiatorBB.top;

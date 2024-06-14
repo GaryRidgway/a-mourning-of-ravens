@@ -114,7 +114,7 @@ function setScrollZone(x, y, addToTotal = true) {
         // so we just normalize the value to the higher one.
         scrollZoneData.total = {
             x: scrollZoneData.total.x + maxScroll,
-            y: scrollZoneData.total.y + maxScroll
+            y: scrollZoneData.total.y + maxScroll * slope
         }
 
         currentScrollValue += maxScroll;
@@ -146,8 +146,17 @@ function setAnchorOffsets(usedSlope = null, useBigB = 0) {
 
     // Set the left active offset css value.
     anchorStyle.setProperty('--left-active-offset', (scrollZoneData.total.x * -1 + aBBWO));
+    const indexedVal = currentScrollValue * curSlope * -1;
 
-    let newTopActiveOffset = (scrollZoneData.total.x * curSlope * -1 + aBBHO);
+    dbp('');
+    console.log('stanza indexed y val: ' + (indexedVal));
+    console.log('total y val: ' + scrollZoneData.total.y)
+    console.log('indexed offset: ' + currentScrollStanzaData.indexedOffset)
+    console.log('previous scroll offset: ' + currentScrollStanzaData.previousScrollOffset);
+    // // let newTopActiveOffset = currentScrollStanzaData.previousScrollOffset + aBBHO + indexedVal;
+    // let newTopActiveOffset = -scrollZoneData.total.y +currentScrollStanzaData.previousScrollOffset + aBBHO + indexedVal;
+
+    let newTopActiveOffset = currentScrollStanzaData.previousScrollOffset + (currentScrollStanzaData.indexedOffset*2) + aBBHO + indexedVal;
 
     if (useBigB !== 0) {
         // console.log('BEEG')
@@ -157,13 +166,18 @@ function setAnchorOffsets(usedSlope = null, useBigB = 0) {
     anchorStyle.setProperty('--big-b', bigB);
     currentTopActiveOffset = newTopActiveOffset;
     // anchorStyle.setProperty('--top-active-offset', 'calc(' + newTopActiveOffset + ' + ' + bigB + ')');
-    anchorStyle.setProperty('--top-active-offset', 'calc(' + newTopActiveOffset + ')');
+    anchorStyle.setProperty('--top-active-offset', 'calc(' + currentTopActiveOffset + ')');
 }
 
 // Sets what stanza is the current stanza.
 function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
     if(debugV) {
         dbp('setCurrentScrollStanza()') 
+    }
+
+    if(debug) {
+        console.log('STANZA PASSED IN');
+        console.log(stanza);
     }
 
     // Initialize a new object for a scroll stanza.
@@ -174,14 +188,23 @@ function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
     const data = stanza.dataset;
 
     // And track some of its relevant data.
+
     newCurrentScrollStanza.target = stanza;
     newCurrentScrollStanza.slope = parseFloat(data.slope);
     newCurrentScrollStanza.scrollWidth = parseFloat(data.scrollWidth);
+
+    if(debug) {
+        console.log('Stanza data created');
+        console.log(newCurrentScrollStanza);
+    }
     
     // Reset the 'currentScrollValue'.
     let newCurrentScrollValue = 0;
 
     if (isFirst) {
+        newCurrentScrollStanza.previousScrollOffset = 0;
+        newCurrentScrollStanza.indexedOffset = 0;
+
         if (startInTopLeft) {
             newCurrentScrollValue = 0;
         }
@@ -190,13 +213,18 @@ function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
         }
     }
     else {
+
         if (currentScrollValue <= 0) {
             const normalizedValue = currentScrollValue + newCurrentScrollStanza.scrollWidth;
             newCurrentScrollValue = normalizedValue % newCurrentScrollStanza.scrollWidth;
+            newCurrentScrollStanza.previousScrollOffset = scrollZoneData.total.y;
+            newCurrentScrollStanza.indexedOffset = parseFloat(data.topOffset);
         }
         else {
             const normalizedValue = currentScrollValue + currentScrollStanzaData.scrollWidth;
             newCurrentScrollValue = normalizedValue % currentScrollStanzaData.scrollWidth;
+            newCurrentScrollStanza.previousScrollOffset = -scrollZoneData.total.y;
+            newCurrentScrollStanza.indexedOffset = 0;
         }
     }
 
@@ -211,6 +239,16 @@ function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
 
     //And then make the curent stanza data the stuff we made.
     currentScrollStanzaData = newCurrentScrollStanza;
+
+
+    // dbp('');
+    // console.log('GREATER');
+    // // HEY ALAN THE CURRENT SCROLL VALUE IS A GOOD VRIABLE USE IT
+    // console.log('pos in stanza: ' + currentScrollValue);
+    // console.log('slope: ' + currentScrollStanzaData.slope);
+    // console.log('f(n) WITHOUT +B: ' + currentScrollStanzaData.slope * currentScrollValue);
+    // console.log('stanza number: ' + currentScrollStanzaData.target.nextSibling.dataset.stanzaNumber);
+
 }
 
 // Check to see if we have changed stanzas.
@@ -224,10 +262,6 @@ function checkStanzaScroll() {
 
     // If we have passed beyond the width of the current scroll stanza...
     if (currentScrollValue > currentScrollStanzaData.scrollWidth) {
-        dbp('greater');
-        dbp(scrollZoneData.total.x % currentScrollStanzaData.scrollWidth);
-        console.log(currentScrollStanzaData.target.nextSibling.dataset.stanzaNumber);
-
         // Set the current stanza.
         setCurrentScrollStanza(currentScrollStanzaData.target.nextSibling);
         changingStanza = -1;
@@ -235,9 +269,6 @@ function checkStanzaScroll() {
 
     // Else if we have passed below the start of the current stanza...
     else if (currentScrollValue < 0) {
-        dbp('lesser');
-        console.log(parseFloat(currentScrollStanzaData.target.previousSibling.dataset.scrollWidth));
-        console.log(currentScrollStanzaData.target.previousSibling.dataset.stanzaNumber);
 
         // Set the current stanza.
         setCurrentScrollStanza(currentScrollStanzaData.target.previousSibling);
