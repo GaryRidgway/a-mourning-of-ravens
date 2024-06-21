@@ -49,6 +49,7 @@ const scrollSpeedMultiplier = 0.2;
 const debug = true;
 const debugV = false;
 const debugStringLength = 30;
+const debugTrimStringLength = 5;
 
 
 // Scroll stanza variables.
@@ -56,7 +57,7 @@ let currentScrollStanzaIndex;
 let currentScrollValue = 0;
 // let currentScrollOffset = 0;
 let currentScrollStanzaData;
-let bigB = 0;
+let direction = 1;
 let currentTopActiveOffset = 0;
 let prevTopActiveOffset = 0;
 let calcOffset = 0;

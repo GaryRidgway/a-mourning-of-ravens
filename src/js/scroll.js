@@ -79,10 +79,9 @@ function scrollTick(e) {
     );
 
     // Check to see if we have changed stanzas.
-    const useBigB = checkStanzaScroll();
+    checkStanzaScroll();
 
-
-    setAnchorOffsets(null, useBigB);
+    setAnchorOffsets(null);
 }
 
 // Set the scroll zone and track any movement in a rolling scroll total.
@@ -129,7 +128,7 @@ function setScrollZone(x, y, addToTotal = true) {
 //
 // The top active offset is a bit more complicated because
 // the slopes of the different stanzas change.
-function setAnchorOffsets(usedSlope = null, useBigB = 0) {
+function setAnchorOffsets(usedSlope = null) {
     const curSlope = usedSlope !== null? usedSlope : slope;
     if(debugV) {
         dbp('setAnchorOffsets()');
@@ -148,22 +147,25 @@ function setAnchorOffsets(usedSlope = null, useBigB = 0) {
     anchorStyle.setProperty('--left-active-offset', (scrollZoneData.total.x * -1 + aBBWO));
     const indexedVal = currentScrollValue * curSlope * -1;
 
-    dbp('');
-    console.log('stanza indexed y val: ' + (indexedVal));
-    console.log('total y val: ' + scrollZoneData.total.y)
-    console.log('indexed offset: ' + currentScrollStanzaData.indexedOffset)
-    console.log('previous scroll offset: ' + currentScrollStanzaData.previousScrollOffset);
-    // // let newTopActiveOffset = currentScrollStanzaData.previousScrollOffset + aBBHO + indexedVal;
-    // let newTopActiveOffset = -scrollZoneData.total.y +currentScrollStanzaData.previousScrollOffset + aBBHO + indexedVal;
-
-    let newTopActiveOffset = currentScrollStanzaData.previousScrollOffset + (currentScrollStanzaData.indexedOffset*2) + aBBHO + indexedVal;
-
-    if (useBigB !== 0) {
-        // console.log('BEEG')
-        // newTopActiveOffset = currentTopActiveOffset;
+    if(debug) {
+        dbp('');
+        console.log('Previous scroll offset: ' + dbt(currentScrollStanzaData.previousScrollOffset));
+        console.log('Indexed offset: ' + dbt(currentScrollStanzaData.indexedOffset));
+        console.log('Direction: ' + dbt(direction));
+        console.log('Anchor bounding box height offset, or');
+        console.log('aBBHO: ' + dbt(aBBHO));
+        // console.log('Stanza indexed y val: ' + (indexedVal));
+        dbp('','\u2508');
     }
 
-    anchorStyle.setProperty('--big-b', bigB);
+    let newTopActiveOffset = (currentScrollStanzaData.previousScrollOffset * direction) + currentScrollStanzaData.indexedOffset + aBBHO + indexedVal;
+
+    if(debug) {
+        console.log('Active offset (rounded): ' + dbt(newTopActiveOffset));
+        console.log('(' + dbt(currentScrollStanzaData.previousScrollOffset) + '* ' + dbt(direction) + ') + ' + dbt(currentScrollStanzaData.indexedOffset) + '  + ' + dbt(aBBHO) + ' + ' + dbt(indexedVal) + ' = ' + dbt(newTopActiveOffset));
+    }
+
+    // anchorStyle.setProperty('--big-b', bigB);
     currentTopActiveOffset = newTopActiveOffset;
     // anchorStyle.setProperty('--top-active-offset', 'calc(' + newTopActiveOffset + ' + ' + bigB + ')');
     anchorStyle.setProperty('--top-active-offset', 'calc(' + currentTopActiveOffset + ')');
@@ -257,14 +259,19 @@ function checkStanzaScroll() {
         dbp('checkStanzaScroll()');
     }
 
-    // Set to 0 by default.
-    let changingStanza = 0;
+
+    if(debug) {
+        console.log('Current scroll value: ' + currentScrollValue);
+        console.log('Current scroll stanza width: ' + currentScrollStanzaData.scrollWidth);
+        console.log('Greater: ' + (currentScrollValue > currentScrollStanzaData.scrollWidth));
+        console.log('Lesser: ' + (currentScrollValue < 0));
+    }
 
     // If we have passed beyond the width of the current scroll stanza...
     if (currentScrollValue > currentScrollStanzaData.scrollWidth) {
         // Set the current stanza.
         setCurrentScrollStanza(currentScrollStanzaData.target.nextSibling);
-        changingStanza = -1;
+        direction = 1;
     }
 
     // Else if we have passed below the start of the current stanza...
@@ -272,8 +279,6 @@ function checkStanzaScroll() {
 
         // Set the current stanza.
         setCurrentScrollStanza(currentScrollStanzaData.target.previousSibling);
-        changingStanza = 1;
+        direction = -1;
     }
-
-    return changingStanza;
 }
