@@ -33,6 +33,7 @@ const scrollZoneData = {
     container: null,
     el: null,
     buffer: null,
+    lenience: 200,
     prevX: 0,
     prevY: 0,
     dims: {},

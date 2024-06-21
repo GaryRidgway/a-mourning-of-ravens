@@ -2,6 +2,8 @@ body {
     margin: 0;
     width: 100vw;
     height: 100vh;
+    background: rgb(0,101,130);
+    background: radial-gradient(circle, rgba(0,101,130,1) 0%, rgba(8,71,98,1) 76%, rgba(7,54,64,1) 100%);
 }
 
 :root {
@@ -44,6 +46,7 @@ body {
             height: var(--base-line-height);
             letter-spacing: var(--char-spacing, inherit);
             font-size: calc(var(--char-scaling, inherit) * var(--base-font-size));
+            color: #fafafa;
             padding-bottom: 4px;
 
             &:last-child {
@@ -100,6 +103,10 @@ body {
         position: absolute;
         left: calc((var(--left-offset, 0px)* 1px));
         top: calc((var(--top-offset, 0px)* 1px));
+
+        span:not(.terminator) {
+            filter: drop-shadow(2px 4px 4px black);
+        }
     }
 
     #anchor {
