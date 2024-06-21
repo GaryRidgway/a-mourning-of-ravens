@@ -46,8 +46,10 @@ let slope = 1;
 const scrollSpeedMultiplier = 0.2;
 
 // Debug.
-const debug = true;
+const debug = false;
 const debugV = false;
+const debugIncludeScroll = true;
+const debugIncludeHelpers = true;
 const debugStringLength = 30;
 const debugTrimStringLength = 5;
 

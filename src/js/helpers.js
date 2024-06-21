@@ -1,3 +1,6 @@
+const helpersDebug = debug && debugIncludeHelpers;
+const helpersDebugV = debugV && debugIncludeHelpers;
+
 function scale(number, inMin, inMax, outMin, outMax) {
     return (number - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
 }
@@ -42,6 +45,9 @@ function fetchRenderedStanza(index, uid) {
 // https://gist.github.com/jjmu15/8646226
 // Determine if an element is in the visible viewport.
 function isInViewport(element) {
+    if (helpersDebug) {
+        console.log('++--is in viewport--++')
+    }
     var rect = element.getBoundingClientRect();
     var html = document.documentElement;
     return (
@@ -76,12 +82,12 @@ function fetchConnector(stanza, direction) {
 
 function checkForVisibleConnectors() {
     const connectorKeys = Object.keys(nonRenderedConnectors);
-
+    
     if (connectorKeys.length > 0) {
         const connectors = [];
         connectorKeys.forEach((key) => {
             const connector = nonRenderedConnectors[key];
-            if ( connector.visible === true ) {
+            if ( isInViewport(connector.stanza) ) {
                 connectors.push(key);
             }
         });

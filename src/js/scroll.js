@@ -1,11 +1,14 @@
+const scrollDebug = debug && debugIncludeScroll;
+const scrollDebugV = debugV && debugIncludeScroll;
+
 // Initialize the scroll zone and the current scroll stanza.
 function scrollInit() {
-    if(debugV) {
+    if(scrollDebugV) {
         dbp('scrollInit()') 
     }
 
     createScrollZone();
-    if (debug) {
+    if (scrollDebug) {
         anchor.childNodes.forEach((stanza) => {
             const centerDot = document.createElement("div");
             centerDot.classList.add('center-dot');
@@ -26,7 +29,7 @@ function scrollInit() {
 
 // Create the scrollable area that the user can interact with.
 function createScrollZone() {
-    if(debugV) {
+    if(scrollDebugV) {
         dbp('createScrollZone()') 
     }
 
@@ -67,7 +70,7 @@ function createScrollZone() {
 
 // Funtion to fire on every scroll event.
 function scrollTick(e) {
-    if(debugV) {
+    if(scrollDebugV) {
         dbp('scrollTick()') 
     }
 
@@ -78,6 +81,8 @@ function scrollTick(e) {
         scrollZoneData.dims.y * 0.16
     );
 
+    cascadeRender();
+
     // Check to see if we have changed stanzas.
     checkStanzaScroll();
 
@@ -86,7 +91,7 @@ function scrollTick(e) {
 
 // Set the scroll zone and track any movement in a rolling scroll total.
 function setScrollZone(x, y, addToTotal = true) {
-    if(debugV) {
+    if(scrollDebugV) {
         dbp('setScrollZone()') 
     }
 
@@ -130,7 +135,7 @@ function setScrollZone(x, y, addToTotal = true) {
 // the slopes of the different stanzas change.
 function setAnchorOffsets(usedSlope = null) {
     const curSlope = usedSlope !== null? usedSlope : slope;
-    if(debugV) {
+    if(scrollDebugV) {
         dbp('setAnchorOffsets()');
     }
 
@@ -147,7 +152,7 @@ function setAnchorOffsets(usedSlope = null) {
     anchorStyle.setProperty('--left-active-offset', (scrollZoneData.total.x * -1 + aBBWO));
     const indexedVal = currentScrollValue * curSlope * -1;
 
-    if(debug) {
+    if(scrollDebug) {
         dbp('');
         console.log('Previous scroll offset: ' + dbt(currentScrollStanzaData.previousScrollOffset));
         console.log('Indexed offset: ' + dbt(currentScrollStanzaData.indexedOffset));
@@ -160,7 +165,7 @@ function setAnchorOffsets(usedSlope = null) {
 
     let newTopActiveOffset = (currentScrollStanzaData.previousScrollOffset * direction) + currentScrollStanzaData.indexedOffset + aBBHO + indexedVal;
 
-    if(debug) {
+    if(scrollDebug) {
         console.log('Active offset (rounded): ' + dbt(newTopActiveOffset));
         console.log('(' + dbt(currentScrollStanzaData.previousScrollOffset) + '* ' + dbt(direction) + ') + ' + dbt(currentScrollStanzaData.indexedOffset) + '  + ' + dbt(aBBHO) + ' + ' + dbt(indexedVal) + ' = ' + dbt(newTopActiveOffset));
     }
@@ -173,11 +178,11 @@ function setAnchorOffsets(usedSlope = null) {
 
 // Sets what stanza is the current stanza.
 function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
-    if(debugV) {
+    if(scrollDebugV) {
         dbp('setCurrentScrollStanza()') 
     }
 
-    if(debug) {
+    if(scrollDebug) {
         console.log('STANZA PASSED IN');
         console.log(stanza);
     }
@@ -195,7 +200,7 @@ function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
     newCurrentScrollStanza.slope = parseFloat(data.slope);
     newCurrentScrollStanza.scrollWidth = parseFloat(data.scrollWidth);
 
-    if(debug) {
+    if(scrollDebug) {
         console.log('Stanza data created');
         console.log(newCurrentScrollStanza);
     }
@@ -255,12 +260,12 @@ function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
 
 // Check to see if we have changed stanzas.
 function checkStanzaScroll() {
-    if(debugV) {
+    if(scrollDebugV) {
         dbp('checkStanzaScroll()');
     }
 
 
-    if(debug) {
+    if(scrollDebug) {
         console.log('Current scroll value: ' + currentScrollValue);
         console.log('Current scroll stanza width: ' + currentScrollStanzaData.scrollWidth);
         console.log('Greater: ' + (currentScrollValue > currentScrollStanzaData.scrollWidth));

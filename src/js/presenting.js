@@ -103,9 +103,8 @@ function addNonRenderedConnector(stanza, direction) {
 
 function cascadeRender(options) {
     if (typeof anchor !== 'undefined') {
-
-        const connectorKeys = Object.keys(nonRenderedConnectors);
-        if (connectorKeys.length > 0) {
+        const ObjConnectorKeys = Object.keys(nonRenderedConnectors);
+        if (ObjConnectorKeys.length > 0) {
 
             let connectorKeys = checkForVisibleConnectors();
 
