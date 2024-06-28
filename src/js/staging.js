@@ -1,5 +1,5 @@
 function pairSpaceAndScale() {
-    const allLines = poemStaging.querySelectorAll('.stanza .line');
+    const allLines = mourn.config.poemStaging.querySelectorAll('.stanza .line');
     const numAllLines = allLines.length;
     allLines.forEach((line, index) => {
         const hasInitiator = line.querySelectorAll('.initiator').length > 0;
@@ -22,8 +22,8 @@ function pairSpaceAndScale() {
 
         const spacing = invLogScale(scale(
             charCount,
-            leastChars,
-            mostChars,
+            mourn.staging.leastChars,
+            mourn.staging.mostChars,
             1,
             10
         ));
@@ -32,8 +32,8 @@ function pairSpaceAndScale() {
 
         const scaling = invLogScale(scale(
             charCount,
-            leastChars,
-            mostChars,
+            mourn.staging.leastChars,
+            mourn.staging.mostChars,
             1,
             10
         ));
@@ -45,8 +45,8 @@ function addStanzasToStaging(jsonData) {
     jsonData.forEach((stanza, index) => {
         const stanzaNode = addStanzaToStaging(index);
         const stanzaWidth = stanzaNode.getBoundingClientRect().width;
-        if (stanzaWidth > widestStanza) {
-            widestStanza = Math.ceil(stanzaWidth);
+        if (stanzaWidth > mourn.staging.widestStanza) {
+            mourn.staging.widestStanza = Math.ceil(stanzaWidth);
         }
         stanzaCountLineChars(stanzaNode);
     });
@@ -60,7 +60,7 @@ function addStanzaToStaging(stanzaNumber) {
     lines.forEach((line) => {
         stanza.append(line);
     })
-    poemStaging.append(stanza);
+    mourn.config.poemStaging.append(stanza);
     return stanza;
 }
 
@@ -104,16 +104,16 @@ function stanzaCountLineChars(stanza) {
     const lines = Array.prototype.slice.call(stanza.children);
     lines.forEach((line) => {
         const chars = line.textContent.length;
-        if (chars > mostChars) {
-            mostChars = Math.ceil(chars);
+        if (chars > mourn.staging.mostChars) {
+            mourn.staging.mostChars = Math.ceil(chars);
             const prevEl = document.getElementById('most-line-characters');
             if (prevEl) {
                 prevEl.removeAttribute('id');
             }
             line.setAttribute('id', 'most-line-characters');
         }
-        else if (chars < leastChars) {
-            leastChars = Math.floor(chars);
+        else if (chars < mourn.staging.leastChars) {
+            mourn.staging.leastChars = Math.floor(chars);
             const prevEl = document.getElementById('least-line-characters');
             if (prevEl) {
                 prevEl.removeAttribute('id');
@@ -124,7 +124,7 @@ function stanzaCountLineChars(stanza) {
 }
 
 function setStanzaOffsets() {
-    poemStaging.childNodes.forEach((stanza, index) => {
+    mourn.config.poemStaging.childNodes.forEach((stanza, index) => {
         const stanzaBB = stanza.getBoundingClientRect();
         const SPD = getDiagonalOfBB(stanzaBB);
         const SSlope = lineSlope(SPD);
@@ -154,9 +154,9 @@ function setStanzaOffsets() {
             }
         ]
         stanza.setAttribute('data-slope', lineSlope(slopeData));
-        stanza.setAttribute('data-scroll-width-begin', fullScrollWidth);
+        stanza.setAttribute('data-scroll-width-begin', mourn.staging.fullScrollWidth);
         const scrollWidth = SPD[1].x - TPD[1].x;
-        fullScrollWidth += scrollWidth;
+        mourn.staging.fullScrollWidth += scrollWidth;
         stanza.setAttribute('data-scroll-width', scrollWidth);
         stanza.style.setProperty('--svg-width', scrollWidth);
         stanza.style.setProperty('--svg-height', SPD[1].y - TPD[1].y);

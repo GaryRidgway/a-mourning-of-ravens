@@ -4,19 +4,19 @@ document.addEventListener("DOMContentLoaded", function () {
 
   pairSpaceAndScale();
 
-  docStyle.setProperty('--stanza-width', (widestStanza * mainScaling) + 'px');
+  mourn.config.docStyle.setProperty('--stanza-width', (mourn.staging.widestStanza * mourn.staging.mainScaling) + 'px');
 
   setStanzaOffsets();
 
   const startStanzaIndex = randomStanzaIndex();
-  startStanza = fetchStagedStanza(startStanzaIndex);
-  placeFirstStanza(startStanza);
+  mourn.trackers.startStanza = fetchStagedStanza(startStanzaIndex);
+  placeFirstStanza(mourn.trackers.startStanza);
 
   cascadeRender();
 
   scrollInit();
 
-  if(debug) {
+  if(mourn.debug.on) {
     placePoemCenter();
   }
 });

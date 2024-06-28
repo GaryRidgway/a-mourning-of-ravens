@@ -1,6 +1,6 @@
 function dbp(string, delimChar = '\u2501') {
     const strLen = string.length;
-    const remainingChars = (debugStringLength - strLen)/2;
+    const remainingChars = (mourn.debug.stringLength - strLen)/2;
     let printed = delimChar+delimChar;
     if (string.length > 0) {
         printed = ' ' + string + ' ';
@@ -11,5 +11,5 @@ function dbp(string, delimChar = '\u2501') {
 
 function dbt(objectToTrim) {
     const string = objectToTrim.toString();
-    return string.substring(0, debugTrimStringLength);
+    return string.substring(0, mourn.debug.trimStringLength);
 }

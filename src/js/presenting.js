@@ -1,17 +1,17 @@
 // Functions.
 function placeFirstStanza(stanza) {
 
-    anchor = document.createElement("div");
-    anchorStyle = anchor.style;
-    anchor.setAttribute('id', 'anchor');
-    startStanza = placeStanza(stanza);
-    startStanza.setAttribute('id', 'anchor-stanza');
-    poemContainer.append(anchor);
+    mourn.trackers.anchor = document.createElement("div");
+    mourn.trackers.anchorStyle = mourn.trackers.anchor.style;
+    mourn.trackers.anchor.setAttribute('id', 'anchor');
+    mourn.trackers.startStanza = placeStanza(stanza);
+    mourn.trackers.startStanza.setAttribute('id', 'anchor-stanza');
+    mourn.config.poemContainer.append(mourn.trackers.anchor);
 
-    addNonRenderedConnector(startStanza, -1);
-    addNonRenderedConnector(startStanza, 1);
+    addNonRenderedConnector(mourn.trackers.startStanza, -1);
+    addNonRenderedConnector(mourn.trackers.startStanza, 1);
 
-    return startStanza;
+    return mourn.trackers.startStanza;
 }
 
 function placeStanza(stanza, options = null) {
@@ -28,10 +28,10 @@ function placeStanza(stanza, options = null) {
                 options.leftOffset < 0 &&
                 options.topOffset < 0
             ) {
-                anchor.prepend(clonedStanza);
+                mourn.trackers.anchor.prepend(clonedStanza);
             }
             else {
-                anchor.append(clonedStanza);
+                mourn.trackers.anchor.append(clonedStanza);
             }
 
             clonedStanza.style.setProperty('--left-offset', parseFloat(options.leftOffset));
@@ -39,7 +39,7 @@ function placeStanza(stanza, options = null) {
         }
     }
     else {
-        anchor.append(clonedStanza);
+        mourn.trackers.anchor.append(clonedStanza);
     }
 
     return clonedStanza;
@@ -56,7 +56,10 @@ function render(prevStanza, direction = 1) {
     // console.log(styleStanza);
 
     ////////
-    let passedOptions = defaultRenderOptions;
+    let passedOptions = {
+        leftOffset: 0,
+        topOffset: 0,
+    };
 
     passedOptions.leftOffset = direction * parseFloat(refStanza.dataset.leftOffset);
     passedOptions.topOffset = direction * parseFloat(refStanza.dataset.topOffset);
@@ -94,7 +97,7 @@ function addNonRenderedConnector(stanza, direction) {
     const uid = getUID(stanza) + '[' + direction + ']';
     const connectorVisible = isInViewport(fetchConnector(stanza, direction));
 
-    nonRenderedConnectors[uid] = {
+    mourn.trackers.nonRenderedConnectors[uid] = {
         stanza: stanza,
         direction, direction,
         visible: connectorVisible
@@ -102,8 +105,8 @@ function addNonRenderedConnector(stanza, direction) {
 }
 
 function cascadeRender(options) {
-    if (typeof anchor !== 'undefined') {
-        const ObjConnectorKeys = Object.keys(nonRenderedConnectors);
+    if (typeof mourn.trackers.anchor !== 'undefined') {
+        const ObjConnectorKeys = Object.keys(mourn.trackers.nonRenderedConnectors);
         if (ObjConnectorKeys.length > 0) {
 
             let connectorKeys = checkForVisibleConnectors();
@@ -115,7 +118,7 @@ function cascadeRender(options) {
 
                 while(connectorKeys.length > 0 && cascadeContinueIterating(iterations, options)) {
                     connectorKeys.forEach((connectorKey) => {
-                        const connectorStanza = nonRenderedConnectors[connectorKey];
+                        const connectorStanza = mourn.trackers.nonRenderedConnectors[connectorKey];
                         const connector = fetchConnector(connectorStanza.stanza, connectorStanza.direction);
                         
                         if(!isInViewport(connector)) {
@@ -125,7 +128,7 @@ function cascadeRender(options) {
                         else {
                             const newStanza = render(connectorStanza.stanza, connectorStanza.direction);
                             addNonRenderedConnector(newStanza.stanza, connectorStanza.direction);
-                            delete nonRenderedConnectors[connectorKey];
+                            delete mourn.trackers.nonRenderedConnectors[connectorKey];
                         }
                     });
 
@@ -166,5 +169,5 @@ function cascadeContinueIterating(iterations, options = null) {
 function placePoemCenter() {
     const poemContainerCenter = document.createElement("div");
     poemContainerCenter.classList.add('center-dot');
-    poemContainer.append(poemContainerCenter);
+    mourn.config.poemContainer.append(poemContainerCenter);
 }

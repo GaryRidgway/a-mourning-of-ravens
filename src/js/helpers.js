@@ -1,18 +1,18 @@
-const helpersDebug = debug && debugIncludeHelpers;
-const helpersDebugV = debugV && debugIncludeHelpers;
+const helpersDebug = mourn.debug.on && mourn.debug.includeHelpers;
+const helpersDebugV = mourn.debug.verbose && mourn.debug.includeHelpers;
 
 function scale(number, inMin, inMax, outMin, outMax) {
     return (number - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
 }
 
 function logScale(x) {
-    const logScalar = (maxScaling - minScaling)/Math.log(10);
-    return Math.log(x)*logScalar+minScaling
+    const logScalar = (mourn.staging.maxScaling - mourn.staging.minScaling)/Math.log(10);
+    return Math.log(x)*logScalar+mourn.staging.minScaling
 }
 
 function invLogScale(x) {
     const normalVal =  logScale(x);
-    return scale(normalVal, minScaling, maxScaling, maxScaling, minScaling);
+    return scale(normalVal, mourn.staging.minScaling, mourn.staging.maxScaling, mourn.staging.maxScaling, mourn.staging.minScaling);
 }
 
 function getRandomInt(max) {
@@ -20,11 +20,11 @@ function getRandomInt(max) {
 }
 
 function randomStanzaIndex() {
-    return getRandomInt(stanzaCount);
+    return getRandomInt(mourn.config.stanzaCount);
 }
 
 function fetchStanza(index, selector, uid = null) {
-    const realIndex = (index + stanzaCount) % stanzaCount;
+    const realIndex = (index + mourn.config.stanzaCount) % mourn.config.stanzaCount;
     const baseSelector = selector + ' [data-stanza-number="' + realIndex + '"]';
     let uidSelector = '';
     if (uid !== null) {
@@ -49,7 +49,7 @@ function isInViewport(element) {
         console.log('++--is in viewport--++')
     }
 
-    const lenience = scrollZoneData.lenience;
+    const lenience = mourn.scrollZoneData.lenience;
 
     var rect = element.getBoundingClientRect();
     var html = document.documentElement;
@@ -85,12 +85,12 @@ function fetchConnector(stanza, direction) {
 }
 
 function checkForVisibleConnectors() {
-    const connectorKeys = Object.keys(nonRenderedConnectors);
+    const connectorKeys = Object.keys(mourn.trackers.nonRenderedConnectors);
 
     if (connectorKeys.length > 0) {
         const connectors = [];
         connectorKeys.forEach((key) => {
-            const connector = nonRenderedConnectors[key];
+            const connector = mourn.trackers.nonRenderedConnectors[key];
             if ( isInViewport(connector.stanza) ) {
                 connectors.push(key);
             }

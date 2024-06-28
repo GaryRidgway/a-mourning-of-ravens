@@ -1,15 +1,15 @@
-const scrollDebug = debug && debugIncludeScroll;
-const scrollDebugV = debugV && debugIncludeScroll;
+const scrollDebug = mourn.debug.on && mourn.debug.includeScroll;
+const scrollDebugV = mourn.debug.verbose && mourn.debug.includeScroll;
 
 // Initialize the scroll zone and the current scroll stanza.
 function scrollInit() {
-    if(scrollDebugV) {
+    if(scrollDebug) {
         dbp('scrollInit()') 
     }
 
     createScrollZone();
     if (scrollDebug) {
-        anchor.childNodes.forEach((stanza) => {
+        mourn.trackers.anchor.childNodes.forEach((stanza) => {
             const centerDot = document.createElement("div");
             centerDot.classList.add('center-dot');
             stanza.prepend(centerDot);
@@ -24,7 +24,7 @@ function scrollInit() {
         });
     }
 
-    setCurrentScrollStanza(startStanza, true);
+    setCurrentScrollStanza(mourn.trackers.startStanza, true);
 }
 
 // Create the scrollable area that the user can interact with.
@@ -34,36 +34,36 @@ function createScrollZone() {
     }
 
     // Create a container for the scroll zone.
-    scrollZoneData.container = document.createElement("div");
-    scrollZoneData.container.id = 'scroll-zone-container';
-    poemContainer.append(scrollZoneData.container);
+    mourn.scrollZoneData.container = document.createElement("div");
+    mourn.scrollZoneData.container.id = 'scroll-zone-container';
+    mourn.config.poemContainer.append(mourn.scrollZoneData.container);
 
     // Create the actual zone.
-    scrollZoneData.el = document.createElement("div");
-    scrollZoneData.el.id = 'scroll-zone';
-    scrollZoneData.container.append(scrollZoneData.el);
+    mourn.scrollZoneData.el = document.createElement("div");
+    mourn.scrollZoneData.el.id = 'scroll-zone';
+    mourn.scrollZoneData.container.append(mourn.scrollZoneData.el);
 
     // Create the buffer scroll space so that the user doesnt see the scrollbars jumping around.
-    scrollZoneData.buffer = document.createElement("div");
-    scrollZoneData.buffer.id = 'scroll-zone-buffer';
-    scrollZoneData.el.append(scrollZoneData.buffer);
+    mourn.scrollZoneData.buffer = document.createElement("div");
+    mourn.scrollZoneData.buffer.id = 'scroll-zone-buffer';
+    mourn.scrollZoneData.el.append(mourn.scrollZoneData.buffer);
 
     // Get and store the scroll zone's dimensions for later use.
-    scrollZoneData.dims = {
-        x: scrollZoneData.el.scrollWidth,
-        y: scrollZoneData.el.scrollHeight
+    mourn.scrollZoneData.dims = {
+        x: mourn.scrollZoneData.el.scrollWidth,
+        y: mourn.scrollZoneData.el.scrollHeight
     }
 
     // Set the scroll zone's position, but don't track the initial movement as a scroll.
     setScrollZone(
         // Multiply by 0.16 to put it in the center.
-        scrollZoneData.dims.x * 0.16,
-        scrollZoneData.dims.y * 0.16,
+        mourn.scrollZoneData.dims.x * 0.16,
+        mourn.scrollZoneData.dims.y * 0.16,
         false
     );
 
     // Add the scroll listener to the scroll zone.
-    scrollZoneData.el.onscroll = function (e) {
+    mourn.scrollZoneData.el.onscroll = function (e) {
         scrollTick(e);
     }
 }
@@ -77,8 +77,8 @@ function scrollTick(e) {
     // Reset the scroll zone and track the distance scrolled.
     setScrollZone(
         // Multiply by 0.16 to put it in the center.
-        scrollZoneData.dims.x * 0.16,
-        scrollZoneData.dims.y * 0.16
+        mourn.scrollZoneData.dims.x * 0.16,
+        mourn.scrollZoneData.dims.y * 0.16
     );
 
     cascadeRender();
@@ -95,20 +95,20 @@ function setScrollZone(x, y, addToTotal = true) {
         dbp('setScrollZone()') 
     }
 
-    scrollZoneData.prevX = scrollZoneData.el.scrollLeft;
-    scrollZoneData.prevY = scrollZoneData.el.scrollTop;
-    scrollZoneData.el.scrollLeft = x;
-    scrollZoneData.el.scrollTop = y;
+    mourn.scrollZoneData.prevX = mourn.scrollZoneData.el.scrollLeft;
+    mourn.scrollZoneData.prevY = mourn.scrollZoneData.el.scrollTop;
+    mourn.scrollZoneData.el.scrollLeft = x;
+    mourn.scrollZoneData.el.scrollTop = y;
 
     // If we want to track the total scrolling...
     if (addToTotal) {
 
         // Calculate the largest scroll value between vertical and horizontal.
-        const left = scrollZoneData.prevX - scrollZoneData.el.scrollLeft;
-        const top = scrollZoneData.prevY - scrollZoneData.el.scrollTop;
+        const left = mourn.scrollZoneData.prevX - mourn.scrollZoneData.el.scrollLeft;
+        const top = mourn.scrollZoneData.prevY - mourn.scrollZoneData.el.scrollTop;
         const leftPower = Math.abs(left);
         const topPower = Math.abs(top);
-        const maxScroll = leftPower > topPower ? left : top;
+        const maxScroll = (leftPower > topPower ? left : top) * mourn.trackers.scrollSpeedMultiplier;
 
         // And then add them to the total.
         // We do this because we want vertical and 
@@ -116,12 +116,12 @@ function setScrollZone(x, y, addToTotal = true) {
         // poem diagonally. It can get confusing if someone doesn't
         // know whether they should scroll forizontally or vertically,
         // so we just normalize the value to the higher one.
-        scrollZoneData.total = {
-            x: scrollZoneData.total.x + maxScroll,
-            y: scrollZoneData.total.y + maxScroll * slope
+        mourn.scrollZoneData.total = {
+            x: mourn.scrollZoneData.total.x + maxScroll,
+            y: mourn.scrollZoneData.total.y + maxScroll * mourn.trackers.slope
         }
 
-        currentScrollValue += maxScroll;
+        mourn.scrollStanza.currentScrollValue += maxScroll;
     }
 }
 
@@ -129,18 +129,18 @@ function setScrollZone(x, y, addToTotal = true) {
 //
 // The left aftive offset is what is changed for horizontal scroll
 // and it will always be a function of the current scroll value,
-// (Ex. scrollZoneData.total.x * theSlope + anOffset)
+// (Ex. mourn.scrollZoneData.total.x * theSlope + anOffset)
 //
 // The top active offset is a bit more complicated because
 // the slopes of the different stanzas change.
 function setAnchorOffsets(usedSlope = null) {
-    const curSlope = usedSlope !== null? usedSlope : slope;
+    const curSlope = usedSlope !== null? usedSlope : mourn.trackers.slope;
     if(scrollDebugV) {
         dbp('setAnchorOffsets()');
     }
 
     // Anchor bounding box
-    const aBB = anchor.getBoundingClientRect();
+    const aBB = mourn.trackers.anchor.getBoundingClientRect();
 
     // Anchor bounding box width offset.
     const aBBWO = aBB.width/2;
@@ -149,31 +149,31 @@ function setAnchorOffsets(usedSlope = null) {
     const aBBHO = aBB.height/2;
 
     // Set the left active offset css value.
-    anchorStyle.setProperty('--left-active-offset', (scrollZoneData.total.x * -1 + aBBWO));
-    const indexedVal = currentScrollValue * curSlope * -1;
+    mourn.trackers.anchorStyle.setProperty('--left-active-offset', (mourn.scrollZoneData.total.x * -1 + aBBWO));
+    const indexedVal = mourn.scrollStanza.currentScrollValue * curSlope * -1;
 
     if(scrollDebug) {
         dbp('');
-        console.log('Previous scroll offset: ' + dbt(currentScrollStanzaData.previousScrollOffset));
-        console.log('Indexed offset: ' + dbt(currentScrollStanzaData.indexedOffset));
-        console.log('Direction: ' + dbt(direction));
+        console.log('Previous scroll offset: ' + dbt(mourn.scrollStanza.currentScrollStanzaData.previousScrollOffset));
+        console.log('Indexed offset: ' + dbt(mourn.scrollStanza.currentScrollStanzaData.indexedOffset));
+        console.log('Direction: ' + dbt(mourn.scrollStanza.mourn.scrollStanza.direction));
         console.log('Anchor bounding box height offset, or');
         console.log('aBBHO: ' + dbt(aBBHO));
         // console.log('Stanza indexed y val: ' + (indexedVal));
         dbp('','\u2508');
     }
 
-    let newTopActiveOffset = (currentScrollStanzaData.previousScrollOffset * direction) + currentScrollStanzaData.indexedOffset + aBBHO + indexedVal;
+    let newTopActiveOffset = (mourn.scrollStanza.currentScrollStanzaData.previousScrollOffset * mourn.scrollStanza.direction) + mourn.scrollStanza.currentScrollStanzaData.indexedOffset + aBBHO + indexedVal;
 
     if(scrollDebug) {
         console.log('Active offset (rounded): ' + dbt(newTopActiveOffset));
-        console.log('(' + dbt(currentScrollStanzaData.previousScrollOffset) + '* ' + dbt(direction) + ') + ' + dbt(currentScrollStanzaData.indexedOffset) + '  + ' + dbt(aBBHO) + ' + ' + dbt(indexedVal) + ' = ' + dbt(newTopActiveOffset));
+        console.log('(' + dbt(mourn.scrollStanza.currentScrollStanzaData.previousScrollOffset) + '* ' + dbt(mourn.scrollStanza.direction) + ') + ' + dbt(mourn.scrollStanza.currentScrollStanzaData.indexedOffset) + '  + ' + dbt(aBBHO) + ' + ' + dbt(indexedVal) + ' = ' + dbt(newTopActiveOffset));
     }
 
-    // anchorStyle.setProperty('--big-b', bigB);
-    currentTopActiveOffset = newTopActiveOffset;
-    // anchorStyle.setProperty('--top-active-offset', 'calc(' + newTopActiveOffset + ' + ' + bigB + ')');
-    anchorStyle.setProperty('--top-active-offset', 'calc(' + currentTopActiveOffset + ')');
+    // mourn.trackers.anchorStyle.setProperty('--big-b', bigB);
+    mourn.scrollStanza.currentTopActiveOffset = newTopActiveOffset;
+    // mourn.trackers.anchorStyle.setProperty('--top-active-offset', 'calc(' + newTopActiveOffset + ' + ' + bigB + ')');
+    mourn.trackers.anchorStyle.setProperty('--top-active-offset', 'calc(' + mourn.scrollStanza.currentTopActiveOffset + ')');
 }
 
 // Sets what stanza is the current stanza.
@@ -205,14 +205,14 @@ function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
         console.log(newCurrentScrollStanza);
     }
     
-    // Reset the 'currentScrollValue'.
+    // Reset the 'mourn.scrollStanza.currentScrollValue'.
     let newCurrentScrollValue = 0;
 
     if (isFirst) {
         newCurrentScrollStanza.previousScrollOffset = 0;
         newCurrentScrollStanza.indexedOffset = 0;
 
-        if (startInTopLeft) {
+        if (mourn.config.startInTopLeft) {
             newCurrentScrollValue = 0;
         }
         else {
@@ -221,40 +221,40 @@ function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
     }
     else {
 
-        if (currentScrollValue <= 0) {
-            const normalizedValue = currentScrollValue + newCurrentScrollStanza.scrollWidth;
+        if (mourn.scrollStanza.currentScrollValue <= 0) {
+            const normalizedValue = mourn.scrollStanza.currentScrollValue + newCurrentScrollStanza.scrollWidth;
             newCurrentScrollValue = normalizedValue % newCurrentScrollStanza.scrollWidth;
-            newCurrentScrollStanza.previousScrollOffset = scrollZoneData.total.y;
+            newCurrentScrollStanza.previousScrollOffset = mourn.scrollZoneData.total.y;
             newCurrentScrollStanza.indexedOffset = parseFloat(data.topOffset);
         }
         else {
-            const normalizedValue = currentScrollValue + currentScrollStanzaData.scrollWidth;
-            newCurrentScrollValue = normalizedValue % currentScrollStanzaData.scrollWidth;
-            newCurrentScrollStanza.previousScrollOffset = -scrollZoneData.total.y;
+            const normalizedValue = mourn.scrollStanza.currentScrollValue + mourn.scrollStanza.currentScrollStanzaData.scrollWidth;
+            newCurrentScrollValue = normalizedValue % mourn.scrollStanza.currentScrollStanzaData.scrollWidth;
+            newCurrentScrollStanza.previousScrollOffset = -mourn.scrollZoneData.total.y;
             newCurrentScrollStanza.indexedOffset = 0;
         }
     }
 
-    // Set the 'currentScrollValue' to what we have calculated it to be.
-    currentScrollValue = newCurrentScrollValue;
+    // Set the 'mourn.scrollStanza.currentScrollValue' to what we have calculated it to be.
+    mourn.scrollStanza.currentScrollValue = newCurrentScrollValue;
 
     // Get and set the new slope.
-    slope = parseFloat(newCurrentScrollStanza.slope);
+    mourn.trackers.slope = parseFloat(newCurrentScrollStanza.slope);
 
     // And add it to the anchor stanza css.
-    anchorStyle.setProperty('--slope', slope);
+    mourn.trackers.anchorStyle.setProperty('--slope', mourn.trackers.slope);
 
     //And then make the curent stanza data the stuff we made.
-    currentScrollStanzaData = newCurrentScrollStanza;
+    mourn.scrollStanza.currentScrollStanzaData = newCurrentScrollStanza;
 
 
     // dbp('');
     // console.log('GREATER');
     // // HEY ALAN THE CURRENT SCROLL VALUE IS A GOOD VRIABLE USE IT
-    // console.log('pos in stanza: ' + currentScrollValue);
-    // console.log('slope: ' + currentScrollStanzaData.slope);
-    // console.log('f(n) WITHOUT +B: ' + currentScrollStanzaData.slope * currentScrollValue);
-    // console.log('stanza number: ' + currentScrollStanzaData.target.nextSibling.dataset.stanzaNumber);
+    // console.log('pos in stanza: ' + mourn.scrollStanza.currentScrollValue);
+    // console.log('slope: ' + mourn.scrollStanza.currentScrollStanzaData.slope);
+    // console.log('f(n) WITHOUT +B: ' + mourn.scrollStanza.currentScrollStanzaData.slope * mourn.scrollStanza.currentScrollValue);
+    // console.log('stanza number: ' + mourn.scrollStanza.currentScrollStanzaData.target.nextSibling.dataset.stanzaNumber);
 
 }
 
@@ -266,24 +266,24 @@ function checkStanzaScroll() {
 
 
     if(scrollDebug) {
-        console.log('Current scroll value: ' + currentScrollValue);
-        console.log('Current scroll stanza width: ' + currentScrollStanzaData.scrollWidth);
-        console.log('Greater: ' + (currentScrollValue > currentScrollStanzaData.scrollWidth));
-        console.log('Lesser: ' + (currentScrollValue < 0));
+        console.log('Current scroll value: ' + mourn.scrollStanza.currentScrollValue);
+        console.log('Current scroll stanza width: ' + mourn.scrollStanza.currentScrollStanzaData.scrollWidth);
+        console.log('Greater: ' + (mourn.scrollStanza.currentScrollValue > mourn.scrollStanza.currentScrollStanzaData.scrollWidth));
+        console.log('Lesser: ' + (mourn.scrollStanza.currentScrollValue < 0));
     }
 
     // If we have passed beyond the width of the current scroll stanza...
-    if (currentScrollValue > currentScrollStanzaData.scrollWidth) {
+    if (mourn.scrollStanza.currentScrollValue > mourn.scrollStanza.currentScrollStanzaData.scrollWidth) {
         // Set the current stanza.
-        setCurrentScrollStanza(currentScrollStanzaData.target.nextSibling);
-        direction = 1;
+        setCurrentScrollStanza(mourn.scrollStanza.currentScrollStanzaData.target.nextSibling);
+        mourn.scrollStanza.direction = 1;
     }
 
     // Else if we have passed below the start of the current stanza...
-    else if (currentScrollValue < 0) {
+    else if (mourn.scrollStanza.currentScrollValue < 0) {
 
         // Set the current stanza.
-        setCurrentScrollStanza(currentScrollStanzaData.target.previousSibling);
-        direction = -1;
+        setCurrentScrollStanza(mourn.scrollStanza.currentScrollStanzaData.target.previousSibling);
+        mourn.scrollStanza.direction = -1;
     }
 }

@@ -1,69 +1,65 @@
-// Variables.
-const stanzaCount = poem_json.length;
+mourn = {
+    config: {
 
-const poemStaging = document.getElementById("poem-staging");
-const poemContainer = document.getElementById("poem-container");
-const docStyle = document.documentElement.style;
-let widestStanza = 0;
-let leastChars = 100000000000000;
-let mostChars = 0;
-let fullScrollWidth = 0;
+        // Const.
+        stanzaCount : poem_json.length,
+        poemStaging : document.getElementById("poem-staging"),
+        poemContainer : document.getElementById("poem-container"),
+        docStyle : document.documentElement.style,
+        startInTopLeft : true,
+    },
 
-const minSpacing = -1;
-const maxSpacing = 2;
+    debug : {
 
-const minScaling = 1.01;
-const maxScaling = 2.2;
+        // Const.
+        on : false,
+        verbose: false,
+        stringLength : 30,
+        includeScroll : true,
+        includeHelpers : true,
+        trimStringLength : 5,
+    },
 
-const mainScaling = 1.3;
+    trackers: {
+        anchor : null,
+        anchorStyle : null,
+        startStanza : null,
+        startStanzaSlope : null,
+        nonRenderedConnectors : {},
+        slope : 1,
+        scrollSpeedMultiplier : 1.1,
+    },
 
-const defaultRenderOptions = {
-    leftOffset: 0,
-    topOffset: 0,
-}
+    staging : {
+        widestStanza : 0,
+        leastChars : 100000000000000,
+        mostChars : 0,
+        fullScrollWidth : 0,
 
-let anchor;
-let anchorStyle;
-let startStanza;
-let startStanzaSlope;
-let startScrollPos;
-let nonRenderedConnectors = {};
+        // Const.
+        minScaling : 1.01,
+        maxScaling : 2.2,
+        mainScaling : 1.3
+    },
 
-const scrollZoneData = {
-    container: null,
-    el: null,
-    buffer: null,
-    lenience: 200,
-    prevX: 0,
-    prevY: 0,
-    dims: {},
-    total: {
-        x: 0,
-        y: 0
+    scrollZoneData : {
+        container: null,
+        el: null,
+        buffer: null,
+        lenience: 200,
+        prevX: 0,
+        prevY: 0,
+        dims: {},
+        total: {
+            x: 0,
+            y: 0
+        }
+    },
+
+    scrollStanza : {
+        currentScrollValue : 0,
+        currentScrollStanzaData : null,
+        direction : 1,
+        currentTopActiveOffset: 0,
     }
 };
-
-let slope = 1;
-const scrollSpeedMultiplier = 0.2;
-
-// Debug.
-const debug = false;
-const debugV = false;
-const debugIncludeScroll = true;
-const debugIncludeHelpers = true;
-const debugStringLength = 30;
-const debugTrimStringLength = 5;
-
-
-// Scroll stanza variables.
-let currentScrollStanzaIndex;
-let currentScrollValue = 0;
-// let currentScrollOffset = 0;
-let currentScrollStanzaData;
-let direction = 1;
-let currentTopActiveOffset = 0;
-let prevTopActiveOffset = 0;
-let calcOffset = 0;
-const startInTopLeft = true;
-
-let scrollOffset = null;
