@@ -1,0 +1,89 @@
+.center-dot {
+  position: absolute;
+  width: var(--dot-size);
+  height: var(--dot-size);
+  left: calc(50% - var(--dot-size) * 0.5);
+  top: calc(50% - var(--dot-size) * 0.5);
+  border-radius: 50%;
+  background: var(--dot-color);
+  opacity: 0.6;
+}
+.center-dot .svg-container {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.center-dot svg {
+  width: 100%;
+  height: 100%;
+}
+#poem-container > .center-dot {
+  --pc-size: calc(var(--dot-size) + var(--dot-border-size) * 2);
+  background: transparent;
+  width: var(--dot-size);
+  height: var(--dot-size);
+  left: calc(50% - var(--pc-size) * 0.5);
+  top: calc(50% - var(--pc-size) * 0.5);
+  border: 4px solid var(--dot-color);
+  opacity: 0.8;
+}
+#poem-container > .center-dot:before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 1px;
+  width: 100%;
+  background-color: black;
+  opacity: 0.6;
+}
+#poem-container > .center-dot:after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background-color: black;
+  opacity: 0.6;
+}
+
+.bounds {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  opacity: 0.6;
+}
+.bounds .bounds-tri {
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' version='1.1' preserveAspectRatio='none' viewBox='0 0 10 10'> <path d='M0 0 L0 10 L10 10' fill='lightblue' /></svg>");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 100% 100%, auto;
+  width: calc(var(--svg-width, 0px) * 1px);
+  height: calc(var(--svg-height, 0px) * 1px);
+}
+
+#scroll-zone-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: absolute;
+}
+
+#scroll-zone {
+  --pad: 70px;
+  position: absolute;
+  width: calc(100% + var(--pad));
+  height: calc(100% + var(--pad));
+  left: 0;
+  top: 0;
+  overflow: scroll;
+}
+#scroll-zone #scroll-zone-buffer {
+  width: 150dvw;
+  height: 150dvh;
+}
+
+/*# sourceMappingURL=scroll.css.map */

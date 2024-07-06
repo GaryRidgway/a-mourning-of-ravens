@@ -1,0 +1,116 @@
+body {
+  margin: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgb(0, 101, 130);
+  background: radial-gradient(circle, rgb(0, 101, 130) 0%, rgb(8, 71, 98) 76%, rgb(7, 54, 64) 100%);
+}
+
+:root {
+  --initiator-hl: #f5ed79;
+  --terminator-hl: #8cb6e2;
+  --stanza-width: ;
+  --line-font-size: 24;
+  --base-font-size: 16;
+  --base-line-height: calc(var(--base-font-size) * 1.2px);
+  --mod-mult: calc(var(--line-font-size) / var(--base-font-size));
+  --dot-color: #298dff;
+  --dot-size: 20px;
+  --dot-border-size: 4px;
+}
+
+#poem-container,
+#poem-staging {
+  width: 100%;
+  height: 100%;
+  font-size: calc(var(--base-font-size, 16px) * 1px);
+  font-family: Cinzel;
+}
+#poem-container span,
+#poem-staging span {
+  padding: 0 calc(var(--line-font-size) * 0.2px);
+}
+#poem-container .stanza,
+#poem-staging .stanza {
+  display: inline-block;
+  width: var(--stanza-width, inherit);
+  overflow: hidden;
+}
+#poem-container .stanza .line,
+#poem-staging .stanza .line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: var(--base-line-height);
+  letter-spacing: var(--char-spacing, inherit);
+  font-size: calc(var(--char-scaling, inherit) * var(--base-font-size));
+  color: #fafafa;
+  padding-bottom: 4px;
+}
+#poem-container .stanza .line:last-child,
+#poem-staging .stanza .line:last-child {
+  padding-bottom: 0;
+}
+#poem-container .initiator,
+#poem-container .terminator,
+#poem-staging .initiator,
+#poem-staging .terminator {
+  height: 100%;
+  text-align: left;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#poem-staging {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+}
+#poem-staging .initiator {
+  background-color: var(--initiator-hl);
+}
+#poem-staging .terminator {
+  background-color: var(--terminator-hl);
+}
+#poem-staging #most-line-characters {
+  background: rgb(214, 96, 235);
+}
+#poem-staging #least-line-characters {
+  background: rgb(182, 251, 193);
+}
+
+#poem-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+#poem-container .stanza {
+  position: absolute;
+  left: calc(var(--left-offset, 0px) * 1px);
+  top: calc(var(--top-offset, 0px) * 1px);
+}
+#poem-container .stanza span:not(.terminator) {
+  filter: drop-shadow(2px 4px 4px black);
+}
+#poem-container #anchor {
+  --left-active-offset: 0;
+  --top-active-offset: 0;
+  position: relative;
+  left: calc(var(--left-active-offset, 0) * 1px);
+  top: calc(var(--top-active-offset, 0) * 1px + var(--static-offset, 0) * 1px);
+  display: flex;
+}
+#poem-container #anchor-stanza {
+  position: relative;
+}
+
+#controls {
+  position: fixed;
+  z-index: 100;
+  right: 0;
+  bottom: 0;
+}
+
+/*# sourceMappingURL=poem.css.map */
