@@ -5,9 +5,9 @@
   "main": "index.js",
   "scripts": {
     "minify:jsf": "jsdoc ./src/js/*.js -d gh-pages -c jsdoc.config.json & uglifyjs-folder ./src/js/ -eo ./dist/js ",
-    "sass-dev": "sass --watch --update --style=expanded ./src/scss/:./docs/css",
-    "compile:sass": "sass --update --style=expanded ./src/scss/:./docs/css",
-    "sass-prod": "sass --no-source-map --style=compressed ./src/scss/:./docs/css",
+    "sass-dev": "sass --watch --update --style=expanded ./src/scss/:./dist/css",
+    "compile:sass": "sass --update --style=expanded ./src/scss/:./dist/css",
+    "sass-prod": "sass --no-source-map --style=compressed ./src/scss/:./dist/css",
     "jsdoc": "./node_modules/.bin/jsdoc",
     "build": "npm run compile:sass & npm run minify:jsf",
     "watch": "npm run build && node server.js"
