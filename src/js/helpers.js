@@ -116,3 +116,21 @@ function lineSlope(pointData) {
 function angleFromSlopes(slope1, slope2){
     return Math.atan((slope2 - slope1 ) / ( 1 + slope1*slope2));
 }
+
+function waydelay(time, action) {
+    console.log('called');
+
+    // Create a promise that will delay.
+    const delay = (delayInMs) => {
+      return new Promise(resolve => setTimeout(resolve, delayInMs));
+    }
+  
+    // Make the promise, wait for it to complete, then run the `action`.
+    const waydelayedAction = async () => {
+      let delayRes = await delay(time);
+      action();
+    }
+  
+    // Finally, call the function that puts it all together.
+    waydelayedAction();
+  }
