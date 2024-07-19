@@ -133,4 +133,38 @@ function waydelay(time, action) {
   
     // Finally, call the function that puts it all together.
     waydelayedAction();
-  }
+}
+
+function chain() {
+    return new Promise((resolve, reject) => {
+       if (true) {
+          resolve();     
+       } else {
+          reject()
+       }
+    });
+}
+
+function css( element, property ) {
+    return window.getComputedStyle( element, null ).getPropertyValue( property );
+}
+
+function getWidestStanza(container) {
+    const stanzas = container.childNodes;
+    let currentWidestStanza = {
+        node: null,
+        width: 0
+    };
+    stanzas.forEach((stanza)=>{
+        const stanzaWidth = stanza.getBoundingClientRect().width;
+
+        if (stanzaWidth > currentWidestStanza.width) {
+            currentWidestStanza.node = stanza;
+            currentWidestStanza.width = Math.ceil(stanzaWidth);
+        }
+    });
+
+    return currentWidestStanza;
+}
+
+        

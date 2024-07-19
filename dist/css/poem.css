@@ -7,8 +7,10 @@ body {
 }
 
 :root {
-  --initiator-hl: #f5ed79;
-  --terminator-hl: #8cb6e2;
+  --line-least-chars: rgba(182, 251, 193, 0.5);
+  --line-most-chars: rgba(214, 96, 235, 0.5);
+  --initiator-hl: rgba(245, 237, 121, 0.5);
+  --terminator-hl: rgba(140, 181, 226, 0.5);
   --stanza-width: ;
   --line-font-size: 24;
   --base-font-size: 16;
@@ -73,11 +75,11 @@ body {
 #poem-staging .terminator {
   background-color: var(--terminator-hl);
 }
-#poem-staging #most-line-characters {
-  background: rgb(214, 96, 235);
-}
 #poem-staging #least-line-characters {
-  background: rgb(182, 251, 193);
+  background: var(--line-least-chars);
+}
+#poem-staging #most-line-characters {
+  background: var(--line-most-chars);
 }
 
 #poem-container {
