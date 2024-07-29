@@ -36,7 +36,6 @@ body {
 #poem-staging .stanza {
   display: inline-block;
   width: var(--stanza-width, inherit);
-  overflow: hidden;
 }
 #poem-container .stanza .line,
 #poem-staging .stanza .line {
@@ -66,8 +65,6 @@ body {
 
 #poem-staging {
   position: absolute;
-  left: -9999px;
-  top: -9999px;
 }
 #poem-staging .initiator {
   background-color: var(--initiator-hl);

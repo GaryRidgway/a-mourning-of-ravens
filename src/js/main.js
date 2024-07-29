@@ -3,44 +3,7 @@
 
 // Ready code.
 document.addEventListener("DOMContentLoaded", function () {
-  // window.requestAnimationFrame(function(){
-  //   console.log(1);
-  // }).then(
-  //   () =>{
-  //     window.requestAnimationFrame(function(){
-  //       console.log(2);
-  //     });
-  //   }
-  // );
-  document.fonts.ready.then(
-    ()=>{
-      // const styleEl= document.createElement("style");
-      // styleEl.innerHTML = '#poem-container, #poem-staging {font-family: Cinzel;}';
-      // document.querySelector('head').append(styleEl);
-    }
-  ).then(
-    addStanzasToStaging(poem_json)
-  )
-  .then(()=>{
-    mourn.staging.widestStanza = getWidestStanza(mourn.config.poemStaging).width;
-    pairSpaceAndScale();
-  }).then(
-    setStanzaOffsets()
-  ).then(()=>{
-    mourn.config.docStyle.setProperty('--stanza-width', (mourn.staging.widestStanza * mourn.staging.mainScaling) + 'px');
-  }).then(()=>{
-    const startStanzaIndex = randomStanzaIndex();
-    mourn.trackers.startStanza = fetchStagedStanza(startStanzaIndex);
-    placeFirstStanza(mourn.trackers.startStanza);
-  }).then(()=>{
-    cascadeRender();
-  }).then(()=>{
-    scrollInit();
-  }).then(()=>{
-    if(mourn.debug.on) {
-      placePoemCenter();
-    }
-  })
+  
 });
 
 var animation1 = function(){
@@ -58,3 +21,39 @@ var animation1 = function(){
     runAnimation();
  });
 }
+
+window.addEventListener("load", (event) => {
+  document.fonts.ready
+  .then(
+    ()=>{
+      window.requestAnimationFrame(function(){
+        addStanzasToStaging(poem_json);
+      window.requestAnimationFrame(function(){
+        mourn.config.docStyle.setProperty('--stanza-width', (mourn.staging.widestStanza * mourn.staging.mainScaling) + 'px');
+      window.requestAnimationFrame(function(){
+        const startStanzaIndex = randomStanzaIndex();
+        mourn.trackers.startStanza = fetchStagedStanza(startStanzaIndex);
+        placeFirstStanza(mourn.trackers.startStanza);
+      window.requestAnimationFrame(function(){
+        pairSpaceAndScale();
+      window.requestAnimationFrame(function(){
+        setStanzaOffsets();
+      // window.requestAnimationFrame(function(){
+        // cascadeRender();
+      // window.requestAnimationFrame(function(){
+        // scrollInit();
+      // window.requestAnimationFrame(function(){
+      //   if(mourn.debug.on) {
+      //     placePoemCenter();
+      //   }
+      // });
+      // });
+      // });
+      });
+      });
+      });
+      });
+      });
+    }
+  )
+});
