@@ -48,6 +48,7 @@ function addStanzasToStaging(jsonData) {
         if (stanzaWidth > mourn.staging.widestStanza) {
             mourn.staging.widestStanza = Math.ceil(stanzaWidth);
         }
+
         stanzaCountLineChars(stanzaNode);
     });
 }

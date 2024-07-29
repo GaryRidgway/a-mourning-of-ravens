@@ -39,7 +39,7 @@ mourn = {
         // Const.
         minScaling : 1.01,
         maxScaling : 2.2,
-        mainScaling : 1.3
+        mainScaling : 1
     },
 
     scrollZoneData : {

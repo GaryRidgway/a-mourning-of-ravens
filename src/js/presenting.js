@@ -45,52 +45,42 @@ function placeStanza(stanza, options = null) {
     return clonedStanza;
 }
 
-function render(prevStanza, direction = 1) {
-    // console.log('-------START RENDER-------');
+function render(prevStanza, direction = 1) {const prevStanzaIndex = parseInt(prevStanza.dataset.stanzaNumber);
+    // window.requestAnimationFrame(function(){
+        const stanza = fetchStagedStanza(prevStanzaIndex + direction);
 
-    const prevStanzaIndex = parseInt(prevStanza.dataset.stanzaNumber);
-    const stanza = fetchStagedStanza(prevStanzaIndex + direction);
-
-    const refStanza = direction < 0 ? stanza : prevStanza;
-    const styleStanza = fetchRenderedStanza(prevStanzaIndex, getUID(prevStanza));
-    // console.log(styleStanza);
-
-    ////////
-    let passedOptions = {
-        leftOffset: 0,
-        topOffset: 0,
-    };
-
-    passedOptions.leftOffset = direction * parseFloat(refStanza.dataset.leftOffset);
-    passedOptions.topOffset = direction * parseFloat(refStanza.dataset.topOffset);
-
-    const prevHasLeftOffset = styleStanza.style.getPropertyValue('--left-offset');
-    if (prevHasLeftOffset.length > 0) {
-        passedOptions.leftOffset = parseFloat(prevHasLeftOffset) + passedOptions.leftOffset;
-    }
-
-    const prevHasTopOffset = styleStanza.style.getPropertyValue('--top-offset');
-    if (prevHasTopOffset.length > 0) {
-        passedOptions.topOffset = parseFloat(prevHasTopOffset) + passedOptions.topOffset;
-    }
-
-    // console.log(passedOptions.leftOffset);
-    // console.log(passedOptions.topOffset);
-
-    const newStanza = placeStanza(
-        stanza,
-        passedOptions
-    );
-
-    // console.log('******* stanza *******');
-    // console.log(newStanza);
-
-    // console.log('--------END RENDER--------');
-
-    return {
-        stanza: newStanza,
-        options: passedOptions
-    };
+        const refStanza = direction < 0 ? stanza : prevStanza;
+        const styleStanza = fetchRenderedStanza(prevStanzaIndex, getUID(prevStanza));
+    
+        let passedOptions = {
+            leftOffset: 0,
+            topOffset: 0,
+        };
+    
+        passedOptions.leftOffset = direction * parseFloat(refStanza.dataset.leftOffset);
+        passedOptions.topOffset = direction * parseFloat(refStanza.dataset.topOffset);
+        console.log(refStanza, styleStanza)
+    
+        const prevHasLeftOffset = styleStanza.style.getPropertyValue('--left-offset');
+        if (prevHasLeftOffset.length > 0) {
+            passedOptions.leftOffset = parseFloat(prevHasLeftOffset) + passedOptions.leftOffset;
+        }
+    
+        const prevHasTopOffset = styleStanza.style.getPropertyValue('--top-offset');
+        if (prevHasTopOffset.length > 0) {
+            passedOptions.topOffset = parseFloat(prevHasTopOffset) + passedOptions.topOffset;
+        }
+    
+        const newStanza = placeStanza(
+            stanza,
+            passedOptions
+        );
+    
+        return {
+            stanza: newStanza,
+            options: passedOptions
+        };
+    // });
 }
 
 function addNonRenderedConnector(stanza, direction) {
@@ -115,7 +105,6 @@ function cascadeRender(options) {
                 // While loop ( CAUTION!!: spooky ).
 
                 let iterations = 0;
-
                 while(connectorKeys.length > 0 && cascadeContinueIterating(iterations, options)) {
                     connectorKeys.forEach((connectorKey) => {
                         const connectorStanza = mourn.trackers.nonRenderedConnectors[connectorKey];
