@@ -134,6 +134,11 @@ function cascadeRender(options) {
 
                     connectorKeys = checkForVisibleConnectors();
                     iterations++;
+
+                    // Failcase
+                    if (iterations >= 200) {
+                        break;
+                    }
                 }
             }
         }
