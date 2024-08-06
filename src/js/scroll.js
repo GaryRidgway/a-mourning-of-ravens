@@ -56,6 +56,7 @@ function createScrollZone() {
 
     // Set the scroll zone's position, but don't track the initial movement as a scroll.
     setScrollZone(
+        
         // Multiply by 0.16 to put it in the center.
         mourn.scrollZoneData.dims.x * 0.16,
         mourn.scrollZoneData.dims.y * 0.16,
@@ -76,6 +77,7 @@ function scrollTick(e) {
 
     // Reset the scroll zone and track the distance scrolled.
     setScrollZone(
+
         // Multiply by 0.16 to put it in the center.
         mourn.scrollZoneData.dims.x * 0.16,
         mourn.scrollZoneData.dims.y * 0.16
@@ -195,7 +197,6 @@ function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
     const data = stanza.dataset;
 
     // And track some of its relevant data.
-
     newCurrentScrollStanza.target = stanza;
     newCurrentScrollStanza.slope = parseFloat(data.slope);
     newCurrentScrollStanza.scrollWidth = parseFloat(data.scrollWidth);

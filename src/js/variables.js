@@ -53,7 +53,10 @@ mourn = {
         total: {
             x: 0,
             y: 0
-        }
+        },
+        arrowKeyMult: 5,
+        maxScrollMs: 100,
+        arrowScrollMSInterval: 1
     },
 
     scrollStanza : {
