@@ -1,5 +1,108 @@
 const scrollDebug = mourn.debug.on && mourn.debug.includeScroll;
 const scrollDebugV = mourn.debug.verbose && mourn.debug.includeScroll;
+let autoScrollRafId = null;
+let autoScrollPrevFrameTs = null;
+let reducedMotionListener = null;
+let reducedMotionMediaQuery = null;
+
+function snapOffset(value, precision = 10) {
+    return Math.round(value * precision) / precision;
+}
+
+function prefersReducedMotion() {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function setAnchorCenterOffsets() {
+    const aBB = mourn.trackers.anchor.getBoundingClientRect();
+    mourn.scrollZoneData.anchorHalfWidth = aBB.width / 2;
+    mourn.scrollZoneData.anchorHalfHeight = aBB.height / 2;
+}
+
+function getCurrentTopActiveOffset(usedSlope = null) {
+    const curSlope = usedSlope !== null ? usedSlope : mourn.trackers.slope;
+
+    if (typeof mourn.scrollZoneData.anchorHalfHeight !== 'number') {
+        setAnchorCenterOffsets();
+    }
+
+    const indexedVal = mourn.scrollStanza.currentScrollValue * curSlope * -1;
+    return (
+        (mourn.scrollStanza.currentScrollStanzaData.previousScrollOffset * mourn.scrollStanza.direction) +
+        mourn.scrollStanza.currentScrollStanzaData.indexedOffset +
+        mourn.scrollZoneData.anchorHalfHeight +
+        indexedVal
+    );
+}
+
+function applyScrollDelta(rawScrollDelta) {
+    const maxScroll = rawScrollDelta * mourn.trackers.scrollSpeedMultiplier;
+
+    mourn.scrollZoneData.total = {
+        x: mourn.scrollZoneData.total.x + maxScroll,
+        y: mourn.scrollZoneData.total.y + maxScroll * mourn.trackers.slope
+    }
+
+    mourn.scrollStanza.currentScrollValue += maxScroll;
+}
+
+function stopAutoScroll() {
+    if (autoScrollRafId !== null) {
+        window.cancelAnimationFrame(autoScrollRafId);
+    }
+    autoScrollRafId = null;
+    autoScrollPrevFrameTs = null;
+
+    if (reducedMotionMediaQuery && reducedMotionListener) {
+        reducedMotionMediaQuery.removeEventListener('change', reducedMotionListener);
+    }
+    reducedMotionListener = null;
+    reducedMotionMediaQuery = null;
+}
+
+function startAutoScroll(speedMultiplier = 1) {
+    stopAutoScroll();
+
+    if (prefersReducedMotion()) {
+        console.info('Auto-scroll skipped due to prefers-reduced-motion setting.');
+        return;
+    }
+
+    if (!Number.isFinite(speedMultiplier) || speedMultiplier === 0) {
+        return;
+    }
+
+    const basePixelsPerSecond = 120;
+    const pixelsPerSecond = basePixelsPerSecond * speedMultiplier;
+    reducedMotionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    reducedMotionListener = function(event) {
+        if (event.matches) {
+            stopAutoScroll();
+        }
+    };
+    reducedMotionMediaQuery.addEventListener('change', reducedMotionListener);
+
+    const tick = (timestamp) => {
+        if (autoScrollPrevFrameTs === null) {
+            autoScrollPrevFrameTs = timestamp;
+        }
+
+        const deltaMs = Math.min(timestamp - autoScrollPrevFrameTs, 50);
+        autoScrollPrevFrameTs = timestamp;
+        const deltaPx = pixelsPerSecond * (deltaMs / 1000);
+
+        if (mourn.scrollZoneData.el && mourn.scrollStanza.currentScrollStanzaData) {
+            applyScrollDelta(deltaPx);
+            cascadeRender();
+            checkStanzaScroll();
+            setAnchorOffsets(null);
+        }
+
+        autoScrollRafId = window.requestAnimationFrame(tick);
+    };
+
+    autoScrollRafId = window.requestAnimationFrame(tick);
+}
 
 // Initialize the scroll zone and the current scroll stanza.
 function scrollInit() {
@@ -25,6 +128,8 @@ function scrollInit() {
     }
 
     setCurrentScrollStanza(mourn.trackers.startStanza, true);
+    setAnchorCenterOffsets();
+    window.addEventListener('resize', setAnchorCenterOffsets);
 }
 
 // Create the scrollable area that the user can interact with.
@@ -110,20 +215,8 @@ function setScrollZone(x, y, addToTotal = true) {
         const top = mourn.scrollZoneData.prevY - mourn.scrollZoneData.el.scrollTop;
         const leftPower = Math.abs(left);
         const topPower = Math.abs(top);
-        const maxScroll = (leftPower > topPower ? left : top) * mourn.trackers.scrollSpeedMultiplier;
-
-        // And then add them to the total.
-        // We do this because we want vertical and 
-        // horizontal scrolling to do the same thing, move the
-        // poem diagonally. It can get confusing if someone doesn't
-        // know whether they should scroll forizontally or vertically,
-        // so we just normalize the value to the higher one.
-        mourn.scrollZoneData.total = {
-            x: mourn.scrollZoneData.total.x + maxScroll,
-            y: mourn.scrollZoneData.total.y + maxScroll * mourn.trackers.slope
-        }
-
-        mourn.scrollStanza.currentScrollValue += maxScroll;
+        const maxScroll = (leftPower > topPower ? left : top);
+        applyScrollDelta(maxScroll);
     }
 }
 
@@ -141,19 +234,16 @@ function setAnchorOffsets(usedSlope = null) {
         dbp('setAnchorOffsets()');
     }
 
-    // Anchor bounding box
-    const aBB = mourn.trackers.anchor.getBoundingClientRect();
-
-    // Anchor bounding box width offset.
-    const aBBWO = aBB.width/2;
-
-    // Anchor bounding box height offset.
-    const aBBHO = aBB.height/2;
+    if (typeof mourn.scrollZoneData.anchorHalfWidth !== 'number' ||
+        typeof mourn.scrollZoneData.anchorHalfHeight !== 'number') {
+        setAnchorCenterOffsets();
+    }
+    const aBBWO = mourn.scrollZoneData.anchorHalfWidth;
+    const aBBHO = mourn.scrollZoneData.anchorHalfHeight;
 
     // Set the left active offset css value.
-    mourn.trackers.anchorStyle.setProperty('--left-active-offset', (mourn.scrollZoneData.total.x * -1 + aBBWO));
-    const indexedVal = mourn.scrollStanza.currentScrollValue * curSlope * -1;
-
+    const snappedLeftOffset = snapOffset(mourn.scrollZoneData.total.x * -1 + aBBWO);
+    mourn.trackers.anchorStyle.setProperty('--left-active-offset', snappedLeftOffset);
     if(scrollDebug) {
         dbp('');
         console.log('Previous scroll offset: ' + dbt(mourn.scrollStanza.currentScrollStanzaData.previousScrollOffset));
@@ -165,17 +255,25 @@ function setAnchorOffsets(usedSlope = null) {
         dbp('','\u2508');
     }
 
-    let newTopActiveOffset = (mourn.scrollStanza.currentScrollStanzaData.previousScrollOffset * mourn.scrollStanza.direction) + mourn.scrollStanza.currentScrollStanzaData.indexedOffset + aBBHO + indexedVal;
+    let newTopActiveOffset = snapOffset(getCurrentTopActiveOffset(curSlope));
 
     if(scrollDebug) {
         console.log('Active offset (rounded): ' + dbt(newTopActiveOffset));
-        console.log('(' + dbt(mourn.scrollStanza.currentScrollStanzaData.previousScrollOffset) + '* ' + dbt(mourn.scrollStanza.direction) + ') + ' + dbt(mourn.scrollStanza.currentScrollStanzaData.indexedOffset) + '  + ' + dbt(aBBHO) + ' + ' + dbt(indexedVal) + ' = ' + dbt(newTopActiveOffset));
+        console.log('aBBHO: ' + dbt(aBBHO));
     }
 
     // mourn.trackers.anchorStyle.setProperty('--big-b', bigB);
     mourn.scrollStanza.currentTopActiveOffset = newTopActiveOffset;
-    // mourn.trackers.anchorStyle.setProperty('--top-active-offset', 'calc(' + newTopActiveOffset + ' + ' + bigB + ')');
-    mourn.trackers.anchorStyle.setProperty('--top-active-offset', 'calc(' + mourn.scrollStanza.currentTopActiveOffset + ')');
+    mourn.trackers.anchorStyle.setProperty('--top-active-offset', mourn.scrollStanza.currentTopActiveOffset);
+}
+
+function setCurrentScrollStanzaContinuous(nextStanza, direction) {
+    const previousTopOffset = getCurrentTopActiveOffset();
+    setCurrentScrollStanza(nextStanza);
+    mourn.scrollStanza.direction = direction;
+    const nextTopOffset = getCurrentTopActiveOffset();
+    const offsetCorrection = previousTopOffset - nextTopOffset;
+    mourn.scrollStanza.currentScrollStanzaData.indexedOffset += offsetCorrection;
 }
 
 // Sets what stanza is the current stanza.
@@ -276,15 +374,13 @@ function checkStanzaScroll() {
     // If we have passed beyond the width of the current scroll stanza...
     if (mourn.scrollStanza.currentScrollValue > mourn.scrollStanza.currentScrollStanzaData.scrollWidth) {
         // Set the current stanza.
-        setCurrentScrollStanza(mourn.scrollStanza.currentScrollStanzaData.target.nextSibling);
-        mourn.scrollStanza.direction = 1;
+        setCurrentScrollStanzaContinuous(mourn.scrollStanza.currentScrollStanzaData.target.nextSibling, 1);
     }
 
     // Else if we have passed below the start of the current stanza...
     else if (mourn.scrollStanza.currentScrollValue < 0) {
 
         // Set the current stanza.
-        setCurrentScrollStanza(mourn.scrollStanza.currentScrollStanzaData.target.previousSibling);
-        mourn.scrollStanza.direction = -1;
+        setCurrentScrollStanzaContinuous(mourn.scrollStanza.currentScrollStanzaData.target.previousSibling, -1);
     }
 }

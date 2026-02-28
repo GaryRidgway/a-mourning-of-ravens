@@ -23,6 +23,11 @@ window.addEventListener("load", function () {
       window.requestAnimationFrame(()=>{
         scrollInit();
       window.requestAnimationFrame(()=>{
+        const autoScrollSpeed = getAutoScrollSpeedFromURL();
+        if (autoScrollSpeed !== null) {
+          startAutoScroll(autoScrollSpeed);
+        }
+
         if(mourn.debug.on) {
           placePoemCenter();
         }

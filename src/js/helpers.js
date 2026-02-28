@@ -23,6 +23,23 @@ function randomStanzaIndex() {
     return getRandomInt(mourn.config.stanzaCount);
 }
 
+function getAutoScrollSpeedFromURL() {
+    const searchParams = new URLSearchParams(window.location.search);
+    const rawSpeed = searchParams.get('auto');
+
+    if (rawSpeed === null) {
+        return null;
+    }
+
+    const speed = parseFloat(rawSpeed);
+    if (!Number.isFinite(speed)) {
+        console.warn('Invalid auto-scroll speed. Expected float for `auto` URL parameter.');
+        return null;
+    }
+
+    return speed;
+}
+
 function fetchStanza(index, selector, uid = null) {
     const realIndex = (index + mourn.config.stanzaCount) % mourn.config.stanzaCount;
     const baseSelector = selector + ' [data-stanza-number="' + realIndex + '"]';

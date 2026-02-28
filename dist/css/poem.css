@@ -99,8 +99,10 @@ body {
   --left-active-offset: 0;
   --top-active-offset: 0;
   position: relative;
-  left: calc(var(--left-active-offset, 0) * 1px);
-  top: calc(var(--top-active-offset, 0) * 1px + var(--static-offset, 0) * 1px);
+  left: 0;
+  top: 0;
+  transform: translate3d(calc(var(--left-active-offset, 0) * 1px), calc((var(--top-active-offset, 0) + var(--static-offset, 0)) * 1px), 0);
+  will-change: transform;
   display: flex;
 }
 #poem-container #anchor-stanza {
