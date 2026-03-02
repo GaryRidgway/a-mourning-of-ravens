@@ -20,8 +20,8 @@ function placeStanza(stanza, options = null) {
 
     if (options !== null) {
         if (
-            options.leftOffset && 
-            options.topOffset
+            typeof options.leftOffset === 'number' &&
+            typeof options.topOffset === 'number'
         ) {
 
             if (

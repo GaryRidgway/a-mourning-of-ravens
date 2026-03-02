@@ -41,7 +41,8 @@ function getAutoScrollSpeedFromURL() {
 }
 
 function fetchStanza(index, selector, uid = null) {
-    const realIndex = (index + mourn.config.stanzaCount) % mourn.config.stanzaCount;
+    const stanzaCount = mourn.config.stanzaCount;
+    const realIndex = ((index % stanzaCount) + stanzaCount) % stanzaCount;
     const baseSelector = selector + ' [data-stanza-number="' + realIndex + '"]';
     let uidSelector = '';
     if (uid !== null) {

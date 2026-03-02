@@ -4,9 +4,172 @@ let autoScrollRafId = null;
 let autoScrollPrevFrameTs = null;
 let reducedMotionListener = null;
 let reducedMotionMediaQuery = null;
+let scrollTickRafId = null;
+let refreshRingMetricsRafId = null;
 
 function snapOffset(value, precision = 10) {
     return Math.round(value * precision) / precision;
+}
+
+function getRenderedStanzas() {
+    return Array.from(mourn.trackers.anchor.children).filter((el) => el.classList.contains('stanza'));
+}
+
+function positiveModulo(value, modulo) {
+    return ((value % modulo) + modulo) % modulo;
+}
+
+function getStanzaScrollMeta(stanza) {
+    if (stanza && stanza._ringData) {
+        return stanza._ringData;
+    }
+
+    const data = stanza.dataset;
+    return {
+        slope: parseFloat(data.slope),
+        scrollWidth: parseFloat(data.scrollWidth),
+        topOffset: parseFloat(data.topOffset),
+    };
+}
+
+function refreshRingMetrics() {
+    if (!mourn.scrollZoneData.ring) {
+        return;
+    }
+
+    mourn.scrollZoneData.ring.records.forEach((record) => {
+        const bb = record.el.getBoundingClientRect();
+        record.el._ringData.width = bb.width;
+        record.el._ringData.height = bb.height;
+    });
+}
+
+function isRingWrapCandidate() {
+    if (!mourn.scrollZoneData.ring || !mourn.scrollStanza.currentScrollStanzaData) {
+        return false;
+    }
+
+    const ring = mourn.scrollZoneData.ring;
+    const currentIndex = mourn.scrollStanza.currentScrollStanzaData.target._ringIndex;
+    if (typeof currentIndex !== 'number') {
+        return false;
+    }
+
+    return (
+        currentIndex <= ring.centerStartIndex ||
+        currentIndex >= ring.centerEndIndex
+    );
+}
+
+function shiftRingOffsets(deltaLeft, deltaTop) {
+    if (!mourn.scrollZoneData.ring) {
+        return;
+    }
+
+    mourn.scrollZoneData.ring.records.forEach((record) => {
+        record.left += deltaLeft;
+        record.top += deltaTop;
+        record.el.style.setProperty('--left-offset', record.left);
+        record.el.style.setProperty('--top-offset', record.top);
+    });
+}
+
+function seedFixedCycleRing() {
+    const seedCycleCount = 5;
+    const cycleSize = mourn.config.stanzaCount;
+    const activeCycleIndex = Math.floor(seedCycleCount / 2);
+    const totalSeededStanzas = cycleSize * seedCycleCount;
+    const activeIndex = cycleSize * activeCycleIndex;
+
+    const previousStartStanza = mourn.trackers.startStanza;
+    const startIndex = previousStartStanza
+        ? parseInt(previousStartStanza.dataset.stanzaNumber)
+        : 0;
+    getRenderedStanzas().forEach((stanza) => stanza.remove());
+    mourn.trackers.nonRenderedConnectors = {};
+
+    let leftOffset = 0;
+    let topOffset = 0;
+    const seeded = [];
+    const ringRecords = [];
+    const seededStagedStanzas = [];
+    const seededOffsets = [];
+
+    for (let i = 0; i < totalSeededStanzas; i++) {
+        const sequenceIndex = startIndex - activeIndex + i;
+        const stagedStanza = fetchStagedStanza(sequenceIndex);
+        if (!stagedStanza) {
+            console.error('Failed to fetch staged stanza for ring seed.', { sequenceIndex });
+            if (previousStartStanza) {
+                mourn.trackers.startStanza = previousStartStanza;
+            }
+            return false;
+        }
+        seededStagedStanzas.push(stagedStanza);
+        seededOffsets.push({
+            leftOffset,
+            topOffset,
+        });
+
+        const stanzaLeftDelta = parseFloat(stagedStanza.dataset.leftOffset);
+        const stanzaTopDelta = parseFloat(stagedStanza.dataset.topOffset);
+        leftOffset += stanzaLeftDelta;
+        topOffset += stanzaTopDelta;
+    }
+
+    const activeOrigin = seededOffsets[activeIndex];
+    if (!activeOrigin) {
+        console.error('Failed to compute active origin for ring seed.');
+        if (previousStartStanza) {
+            mourn.trackers.startStanza = previousStartStanza;
+        }
+        return false;
+    }
+
+    for (let i = 0; i < totalSeededStanzas; i++) {
+        const stagedStanza = seededStagedStanzas[i];
+        const offset = seededOffsets[i];
+        const ringLeft = offset.leftOffset - activeOrigin.leftOffset;
+        const ringTop = offset.topOffset - activeOrigin.topOffset;
+        const ringData = {
+            slope: parseFloat(stagedStanza.dataset.slope),
+            scrollWidth: parseFloat(stagedStanza.dataset.scrollWidth),
+            topOffset: parseFloat(stagedStanza.dataset.topOffset),
+            width: stagedStanza.getBoundingClientRect().width,
+            height: stagedStanza.getBoundingClientRect().height,
+        };
+        const renderedStanza = placeStanza(stagedStanza, {
+            leftOffset: ringLeft,
+            topOffset: ringTop
+        });
+        renderedStanza._ringIndex = i;
+        renderedStanza._ringData = ringData;
+        seeded.push(renderedStanza);
+        ringRecords.push({
+            el: renderedStanza,
+            left: ringLeft,
+            top: ringTop,
+        });
+    }
+
+    mourn.scrollZoneData.ring = {
+        stanzas: seeded,
+        records: ringRecords,
+        cycleSize,
+        centerStartIndex: activeIndex,
+        centerEndIndex: activeIndex + cycleSize - 1,
+    };
+
+    if (!seeded[activeIndex]) {
+        console.error('Failed to create active stanza for ring seed.');
+        if (previousStartStanza) {
+            mourn.trackers.startStanza = previousStartStanza;
+        }
+        return false;
+    }
+
+    mourn.trackers.startStanza = seeded[activeIndex];
+    return true;
 }
 
 function prefersReducedMotion() {
@@ -14,9 +177,18 @@ function prefersReducedMotion() {
 }
 
 function setAnchorCenterOffsets() {
-    const aBB = mourn.trackers.anchor.getBoundingClientRect();
-    mourn.scrollZoneData.anchorHalfWidth = aBB.width / 2;
-    mourn.scrollZoneData.anchorHalfHeight = aBB.height / 2;
+    const target = mourn.scrollStanza.currentScrollStanzaData && mourn.scrollStanza.currentScrollStanzaData.target
+        ? mourn.scrollStanza.currentScrollStanzaData.target
+        : mourn.trackers.startStanza;
+    if (target && target._ringData) {
+        mourn.scrollZoneData.anchorHalfWidth = target._ringData.width / 2;
+        mourn.scrollZoneData.anchorHalfHeight = target._ringData.height / 2;
+        return;
+    }
+
+    const targetBB = target.getBoundingClientRect();
+    mourn.scrollZoneData.anchorHalfWidth = targetBB.width / 2;
+    mourn.scrollZoneData.anchorHalfHeight = targetBB.height / 2;
 }
 
 function getCurrentTopActiveOffset(usedSlope = null) {
@@ -38,12 +210,70 @@ function getCurrentTopActiveOffset(usedSlope = null) {
 function applyScrollDelta(rawScrollDelta) {
     const maxScroll = rawScrollDelta * mourn.trackers.scrollSpeedMultiplier;
 
-    mourn.scrollZoneData.total = {
-        x: mourn.scrollZoneData.total.x + maxScroll,
-        y: mourn.scrollZoneData.total.y + maxScroll * mourn.trackers.slope
-    }
+    mourn.scrollZoneData.total.x += maxScroll;
+    mourn.scrollZoneData.total.y += maxScroll * mourn.trackers.slope;
 
     mourn.scrollStanza.currentScrollValue += maxScroll;
+}
+
+function retargetCurrentScrollStanza(targetStanza) {
+    if (!targetStanza || !mourn.scrollStanza.currentScrollStanzaData) {
+        return;
+    }
+
+    const previousTopOffset = getCurrentTopActiveOffset();
+    const currentDirection = mourn.scrollStanza.direction;
+
+    mourn.scrollStanza.currentScrollStanzaData.target = targetStanza;
+    mourn.scrollStanza.currentScrollStanzaData.slope = parseFloat(targetStanza.dataset.slope);
+    mourn.scrollStanza.currentScrollStanzaData.scrollWidth = parseFloat(targetStanza.dataset.scrollWidth);
+    mourn.trackers.slope = mourn.scrollStanza.currentScrollStanzaData.slope;
+    mourn.trackers.anchorStyle.setProperty('--slope', mourn.trackers.slope);
+    mourn.scrollStanza.direction = currentDirection;
+
+    const nextTopOffset = getCurrentTopActiveOffset();
+    const offsetCorrection = previousTopOffset - nextTopOffset;
+    mourn.scrollStanza.currentScrollStanzaData.indexedOffset += offsetCorrection;
+}
+
+function wrapCurrentStanzaToRingCenter() {
+    if (!mourn.scrollZoneData.ring || !mourn.scrollStanza.currentScrollStanzaData) {
+        return;
+    }
+
+    const ring = mourn.scrollZoneData.ring;
+    const currentStanza = mourn.scrollStanza.currentScrollStanzaData.target;
+    const currentIndex = currentStanza._ringIndex;
+    if (typeof currentIndex !== 'number') {
+        return;
+    }
+
+    if (currentIndex < ring.centerStartIndex) {
+        const equivalentStanza = ring.stanzas[currentIndex + ring.cycleSize];
+        if (equivalentStanza) {
+            const currentRecord = ring.records[currentIndex];
+            const equivalentRecord = ring.records[currentIndex + ring.cycleSize];
+            retargetCurrentScrollStanza(equivalentStanza);
+            shiftRingOffsets(
+                currentRecord.left - equivalentRecord.left,
+                currentRecord.top - equivalentRecord.top
+            );
+        }
+        return;
+    }
+
+    if (currentIndex > ring.centerEndIndex) {
+        const equivalentStanza = ring.stanzas[currentIndex - ring.cycleSize];
+        if (equivalentStanza) {
+            const currentRecord = ring.records[currentIndex];
+            const equivalentRecord = ring.records[currentIndex - ring.cycleSize];
+            retargetCurrentScrollStanza(equivalentStanza);
+            shiftRingOffsets(
+                currentRecord.left - equivalentRecord.left,
+                currentRecord.top - equivalentRecord.top
+            );
+        }
+    }
 }
 
 function stopAutoScroll() {
@@ -58,6 +288,11 @@ function stopAutoScroll() {
     }
     reducedMotionListener = null;
     reducedMotionMediaQuery = null;
+
+    if (refreshRingMetricsRafId !== null) {
+        window.cancelAnimationFrame(refreshRingMetricsRafId);
+        refreshRingMetricsRafId = null;
+    }
 }
 
 function startAutoScroll(speedMultiplier = 1) {
@@ -93,8 +328,10 @@ function startAutoScroll(speedMultiplier = 1) {
 
         if (mourn.scrollZoneData.el && mourn.scrollStanza.currentScrollStanzaData) {
             applyScrollDelta(deltaPx);
-            cascadeRender();
-            checkStanzaScroll();
+            const stanzaChanged = checkStanzaScroll();
+            if (stanzaChanged || isRingWrapCandidate()) {
+                wrapCurrentStanzaToRingCenter();
+            }
             setAnchorOffsets(null);
         }
 
@@ -111,6 +348,10 @@ function scrollInit() {
     }
 
     createScrollZone();
+    const ringSeeded = seedFixedCycleRing();
+    if (!ringSeeded) {
+        console.warn('Falling back to pre-ring start stanza due to seeding failure.');
+    }
     if (scrollDebug) {
         mourn.trackers.anchor.childNodes.forEach((stanza) => {
             const centerDot = document.createElement("div");
@@ -129,7 +370,7 @@ function scrollInit() {
 
     setCurrentScrollStanza(mourn.trackers.startStanza, true);
     setAnchorCenterOffsets();
-    window.addEventListener('resize', setAnchorCenterOffsets);
+    window.addEventListener('resize', queueRefreshRingMetrics);
 }
 
 // Create the scrollable area that the user can interact with.
@@ -169,13 +410,11 @@ function createScrollZone() {
     );
 
     // Add the scroll listener to the scroll zone.
-    mourn.scrollZoneData.el.onscroll = function (e) {
-        scrollTick(e);
-    }
+    mourn.scrollZoneData.el.onscroll = queueScrollTick;
 }
 
 // Funtion to fire on every scroll event.
-function scrollTick(e) {
+function scrollTick() {
     if(scrollDebugV) {
         dbp('scrollTick()') 
     }
@@ -188,10 +427,11 @@ function scrollTick(e) {
         mourn.scrollZoneData.dims.y * 0.16
     );
 
-    cascadeRender();
-
     // Check to see if we have changed stanzas.
-    checkStanzaScroll();
+    const stanzaChanged = checkStanzaScroll();
+    if (stanzaChanged || isRingWrapCandidate()) {
+        wrapCurrentStanzaToRingCenter();
+    }
 
     setAnchorOffsets(null);
 }
@@ -268,16 +508,24 @@ function setAnchorOffsets(usedSlope = null) {
 }
 
 function setCurrentScrollStanzaContinuous(nextStanza, direction) {
+    if (!nextStanza) {
+        return false;
+    }
+
     const previousTopOffset = getCurrentTopActiveOffset();
-    setCurrentScrollStanza(nextStanza);
+    const stanzaWasSet = setCurrentScrollStanza(nextStanza);
+    if (!stanzaWasSet) {
+        return false;
+    }
     mourn.scrollStanza.direction = direction;
     const nextTopOffset = getCurrentTopActiveOffset();
     const offsetCorrection = previousTopOffset - nextTopOffset;
     mourn.scrollStanza.currentScrollStanzaData.indexedOffset += offsetCorrection;
+    return true;
 }
 
 // Sets what stanza is the current stanza.
-function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
+function setCurrentScrollStanza(stanza, isFirst = false) {
     if(scrollDebugV) {
         dbp('setCurrentScrollStanza()') 
     }
@@ -287,17 +535,21 @@ function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
         console.log(stanza);
     }
 
+    if (!stanza) {
+        console.error('Cannot set current scroll stanza: stanza is null.');
+        return false;
+    }
+
     // Initialize a new object for a scroll stanza.
     // This should probably be an object with a constructor.
     const newCurrentScrollStanza = {};
 
-    // Get the stanza we are setting as the current stanza's data attributes.
-    const data = stanza.dataset;
+    const meta = getStanzaScrollMeta(stanza);
 
     // And track some of its relevant data.
     newCurrentScrollStanza.target = stanza;
-    newCurrentScrollStanza.slope = parseFloat(data.slope);
-    newCurrentScrollStanza.scrollWidth = parseFloat(data.scrollWidth);
+    newCurrentScrollStanza.slope = meta.slope;
+    newCurrentScrollStanza.scrollWidth = meta.scrollWidth;
 
     if(scrollDebug) {
         console.log('Stanza data created');
@@ -322,13 +574,14 @@ function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
 
         if (mourn.scrollStanza.currentScrollValue <= 0) {
             const normalizedValue = mourn.scrollStanza.currentScrollValue + newCurrentScrollStanza.scrollWidth;
-            newCurrentScrollValue = normalizedValue % newCurrentScrollStanza.scrollWidth;
+            newCurrentScrollValue = positiveModulo(normalizedValue, newCurrentScrollStanza.scrollWidth);
             newCurrentScrollStanza.previousScrollOffset = mourn.scrollZoneData.total.y;
-            newCurrentScrollStanza.indexedOffset = parseFloat(data.topOffset);
+            newCurrentScrollStanza.indexedOffset = meta.topOffset;
         }
         else {
-            const normalizedValue = mourn.scrollStanza.currentScrollValue + mourn.scrollStanza.currentScrollStanzaData.scrollWidth;
-            newCurrentScrollValue = normalizedValue % mourn.scrollStanza.currentScrollStanzaData.scrollWidth;
+            const previousScrollWidth = mourn.scrollStanza.currentScrollStanzaData.scrollWidth;
+            const normalizedValue = mourn.scrollStanza.currentScrollValue + previousScrollWidth;
+            newCurrentScrollValue = positiveModulo(normalizedValue, previousScrollWidth);
             newCurrentScrollStanza.previousScrollOffset = -mourn.scrollZoneData.total.y;
             newCurrentScrollStanza.indexedOffset = 0;
         }
@@ -355,10 +608,15 @@ function setCurrentScrollStanza(stanza, isFirst = false, BigB = false) {
     // console.log('f(n) WITHOUT +B: ' + mourn.scrollStanza.currentScrollStanzaData.slope * mourn.scrollStanza.currentScrollValue);
     // console.log('stanza number: ' + mourn.scrollStanza.currentScrollStanzaData.target.nextSibling.dataset.stanzaNumber);
 
+    return true;
 }
 
 // Check to see if we have changed stanzas.
 function checkStanzaScroll() {
+    if (!mourn.scrollStanza.currentScrollStanzaData) {
+        return false;
+    }
+
     if(scrollDebugV) {
         dbp('checkStanzaScroll()');
     }
@@ -373,14 +631,59 @@ function checkStanzaScroll() {
 
     // If we have passed beyond the width of the current scroll stanza...
     if (mourn.scrollStanza.currentScrollValue > mourn.scrollStanza.currentScrollStanzaData.scrollWidth) {
+        let nextStanza = null;
+        if (mourn.scrollZoneData.ring) {
+            const ring = mourn.scrollZoneData.ring;
+            const currentIndex = mourn.scrollStanza.currentScrollStanzaData.target._ringIndex;
+            const nextIndex = positiveModulo(currentIndex + 1, ring.stanzas.length);
+            nextStanza = ring.stanzas[nextIndex];
+        }
+        else {
+            nextStanza = mourn.scrollStanza.currentScrollStanzaData.target.nextSibling;
+        }
+
         // Set the current stanza.
-        setCurrentScrollStanzaContinuous(mourn.scrollStanza.currentScrollStanzaData.target.nextSibling, 1);
+        return setCurrentScrollStanzaContinuous(nextStanza, 1);
     }
 
     // Else if we have passed below the start of the current stanza...
     else if (mourn.scrollStanza.currentScrollValue < 0) {
+        let previousStanza = null;
+        if (mourn.scrollZoneData.ring) {
+            const ring = mourn.scrollZoneData.ring;
+            const currentIndex = mourn.scrollStanza.currentScrollStanzaData.target._ringIndex;
+            const previousIndex = positiveModulo(currentIndex - 1, ring.stanzas.length);
+            previousStanza = ring.stanzas[previousIndex];
+        }
+        else {
+            previousStanza = mourn.scrollStanza.currentScrollStanzaData.target.previousSibling;
+        }
 
         // Set the current stanza.
-        setCurrentScrollStanzaContinuous(mourn.scrollStanza.currentScrollStanzaData.target.previousSibling, -1);
+        return setCurrentScrollStanzaContinuous(previousStanza, -1);
     }
+
+    return false;
+}
+function queueScrollTick() {
+    if (scrollTickRafId !== null) {
+        return;
+    }
+
+    scrollTickRafId = window.requestAnimationFrame(() => {
+        scrollTickRafId = null;
+        scrollTick();
+    });
+}
+
+function queueRefreshRingMetrics() {
+    if (refreshRingMetricsRafId !== null) {
+        return;
+    }
+
+    refreshRingMetricsRafId = window.requestAnimationFrame(() => {
+        refreshRingMetricsRafId = null;
+        refreshRingMetrics();
+        setAnchorCenterOffsets();
+    });
 }

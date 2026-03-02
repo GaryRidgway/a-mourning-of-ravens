@@ -19,8 +19,6 @@ window.addEventListener("load", function () {
       window.requestAnimationFrame(()=>{
         placeFirstStanza(mourn.trackers.startStanza);
       window.requestAnimationFrame(()=>{
-        cascadeRender();
-      window.requestAnimationFrame(()=>{
         scrollInit();
       window.requestAnimationFrame(()=>{
         const autoScrollSpeed = getAutoScrollSpeedFromURL();
@@ -31,7 +29,6 @@ window.addEventListener("load", function () {
         if(mourn.debug.on) {
           placePoemCenter();
         }
-      });
       });
       });
       });
