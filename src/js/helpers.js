@@ -2,6 +2,9 @@ const helpersDebug = mourn.debug.on && mourn.debug.includeHelpers;
 const helpersDebugV = mourn.debug.verbose && mourn.debug.includeHelpers;
 
 function scale(number, inMin, inMax, outMin, outMax) {
+    if (!Number.isFinite(inMin) || !Number.isFinite(inMax) || inMax === inMin) {
+        return (outMin + outMax) * 0.5;
+    }
     return (number - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
 }
 

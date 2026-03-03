@@ -20,8 +20,383 @@
 </head>
 
 <body>
+  <div id="poem-bg"></div>
   <div id="poem-staging"></div>
   <div id="poem-container"></div>
+    <aside id="dune-controls" class="controls">
+      <h3>Dune Controls</h3>
+
+      <label class="control-row control-toggle">
+        <span>Word Colliders</span>
+        <input type="checkbox" data-app-key="wordBoxes" />
+      </label>
+
+      <label class="control-row">
+        <span>Word Inset X</span>
+        <input type="range" min="0" max="20" step="0.5" data-app-key="wordInsetX" />
+        <output data-app-value-for="wordInsetX"></output>
+      </label>
+
+      <label class="control-row">
+        <span>Word Inset Y</span>
+        <input type="range" min="0" max="20" step="0.5" data-app-key="wordInsetY" />
+        <output data-app-value-for="wordInsetY"></output>
+      </label>
+
+      <details class="control-group" open>
+        <summary>Particles</summary>
+
+        <label class="control-row">
+          <span>Particle Radius</span>
+          <input type="range" min="0.2" max="3" step="0.05" data-key="particleSize" />
+          <output data-value-for="particleSize"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Size Rand Negative</span>
+          <input type="range" min="0" max="2" step="0.01" data-key="particleSizeRandomNegative" />
+          <output data-value-for="particleSizeRandomNegative"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Size Rand Positive</span>
+          <input type="range" min="0" max="2" step="0.01" data-key="particleSizeRandomPositive" />
+          <output data-value-for="particleSizeRandomPositive"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Min Speed To Draw</span>
+          <input type="range" min="0" max="3" step="0.01" data-key="particleRenderMinSpeed" />
+          <output data-value-for="particleRenderMinSpeed"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Speed Alpha Boost</span>
+          <input type="range" min="0" max="4" step="0.01" data-key="particleSpeedAlphaBoost" />
+          <output data-value-for="particleSpeedAlphaBoost"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Speed Width Boost</span>
+          <input type="range" min="0" max="4" step="0.01" data-key="particleSpeedWidthBoost" />
+          <output data-value-for="particleSpeedWidthBoost"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Render Fraction</span>
+          <input type="range" min="0.05" max="1" step="0.01" data-key="particleRenderFraction" />
+          <output data-value-for="particleRenderFraction"></output>
+        </label>
+
+      </details>
+
+      <details class="control-group" open>
+        <summary>Ambient Motion</summary>
+
+        <label class="control-row control-toggle">
+          <span>Enable Ambient Motion</span>
+          <input type="checkbox" data-key="enableAmbientMotion" />
+        </label>
+
+        <label class="control-row">
+          <span>Wind Strength</span>
+          <input type="range" min="0" max="0.5" step="0.001" data-key="ambientWindStrength" />
+          <output data-value-for="ambientWindStrength"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Dune Band Scale</span>
+          <input type="range" min="40" max="600" step="1" data-key="duneBandScale" />
+          <output data-value-for="duneBandScale"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Dune Along Warp Scale</span>
+          <input type="range" min="80" max="900" step="1" data-key="duneAlongWarpScale" />
+          <output data-value-for="duneAlongWarpScale"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Dune Warp Strength</span>
+          <input type="range" min="0" max="4" step="0.01" data-key="duneWarpStrength" />
+          <output data-value-for="duneWarpStrength"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Dune Contrast</span>
+          <input type="range" min="0.2" max="4" step="0.01" data-key="duneContrast" />
+          <output data-value-for="duneContrast"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Dune Drift Speed</span>
+          <input type="range" min="0" max="1.2" step="0.01" data-key="duneDriftSpeed" />
+          <output data-value-for="duneDriftSpeed"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Micro Noise Scale</span>
+          <input type="range" min="40" max="1000" step="1" data-key="microNoiseScale" />
+          <output data-value-for="microNoiseScale"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Micro Turbulence</span>
+          <input type="range" min="0" max="0.1" step="0.001" data-key="microTurbulenceStrength" />
+          <output data-value-for="microTurbulenceStrength"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Edge Respawn Base</span>
+          <input type="range" min="0" max="0.5" step="0.01" data-key="edgeRespawnWeightBase" />
+          <output data-value-for="edgeRespawnWeightBase"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Edge Respawn Strength</span>
+          <input type="range" min="0" max="3" step="0.05" data-key="edgeRespawnWeightStrength" />
+          <output data-value-for="edgeRespawnWeightStrength"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Edge Respawn Exponent</span>
+          <input type="range" min="0.5" max="4" step="0.1" data-key="edgeRespawnWeightExponent" />
+          <output data-value-for="edgeRespawnWeightExponent"></output>
+        </label>
+
+        <label class="control-row control-toggle">
+          <span>Weighted Edge Respawn</span>
+          <input type="checkbox" data-key="useWeightedEdgeRespawn" />
+        </label>
+
+        <label class="control-row">
+          <span>Weighted Mix When Off (%)</span>
+          <input type="range" min="0" max="100" step="1" data-key="edgeRespawnWeightedMixPercent" />
+          <output data-value-for="edgeRespawnWeightedMixPercent"></output>
+        </label>
+      </details>
+
+      <details class="control-group">
+        <summary>Collision Separation</summary>
+
+        <label class="control-row control-toggle">
+          <span>Enable Separation</span>
+          <input type="checkbox" data-key="enableParticleSeparation" />
+        </label>
+
+        <label class="control-row">
+          <span>Collision Radius</span>
+          <input type="range" min="0.4" max="3" step="0.05" data-key="particleCollisionRadius" />
+          <output data-value-for="particleCollisionRadius"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Collision Strength</span>
+          <input type="range" min="0" max="1.5" step="0.01" data-key="particleCollisionStrength" />
+          <output data-value-for="particleCollisionStrength"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Velocity Damp</span>
+          <input type="range" min="0" max="0.5" step="0.01" data-key="particleCollisionVelocityDamp" />
+          <output data-value-for="particleCollisionVelocityDamp"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Frames Per Solve</span>
+          <input type="range" min="1" max="6" step="1" data-key="separationEveryNFrames" />
+          <output data-value-for="separationEveryNFrames"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Near Box Radius</span>
+          <input type="range" min="1" max="100" step="1" data-key="separationNearBoxRadius" />
+          <output data-value-for="separationNearBoxRadius"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Min Active Speed</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="separationMinSpeed" />
+          <output data-value-for="separationMinSpeed"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Box Force Max Radius</span>
+          <input type="range" min="0.5" max="20" step="0.1" data-key="boxForceMaxRadius" />
+          <output data-value-for="boxForceMaxRadius"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Surface Slide Band</span>
+          <input type="range" min="0.2" max="4" step="0.05" data-key="surfaceSlideBand" />
+          <output data-value-for="surfaceSlideBand"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Forward Dot Min</span>
+          <input type="range" min="0" max="0.5" step="0.01" data-key="staticInfluenceForwardDotMin" />
+          <output data-value-for="staticInfluenceForwardDotMin"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Backside Drag</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="backsideDragStrength" />
+          <output data-value-for="backsideDragStrength"></output>
+        </label>
+      </details>
+
+      <details class="control-group">
+        <summary>Wind Shadow</summary>
+
+        <label class="control-row control-toggle">
+          <span>Enable Wind Shadow</span>
+          <input type="checkbox" data-key="enableWindShadow" />
+        </label>
+
+        <label class="control-row">
+          <span>Shadow Length</span>
+          <input type="range" min="0" max="600" step="1" data-key="windShadowLength" />
+          <output data-value-for="windShadowLength"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Width Growth</span>
+          <input type="range" min="0" max="1.5" step="0.01" data-key="windShadowWidthGrowth" />
+          <output data-value-for="windShadowWidthGrowth"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Shadow Strength</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="windShadowStrength" />
+          <output data-value-for="windShadowStrength"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Shadow Rotation (deg)</span>
+          <input type="range" min="-180" max="180" step="1" data-key="windShadowRotationDeg" />
+          <output data-value-for="windShadowRotationDeg"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Offset Along Wind</span>
+          <input type="range" min="-300" max="300" step="1" data-key="windShadowOffsetAlong" />
+          <output data-value-for="windShadowOffsetAlong"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Offset Lateral</span>
+          <input type="range" min="-300" max="300" step="1" data-key="windShadowOffsetLateral" />
+          <output data-value-for="windShadowOffsetLateral"></output>
+        </label>
+
+        <label class="control-row control-toggle">
+          <span>Show Shadow Zone</span>
+          <input type="checkbox" data-key="showWindShadowZone" />
+        </label>
+
+        <label class="control-row">
+          <span>Shadow Zone Alpha</span>
+          <input type="range" min="0" max="120" step="1" data-key="windShadowZoneAlpha" />
+          <output data-value-for="windShadowZoneAlpha"></output>
+        </label>
+      </details>
+
+      <details class="control-group">
+        <summary>Prewarm</summary>
+
+        <label class="control-row control-toggle">
+          <span>Enable Prewarm</span>
+          <input type="checkbox" data-key="enablePrewarm" />
+        </label>
+
+        <label class="control-row">
+          <span>Prewarm Steps</span>
+          <input type="range" min="0" max="3000" step="50" data-key="prewarmSteps" />
+          <output data-value-for="prewarmSteps"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Prewarm Time Step (ms)</span>
+          <input type="range" min="1" max="33" step="1" data-key="prewarmTimeStepMs" />
+          <output data-value-for="prewarmTimeStepMs"></output>
+        </label>
+
+        <label class="control-row control-toggle">
+          <span>Use Separation in Prewarm</span>
+          <input type="checkbox" data-key="prewarmEnableSeparation" />
+        </label>
+      </details>
+
+      <details class="control-group">
+        <summary>Render Colors</summary>
+
+        <label class="control-row">
+          <span>Background Fade</span>
+          <input type="color" data-color-key="fade" />
+          <output data-color-value-for="fade"></output>
+        </label>
+        <label class="control-row">
+          <span>Background Fade Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-color-alpha-key="fade" />
+          <output data-color-alpha-value-for="fade"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Particles</span>
+          <input type="color" data-color-key="particles" />
+          <output data-color-value-for="particles"></output>
+        </label>
+        <label class="control-row">
+          <span>Particles Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-color-alpha-key="particles" />
+          <output data-color-alpha-value-for="particles"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Separation Zone</span>
+          <input type="color" data-color-key="separationZone" />
+          <output data-color-value-for="separationZone"></output>
+        </label>
+        <label class="control-row">
+          <span>Separation Zone Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-color-alpha-key="separationZone" />
+          <output data-color-alpha-value-for="separationZone"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Box Stroke (Idle)</span>
+          <input type="color" data-color-key="boxStrokeIdle" />
+          <output data-color-value-for="boxStrokeIdle"></output>
+        </label>
+        <label class="control-row">
+          <span>Box Stroke (Idle) Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxStrokeIdle" />
+          <output data-color-alpha-value-for="boxStrokeIdle"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Box Stroke (Dragged)</span>
+          <input type="color" data-color-key="boxStrokeDragged" />
+          <output data-color-value-for="boxStrokeDragged"></output>
+        </label>
+        <label class="control-row">
+          <span>Box Stroke (Dragged) Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxStrokeDragged" />
+          <output data-color-alpha-value-for="boxStrokeDragged"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Wind Shadow Zone</span>
+          <input type="color" data-color-key="windShadowZone" />
+          <output data-color-value-for="windShadowZone"></output>
+        </label>
+        <label class="control-row">
+          <span>Wind Shadow Zone Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-color-alpha-key="windShadowZone" />
+          <output data-color-alpha-value-for="windShadowZone"></output>
+        </label>
+      </details>
+    </aside>
 
   <!-- vvv Add scripts here from dist folder vvv -->
   <!-- <script src="./dist/js/poem_json.min.js"></script>
@@ -30,6 +405,10 @@
   <script src="./dist/js/main.min.js"></script> -->
 
   <!-- vvv Add scripts here from dist folder vvv -->
+  <script src="./src/vendor/p5/p5.min.js"></script>
+  <script src="./src/vendor/p5/p5.dom.min.js"></script>
+  <script src="./src/vendor/p5/p5.sound.min.js"></script>
+  <script src="./src/js/flowField.js"></script>
   <script src="./src/js/poem_json.js"></script>
   <script src="./src/js/variables.js"></script>
   <script src="./src/js/debug.js"></script>

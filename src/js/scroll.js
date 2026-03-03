@@ -6,6 +6,151 @@ let reducedMotionListener = null;
 let reducedMotionMediaQuery = null;
 let scrollTickRafId = null;
 let refreshRingMetricsRafId = null;
+let flowBoxesSyncRafId = null;
+const flowParams = new URLSearchParams(window.location.search);
+let flowWordBoxesEnabled = (() => {
+    const raw = flowParams.get('wordBoxes');
+    if (raw === null) return true;
+    return raw === '1';
+})();
+let flowWordInsetXPx = (() => {
+    const raw = flowParams.get('wordInsetX') ?? flowParams.get('wordInset');
+    const parsed = raw === null ? 3 : parseFloat(raw);
+    if (!Number.isFinite(parsed)) return 3;
+    return Math.max(0, Math.min(20, parsed));
+})();
+let flowWordInsetYPx = (() => {
+    const raw = flowParams.get('wordInsetY') ?? flowParams.get('wordInset');
+    const parsed = raw === null ? 5 : parseFloat(raw);
+    if (!Number.isFinite(parsed)) return 5;
+    return Math.max(0, Math.min(20, parsed));
+})();
+
+window.__mournSetWordBoxes = function setWordBoxes(enabled) {
+    flowWordBoxesEnabled = !!enabled;
+    queueFlowFieldBoxSync();
+};
+window.__mournSetWordInsetPx = function setWordInsetPx(value) {
+    const parsed = parseFloat(value);
+    if (!Number.isFinite(parsed)) {
+        return;
+    }
+    flowWordInsetXPx = Math.max(0, Math.min(20, parsed));
+    flowWordInsetYPx = Math.max(0, Math.min(20, parsed));
+    queueFlowFieldBoxSync();
+};
+window.__mournSetWordInsetXPx = function setWordInsetXPx(value) {
+    const parsed = parseFloat(value);
+    if (!Number.isFinite(parsed)) {
+        return;
+    }
+    flowWordInsetXPx = Math.max(0, Math.min(20, parsed));
+    queueFlowFieldBoxSync();
+};
+window.__mournSetWordInsetYPx = function setWordInsetYPx(value) {
+    const parsed = parseFloat(value);
+    if (!Number.isFinite(parsed)) {
+        return;
+    }
+    flowWordInsetYPx = Math.max(0, Math.min(20, parsed));
+    queueFlowFieldBoxSync();
+};
+const perfProbe = {
+    enabled: false,
+    logEnabled: false,
+    lastFrameTs: null,
+    frames: 0,
+    totalDeltaMs: 0,
+    maxDeltaMs: 0,
+    spikesOver24ms: 0,
+    wraps: {
+        toCenterFromLow: 0,
+        toCenterFromHigh: 0,
+    },
+};
+
+function isPerfURLFlagEnabled() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('perf') === '1';
+}
+
+function formatPerfSnapshot() {
+    const avgMs = perfProbe.frames > 0 ? (perfProbe.totalDeltaMs / perfProbe.frames) : 0;
+    return [
+        '[pf]',
+        'f=' + perfProbe.frames,
+        'a=' + avgMs.toFixed(2),
+        'm=' + perfProbe.maxDeltaMs.toFixed(2),
+        's24=' + perfProbe.spikesOver24ms,
+        'wl=' + perfProbe.wraps.toCenterFromLow,
+        'wh=' + perfProbe.wraps.toCenterFromHigh,
+    ].join(' ');
+}
+
+function initPerfProbe() {
+    perfProbe.enabled = scrollDebug || isPerfURLFlagEnabled();
+    perfProbe.logEnabled = false;
+    perfProbe.lastFrameTs = null;
+    perfProbe.frames = 0;
+    perfProbe.totalDeltaMs = 0;
+    perfProbe.maxDeltaMs = 0;
+    perfProbe.spikesOver24ms = 0;
+    perfProbe.wraps.toCenterFromLow = 0;
+    perfProbe.wraps.toCenterFromHigh = 0;
+    window.__mournPerf = perfProbe;
+    window.__mournPerfSnapshot = () => formatPerfSnapshot();
+    window.__mournPerfPrint = () => {
+        const snapshot = formatPerfSnapshot();
+        console.log(snapshot);
+        return snapshot;
+    };
+    window.__mournPerfReset = () => {
+        initPerfProbe();
+        return formatPerfSnapshot();
+    };
+    window.__mournPerfLogs = (enabled) => {
+        perfProbe.logEnabled = !!enabled;
+        return perfProbe.logEnabled;
+    };
+}
+
+function perfRecordFrame(timestamp, source = 'unknown') {
+    if (!perfProbe.enabled || timestamp === null) {
+        return;
+    }
+
+    if (perfProbe.lastFrameTs !== null) {
+        const deltaMs = timestamp - perfProbe.lastFrameTs;
+        perfProbe.frames += 1;
+        perfProbe.totalDeltaMs += deltaMs;
+        perfProbe.maxDeltaMs = Math.max(perfProbe.maxDeltaMs, deltaMs);
+        if (deltaMs > 24) {
+            perfProbe.spikesOver24ms += 1;
+            if (scrollDebugV && perfProbe.logEnabled) {
+                console.warn('[perf] frame spike', { deltaMs: Math.round(deltaMs * 10) / 10, source });
+            }
+        }
+
+        if (perfProbe.logEnabled && perfProbe.frames % 120 === 0) {
+            console.log(formatPerfSnapshot());
+        }
+    }
+
+    perfProbe.lastFrameTs = timestamp;
+}
+
+function perfMarkWrap(direction) {
+    if (!perfProbe.enabled) {
+        return;
+    }
+
+    if (direction === 'low') {
+        perfProbe.wraps.toCenterFromLow += 1;
+    }
+    else if (direction === 'high') {
+        perfProbe.wraps.toCenterFromHigh += 1;
+    }
+}
 
 function snapOffset(value, precision = 10) {
     return Math.round(value * precision) / precision;
@@ -258,6 +403,7 @@ function wrapCurrentStanzaToRingCenter() {
                 currentRecord.left - equivalentRecord.left,
                 currentRecord.top - equivalentRecord.top
             );
+            perfMarkWrap('low');
         }
         return;
     }
@@ -272,6 +418,7 @@ function wrapCurrentStanzaToRingCenter() {
                 currentRecord.left - equivalentRecord.left,
                 currentRecord.top - equivalentRecord.top
             );
+            perfMarkWrap('high');
         }
     }
 }
@@ -292,6 +439,11 @@ function stopAutoScroll() {
     if (refreshRingMetricsRafId !== null) {
         window.cancelAnimationFrame(refreshRingMetricsRafId);
         refreshRingMetricsRafId = null;
+    }
+
+    if (flowBoxesSyncRafId !== null) {
+        window.cancelAnimationFrame(flowBoxesSyncRafId);
+        flowBoxesSyncRafId = null;
     }
 }
 
@@ -322,6 +474,8 @@ function startAutoScroll(speedMultiplier = 1) {
             autoScrollPrevFrameTs = timestamp;
         }
 
+        perfRecordFrame(timestamp, 'auto');
+
         const deltaMs = Math.min(timestamp - autoScrollPrevFrameTs, 50);
         autoScrollPrevFrameTs = timestamp;
         const deltaPx = pixelsPerSecond * (deltaMs / 1000);
@@ -347,6 +501,7 @@ function scrollInit() {
         dbp('scrollInit()') 
     }
 
+    initPerfProbe();
     createScrollZone();
     const ringSeeded = seedFixedCycleRing();
     if (!ringSeeded) {
@@ -370,6 +525,7 @@ function scrollInit() {
 
     setCurrentScrollStanza(mourn.trackers.startStanza, true);
     setAnchorCenterOffsets();
+    queueFlowFieldBoxSync();
     window.addEventListener('resize', queueRefreshRingMetrics);
 }
 
@@ -414,10 +570,12 @@ function createScrollZone() {
 }
 
 // Funtion to fire on every scroll event.
-function scrollTick() {
+function scrollTick(timestamp = null) {
     if(scrollDebugV) {
         dbp('scrollTick()') 
     }
+
+    perfRecordFrame(timestamp, 'manual');
 
     // Reset the scroll zone and track the distance scrolled.
     setScrollZone(
@@ -488,7 +646,7 @@ function setAnchorOffsets(usedSlope = null) {
         dbp('');
         console.log('Previous scroll offset: ' + dbt(mourn.scrollStanza.currentScrollStanzaData.previousScrollOffset));
         console.log('Indexed offset: ' + dbt(mourn.scrollStanza.currentScrollStanzaData.indexedOffset));
-        console.log('Direction: ' + dbt(mourn.scrollStanza.mourn.scrollStanza.direction));
+        console.log('Direction: ' + dbt(mourn.scrollStanza.direction));
         console.log('Anchor bounding box height offset, or');
         console.log('aBBHO: ' + dbt(aBBHO));
         // console.log('Stanza indexed y val: ' + (indexedVal));
@@ -505,6 +663,7 @@ function setAnchorOffsets(usedSlope = null) {
     // mourn.trackers.anchorStyle.setProperty('--big-b', bigB);
     mourn.scrollStanza.currentTopActiveOffset = newTopActiveOffset;
     mourn.trackers.anchorStyle.setProperty('--top-active-offset', mourn.scrollStanza.currentTopActiveOffset);
+    queueFlowFieldBoxSync();
 }
 
 function setCurrentScrollStanzaContinuous(nextStanza, direction) {
@@ -670,9 +829,9 @@ function queueScrollTick() {
         return;
     }
 
-    scrollTickRafId = window.requestAnimationFrame(() => {
+    scrollTickRafId = window.requestAnimationFrame((timestamp) => {
         scrollTickRafId = null;
-        scrollTick();
+        scrollTick(timestamp);
     });
 }
 
@@ -685,5 +844,87 @@ function queueRefreshRingMetrics() {
         refreshRingMetricsRafId = null;
         refreshRingMetrics();
         setAnchorCenterOffsets();
+        queueFlowFieldBoxSync();
     });
+}
+
+function queueFlowFieldBoxSync() {
+    if (flowBoxesSyncRafId !== null) {
+        return;
+    }
+
+    flowBoxesSyncRafId = window.requestAnimationFrame(() => {
+        flowBoxesSyncRafId = null;
+        syncFlowFieldBoxesFromPoem();
+    });
+}
+
+function syncFlowFieldBoxesFromPoem() {
+    if (typeof window.setFlowBoxes !== 'function') {
+        return;
+    }
+
+    const stanzasToSync = getRenderedStanzas();
+    stanzasToSync.sort((a, b) => {
+        const aIdx = typeof a._ringIndex === 'number' ? a._ringIndex : 0;
+        const bIdx = typeof b._ringIndex === 'number' ? b._ringIndex : 0;
+        return aIdx - bIdx;
+    });
+
+    const viewportMargin = 240;
+    const minX = 0 - viewportMargin;
+    const minY = 0 - viewportMargin;
+    const maxX = window.innerWidth + viewportMargin;
+    const maxY = window.innerHeight + viewportMargin;
+
+    const isNearViewport = (bb) => {
+        return !(
+            bb.right < minX ||
+            bb.left > maxX ||
+            bb.bottom < minY ||
+            bb.top > maxY
+        );
+    };
+
+    const flowBoxes = [];
+    stanzasToSync.forEach((stanza) => {
+        const stanzaBB = stanza.getBoundingClientRect();
+        if (!isNearViewport(stanzaBB)) {
+            return;
+        }
+
+        if (flowWordBoxesEnabled) {
+            const wordSpans = stanza.querySelectorAll('.line > span:not(.terminator)');
+            wordSpans.forEach((wordSpan) => {
+                const word = wordSpan.textContent.trim();
+                if (word.length === 0) {
+                    return;
+                }
+                const bb = wordSpan.getBoundingClientRect();
+                if (!isNearViewport(bb)) {
+                    return;
+                }
+                const insetX = flowWordInsetXPx;
+                const insetY = flowWordInsetYPx;
+                const shrunkWidth = Math.max(1, bb.width - insetX * 2);
+                const shrunkHeight = Math.max(1, bb.height - insetY * 2);
+                flowBoxes.push({
+                    x: bb.left + insetX,
+                    y: bb.top + insetY,
+                    w: shrunkWidth,
+                    h: shrunkHeight,
+                });
+            });
+        }
+        else {
+            flowBoxes.push({
+                x: stanzaBB.left,
+                y: stanzaBB.top,
+                w: stanzaBB.width,
+                h: stanzaBB.height,
+            });
+        }
+    });
+
+    window.setFlowBoxes(flowBoxes);
 }

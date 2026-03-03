@@ -1,6 +1,9 @@
 function pairSpaceAndScale() {
     const allLines = mourn.config.poemStaging.querySelectorAll('.stanza .line');
     const numAllLines = allLines.length;
+    const leastChars = Number.isFinite(mourn.staging.leastChars) ? mourn.staging.leastChars : 0;
+    const mostChars = Number.isFinite(mourn.staging.mostChars) ? mourn.staging.mostChars : 0;
+    const charRangeCollapsed = mostChars <= leastChars;
     allLines.forEach((line, index) => {
         const hasInitiator = line.querySelectorAll('.initiator').length > 0;
         const hasTerminator = line.querySelectorAll('.terminator').length > 0;
@@ -20,28 +23,37 @@ function pairSpaceAndScale() {
             charCount = avgCharCount;
         }
 
-        const spacing = invLogScale(scale(
-            charCount,
-            mourn.staging.leastChars,
-            mourn.staging.mostChars,
-            1,
-            10
-        ));
+        const spacing = charRangeCollapsed
+            ? 1
+            : invLogScale(scale(
+                charCount,
+                leastChars,
+                mostChars,
+                1,
+                10
+            ));
         line.style.setProperty('--char-spacing', spacing + 'px')
 
 
-        const scaling = invLogScale(scale(
-            charCount,
-            mourn.staging.leastChars,
-            mourn.staging.mostChars,
-            1,
-            10
-        ));
+        const scaling = charRangeCollapsed
+            ? 1
+            : invLogScale(scale(
+                charCount,
+                leastChars,
+                mostChars,
+                1,
+                10
+            ));
         line.style.setProperty('--char-scaling', scaling + 'px')
     });
 }
 
 function addStanzasToStaging(jsonData) {
+    // Always recompute bounds from scratch in case staging is rebuilt.
+    mourn.staging.widestStanza = 0;
+    mourn.staging.leastChars = Number.POSITIVE_INFINITY;
+    mourn.staging.mostChars = Number.NEGATIVE_INFINITY;
+
     jsonData.forEach((stanza, index) => {
         const stanzaNode = addStanzaToStaging(index);
         const stanzaWidth = stanzaNode.getBoundingClientRect().width;
@@ -112,7 +124,7 @@ function stanzaCountLineChars(stanza) {
             }
             line.setAttribute('id', 'most-line-characters');
         }
-        else if (chars < mourn.staging.leastChars) {
+        if (chars < mourn.staging.leastChars) {
             mourn.staging.leastChars = Math.floor(chars);
             const prevEl = document.getElementById('least-line-characters');
             if (prevEl) {
