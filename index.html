@@ -26,22 +26,26 @@
     <aside id="dune-controls" class="controls">
       <h3>Dune Controls</h3>
 
-      <label class="control-row control-toggle">
-        <span>Word Colliders</span>
-        <input type="checkbox" data-app-key="wordBoxes" />
-      </label>
+      <details class="control-group" open>
+        <summary>Word Colliders</summary>
 
-      <label class="control-row">
-        <span>Word Inset X</span>
-        <input type="range" min="0" max="20" step="0.5" data-app-key="wordInsetX" />
-        <output data-app-value-for="wordInsetX"></output>
-      </label>
+        <label class="control-row control-toggle">
+          <span>Word Colliders</span>
+          <input type="checkbox" data-app-key="wordBoxes" />
+        </label>
 
-      <label class="control-row">
-        <span>Word Inset Y</span>
-        <input type="range" min="0" max="20" step="0.5" data-app-key="wordInsetY" />
-        <output data-app-value-for="wordInsetY"></output>
-      </label>
+        <label class="control-row">
+          <span>Word Inset X (%)</span>
+          <input type="range" min="0" max="20" step="0.5" data-app-key="wordInsetX" />
+          <output data-app-value-for="wordInsetX"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Word Inset Y (%)</span>
+          <input type="range" min="0" max="20" step="0.5" data-app-key="wordInsetY" />
+          <output data-app-value-for="wordInsetY"></output>
+        </label>
+      </details>
 
       <details class="control-group" open>
         <summary>Particles</summary>
@@ -88,6 +92,62 @@
           <output data-value-for="particleRenderFraction"></output>
         </label>
 
+        <label class="control-row">
+          <span>Max Particles</span>
+          <input type="range" min="200" max="10000" step="100" data-key="particleCount" />
+          <output data-value-for="particleCount"></output>
+        </label>
+
+      </details>
+
+      <details class="control-group" open>
+        <summary>Performance</summary>
+
+        <label class="control-row control-toggle">
+          <span>Enable Adaptive Quality</span>
+          <input type="checkbox" data-key="enableAdaptiveQuality" />
+        </label>
+
+        <label class="control-row">
+          <span>Target FPS</span>
+          <input type="range" min="20" max="120" step="1" data-key="qualityTargetFps" />
+          <output data-value-for="qualityTargetFps"></output>
+        </label>
+
+        <label class="control-row control-toggle">
+          <span>Auto Render Scale</span>
+          <input type="checkbox" data-key="enableAutoRenderScale" />
+        </label>
+
+        <label class="control-row">
+          <span>Auto Scale Threshold (px)</span>
+          <input type="range" min="640" max="3200" step="10" data-key="autoRenderScaleThresholdPx" />
+          <output data-value-for="autoRenderScaleThresholdPx"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Decision Window (ms)</span>
+          <input type="range" min="200" max="3000" step="50" data-key="qualityDecisionWindowMs" />
+          <output data-value-for="qualityDecisionWindowMs"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Tier Cooldown (ms)</span>
+          <input type="range" min="200" max="3000" step="50" data-key="qualityCooldownMs" />
+          <output data-value-for="qualityCooldownMs"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Quality Transition (ms)</span>
+          <input type="range" min="80" max="2000" step="20" data-key="qualityTransitionMs" />
+          <output data-value-for="qualityTransitionMs"></output>
+        </label>
+
+        <label class="control-row control-toggle">
+          <span>Show Performance HUD</span>
+          <input type="checkbox" data-key="qualityHudEnabled" />
+        </label>
+
       </details>
 
       <details class="control-group" open>
@@ -98,10 +158,24 @@
           <input type="checkbox" data-key="enableAmbientMotion" />
         </label>
 
+        <label class="control-row control-angle-row">
+          <span>Wind Direction</span>
+          <input class="control-angle-input" type="range" min="-180" max="180" step="1" data-key="ambientWindDirectionDeg" />
+          <button class="control-angle" type="button" data-angle-key="ambientWindDirectionDeg" aria-label="Wind direction"></button>
+          <output data-value-for="ambientWindDirectionDeg"></output>
+        </label>
+
         <label class="control-row">
           <span>Wind Strength</span>
           <input type="range" min="0" max="0.5" step="0.001" data-key="ambientWindStrength" />
           <output data-value-for="ambientWindStrength"></output>
+        </label>
+
+        <label class="control-row control-angle-row">
+          <span>Dune Band Angle</span>
+          <input class="control-angle-input" type="range" min="-180" max="180" step="1" data-key="duneBandRotationDeg" />
+          <button class="control-angle" type="button" data-angle-key="duneBandRotationDeg" aria-label="Dune band angle"></button>
+          <output data-value-for="duneBandRotationDeg"></output>
         </label>
 
         <label class="control-row">
@@ -397,6 +471,10 @@
         </label>
       </details>
     </aside>
+    <button id="simulation-pause-toggle" type="button" aria-pressed="false" title="Pause simulation">
+      <span class="pause-icon" aria-hidden="true"></span>
+      <span class="pause-label">Pause</span>
+    </button>
 
   <!-- vvv Add scripts here from dist folder vvv -->
   <!-- <script src="./dist/js/poem_json.min.js"></script>

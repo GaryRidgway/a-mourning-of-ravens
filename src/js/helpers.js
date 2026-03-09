@@ -1,7 +1,7 @@
 const helpersDebug = mourn.debug.on && mourn.debug.includeHelpers;
 const helpersDebugV = mourn.debug.verbose && mourn.debug.includeHelpers;
 
-function scale(number, inMin, inMax, outMin, outMax) {
+function mapRange(number, inMin, inMax, outMin, outMax) {
     if (!Number.isFinite(inMin) || !Number.isFinite(inMax) || inMax === inMin) {
         return (outMin + outMax) * 0.5;
     }
@@ -15,7 +15,7 @@ function logScale(x) {
 
 function invLogScale(x) {
     const normalVal =  logScale(x);
-    return scale(normalVal, mourn.staging.minScaling, mourn.staging.maxScaling, mourn.staging.maxScaling, mourn.staging.minScaling);
+    return mapRange(normalVal, mourn.staging.minScaling, mourn.staging.maxScaling, mourn.staging.maxScaling, mourn.staging.minScaling);
 }
 
 function getRandomInt(max) {

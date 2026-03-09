@@ -25,7 +25,7 @@ function pairSpaceAndScale() {
 
         const spacing = charRangeCollapsed
             ? 1
-            : invLogScale(scale(
+            : invLogScale(mapRange(
                 charCount,
                 leastChars,
                 mostChars,
@@ -37,7 +37,7 @@ function pairSpaceAndScale() {
 
         const scaling = charRangeCollapsed
             ? 1
-            : invLogScale(scale(
+            : invLogScale(mapRange(
                 charCount,
                 leastChars,
                 mostChars,

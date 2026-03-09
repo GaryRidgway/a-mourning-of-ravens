@@ -2,15 +2,19 @@
 
 const CONFIG = {
   particleCount: 5000,
+  enableAutoRenderScale: true,
+  autoRenderScaleThresholdPx: 1870,
   particleSize: 0.65,
   particleSizeRandomNegative: 0.12,
   particleSizeRandomPositive: 0.9,
-  particleRenderMinSpeed: 0.1,
+  particleRenderMinSpeed: 0,
   particleSpeedAlphaBoost: 3.24,
   particleSpeedWidthBoost: 0.26,
   particleRenderFraction: 1,
   enableAmbientMotion: true,
-  ambientWindStrength: 0.042,
+  ambientWindDirectionDeg: 135,
+  ambientWindStrength: 0.281,
+  duneBandRotationDeg: 135,
   duneBandScale: 100,
   duneAlongWarpScale: 316,
   duneWarpStrength: 1.5,
@@ -27,7 +31,7 @@ const CONFIG = {
   edgeRespawnWeightStrength: 0.45,
   edgeRespawnWeightExponent: 2,
   useWeightedEdgeRespawn: false,
-  edgeRespawnWeightedMixPercent: 20,
+  edgeRespawnWeightedMixPercent: 0,
   enableParticleSeparation: true,
   particleCollisionRadius: 0.95,
   particleCollisionStrength: 0.64,
@@ -87,11 +91,18 @@ const CONFIG = {
   boxStationarySpeedThreshold: 0.12,
   showBoxes: true,
   showDebug: false,
+  enableAdaptiveQuality: true,
+  qualityTargetFps: 60,
+  qualityDecisionWindowMs: 1200,
+  qualityCooldownMs: 900,
+  qualityTransitionMs: 700,
+  qualityHudEnabled: true,
+  pauseSimulation: false,
 };
 
 const RENDER_COLORS = {
   fade: [20, 17, 11],
-  particles: [164, 40, 40, 97],
+  particles: [206, 39, 39, 97],
   separationZone: [130, 175, 235],
   boxStrokeIdle: [200, 200, 180, 0],
   boxStrokeDragged: [250, 230, 190, 0],
@@ -99,6 +110,9 @@ const RENDER_COLORS = {
 };
 
 const CONTROL_PARAM_DEFS = [
+  { key: 'particleCount', type: 'number', digits: 0 },
+  { key: 'enableAutoRenderScale', type: 'bool' },
+  { key: 'autoRenderScaleThresholdPx', type: 'number', digits: 0 },
   { key: 'particleSize', type: 'number', digits: 2 },
   { key: 'particleSizeRandomNegative', type: 'number', digits: 2 },
   { key: 'particleSizeRandomPositive', type: 'number', digits: 2 },
@@ -106,8 +120,17 @@ const CONTROL_PARAM_DEFS = [
   { key: 'particleSpeedAlphaBoost', type: 'number', digits: 2 },
   { key: 'particleSpeedWidthBoost', type: 'number', digits: 2 },
   { key: 'particleRenderFraction', type: 'number', digits: 2 },
+  { key: 'enableAdaptiveQuality', type: 'bool' },
+  { key: 'qualityTargetFps', type: 'number', digits: 0 },
+  { key: 'qualityDecisionWindowMs', type: 'number', digits: 0 },
+  { key: 'qualityCooldownMs', type: 'number', digits: 0 },
+  { key: 'qualityTransitionMs', type: 'number', digits: 0 },
+  { key: 'qualityHudEnabled', type: 'bool' },
+  { key: 'pauseSimulation', type: 'bool' },
   { key: 'enableAmbientMotion', type: 'bool' },
+  { key: 'ambientWindDirectionDeg', type: 'number', digits: 0 },
   { key: 'ambientWindStrength', type: 'number', digits: 3 },
+  { key: 'duneBandRotationDeg', type: 'number', digits: 0 },
   { key: 'duneBandScale', type: 'number', digits: 0 },
   { key: 'duneAlongWarpScale', type: 'number', digits: 0 },
   { key: 'duneWarpStrength', type: 'number', digits: 2 },
@@ -164,6 +187,50 @@ const COLOR_ALPHA_PARAM_DEFS = [
   { key: 'windShadowZone', param: 'colorWindShadowZoneAlpha', source: 'config', configKey: 'windShadowZoneAlpha', digits: 0 },
 ];
 
+const CONTROL_TOOLTIPS = {
+  particleRenderMinSpeed: 'Particles below this speed are hidden. Just above this threshold, alpha ramps in smoothly.',
+  particleSpeedAlphaBoost: 'How strongly faster particles become brighter. Higher values emphasize fast streaks.',
+  particleSpeedWidthBoost: 'How strongly faster particles get thicker strokes.',
+  particleRenderFraction: 'Global streak density scaler. Lower values reduce accumulated ink while preserving continuity.',
+  particleCount: 'Maximum particle budget used by the simulation and adaptive particle count system.',
+  enableAutoRenderScale: 'Automatically caps the internal canvas size on very large screens, then CSS stretches it to fill the viewport.',
+  autoRenderScaleThresholdPx: 'Maximum internal canvas size before auto render scaling caps it.',
+  edgeRespawnWeightBase: 'Base chance weight for edge respawn bins before dune influence is applied.',
+  edgeRespawnWeightStrength: 'How strongly dune sampling biases random edge respawn locations.',
+  edgeRespawnWeightExponent: 'Contrast of edge respawn weighting. Higher values favor high-weight bins more aggressively.',
+  useWeightedEdgeRespawn: 'When enabled, all wrapped particles respawn using weighted edge distribution.',
+  edgeRespawnWeightedMixPercent: 'Used only when weighted edge respawn is OFF. Percentage of wraps that still use weighted placement.',
+  enableParticleSeparation: 'Enables particle-particle collision solving to prevent heavy overlap and clumping.',
+  particleCollisionRadius: 'Distance at which particles begin separating from each other.',
+  particleCollisionStrength: 'How strongly overlapping particles are pushed apart.',
+  particleCollisionVelocityDamp: 'Velocity damping applied during separation impulses to reduce jitter and rebound.',
+  separationEveryNFrames: 'Base interval for separation solves. Higher values reduce CPU cost but allow more temporary overlap.',
+  separationNearBoxRadius: 'Activates separation for particles near collider boxes.',
+  separationMinSpeed: 'Particles moving slower than this may skip separation unless near a box or recently interacted.',
+  maxSeparationPairsPerTick: 'Hard cap on pair solves per update tick to bound worst-case CPU load.',
+  maxSeparationCandidatesPerCell: 'Limits neighbor candidates checked per cell in dense regions for performance stability.',
+  enableWindShadow: 'Reduces wind force in lee zones behind boxes. Can improve visual depth at extra CPU cost.',
+  windShadowLength: 'How far downwind the shadow influence extends.',
+  windShadowWidthGrowth: 'How quickly the wind shadow widens as distance increases.',
+  windShadowStrength: 'Maximum wind reduction applied inside shadow regions.',
+  qualityTargetFps: 'Adaptive-quality target. The system throttles up/down to stay near this framerate.',
+  enableAdaptiveQuality: 'Automatically changes quality tier based on sustained frame time.',
+  qualityDecisionWindowMs: 'How long performance must stay bad/good before changing quality tier.',
+  qualityCooldownMs: 'Minimum delay between tier changes to avoid oscillation.',
+  qualityTransitionMs: 'How quickly effective quality values blend to a new tier (higher is smoother/slower).',
+  qualityHudEnabled: 'Shows a live on-screen performance HUD with FPS, quality tier, and active budgets.',
+  pauseSimulation: 'Pauses the flow simulation loop. The simulation also auto-pauses when the tab is hidden.',
+  ambientWindDirectionDeg: 'Sets the direction the ambient wind force pushes particles, in degrees.',
+  ambientWindStrength: 'Overall strength of the ambient wind field.',
+  duneBandRotationDeg: 'Rotates the dune band pattern independently from the wind direction, in degrees.',
+};
+
+const APP_CONTROL_TOOLTIPS = {
+  wordBoxes: 'Uses per-word colliders instead of one collider per stanza.',
+  wordInsetX: 'Shrinks each word collider horizontally by a percentage of that word box width.',
+  wordInsetY: 'Shrinks each word collider vertically by a percentage of that word box height.',
+};
+
 const particles = [];
 const boxes = [];
 let activeBoxes = [];
@@ -182,8 +249,375 @@ const separationCellYs = [];
 const separationGrid = new Map();
 const CELL_KEY_OFFSET = 32768;
 const CELL_KEY_STRIDE = 65536;
+const QUALITY_BASELINE_KEYS = [
+  'particleRenderFraction',
+  'particleRenderMinSpeed',
+  'maxSeparationPairsPerTick',
+  'maxSeparationCandidatesPerCell',
+  'separationEveryNFrames',
+  'enableWindShadow',
+];
+const QUALITY_TIER_SETTINGS = [
+  { renderFractionMul: 1, minSpeedAdd: 0, pairMul: 1, candidateMul: 1, sepEveryAdd: 0, disableWindShadow: false },
+  { renderFractionMul: 0.86, minSpeedAdd: 0.03, pairMul: 0.85, candidateMul: 0.9, sepEveryAdd: 0, disableWindShadow: false },
+  { renderFractionMul: 0.7, minSpeedAdd: 0.08, pairMul: 0.68, candidateMul: 0.75, sepEveryAdd: 1, disableWindShadow: false },
+  { renderFractionMul: 0.55, minSpeedAdd: 0.13, pairMul: 0.52, candidateMul: 0.6, sepEveryAdd: 2, disableWindShadow: true },
+  { renderFractionMul: 0.4, minSpeedAdd: 0.18, pairMul: 0.38, candidateMul: 0.48, sepEveryAdd: 3, disableWindShadow: true },
+];
+const qualityState = {
+  tier: 0,
+  avgFrameMs: 16.7,
+  lastFrameMs: null,
+  badMsAccum: 0,
+  goodMsAccum: 0,
+  lastTierChangeMs: 0,
+  baseline: {},
+  target: {},
+  effective: {},
+  hudEl: null,
+  lastHudPaintMs: 0,
+};
+let detectedRefreshRateFps = null;
+let currentRenderScale = 1;
+let simulationLoopRunning = true;
+let simulationVisibilityListenerBound = false;
+let pauseToggleBound = false;
 
 applyConfigFromUrlParams();
+
+function getQualityValue(key) {
+  if (Object.prototype.hasOwnProperty.call(qualityState.effective, key)) {
+    return qualityState.effective[key];
+  }
+  return CONFIG[key];
+}
+
+function initQualityManager() {
+  for (let i = 0; i < QUALITY_BASELINE_KEYS.length; i++) {
+    const key = QUALITY_BASELINE_KEYS[i];
+    qualityState.baseline[key] = CONFIG[key];
+  }
+  applyQualityTier(0, true);
+  window.__mournQuality = qualityState;
+}
+
+function getActiveRenderScale() {
+  if (!CONFIG.enableAutoRenderScale) {
+    return 1;
+  }
+  const thresholdPx = max(320, CONFIG.autoRenderScaleThresholdPx);
+  const viewportW = max(1, window.innerWidth);
+  const viewportH = max(1, window.innerHeight);
+  const maxInternalDim = max(viewportW, viewportH);
+  if (maxInternalDim <= thresholdPx) {
+    return 1;
+  }
+  return constrain(thresholdPx / maxInternalDim, 0.3, 1);
+}
+
+function applyRenderScale(nextScale) {
+  const safeScale = constrain(nextScale, 0.3, 1);
+  const nextW = max(1, floor(window.innerWidth * safeScale));
+  const nextH = max(1, floor(window.innerHeight * safeScale));
+  const prevW = width || nextW;
+  const prevH = height || nextH;
+  const scaleX = prevW > 0 ? nextW / prevW : 1;
+  const scaleY = prevH > 0 ? nextH / prevH : 1;
+
+  resizeCanvas(nextW, nextH);
+  currentRenderScale = safeScale;
+
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    p.pos.x *= scaleX;
+    p.pos.y *= scaleY;
+    p.prevX *= scaleX;
+    p.prevY *= scaleY;
+    p.vel.x *= scaleX;
+    p.vel.y *= scaleY;
+  }
+
+  for (let i = 0; i < boxes.length; i++) {
+    const b = boxes[i];
+    b.x *= scaleX;
+    b.y *= scaleY;
+    b.w *= scaleX;
+    b.h *= scaleY;
+  }
+}
+
+function updateQualityBaseline(key, value) {
+  if (!Object.prototype.hasOwnProperty.call(qualityState.baseline, key)) {
+    return;
+  }
+  qualityState.baseline[key] = value;
+  applyQualityTier(qualityState.tier);
+}
+
+function applyQualityTier(tier, snap = false) {
+  const clampedTier = constrain(tier, 0, QUALITY_TIER_SETTINGS.length - 1);
+  const settings = QUALITY_TIER_SETTINGS[clampedTier];
+  const b = qualityState.baseline;
+  qualityState.tier = clampedTier;
+  qualityState.target.particleRenderFraction = constrain(
+    b.particleRenderFraction * settings.renderFractionMul,
+    0.01,
+    1
+  );
+  qualityState.target.particleRenderMinSpeed = max(
+    0,
+    b.particleRenderMinSpeed + settings.minSpeedAdd
+  );
+  qualityState.target.maxSeparationPairsPerTick = max(
+    1,
+    floor(b.maxSeparationPairsPerTick * settings.pairMul)
+  );
+  qualityState.target.maxSeparationCandidatesPerCell = max(
+    1,
+    floor(b.maxSeparationCandidatesPerCell * settings.candidateMul)
+  );
+  qualityState.target.separationEveryNFrames = max(
+    1,
+    floor(b.separationEveryNFrames + settings.sepEveryAdd)
+  );
+  qualityState.target.enableWindShadow = settings.disableWindShadow
+    ? false
+    : Boolean(b.enableWindShadow);
+  if (snap) {
+    qualityState.effective.particleRenderFraction = qualityState.target.particleRenderFraction;
+    qualityState.effective.particleRenderMinSpeed = qualityState.target.particleRenderMinSpeed;
+    qualityState.effective.maxSeparationPairsPerTick = qualityState.target.maxSeparationPairsPerTick;
+    qualityState.effective.maxSeparationCandidatesPerCell = qualityState.target.maxSeparationCandidatesPerCell;
+    qualityState.effective.separationEveryNFrames = qualityState.target.separationEveryNFrames;
+    qualityState.effective.enableWindShadow = qualityState.target.enableWindShadow;
+  }
+}
+
+function smoothQualityEffective(dt) {
+  const transitionMs = max(80, CONFIG.qualityTransitionMs);
+  const alpha = 1 - Math.exp(-dt / transitionMs);
+  const lerpNum = (current, target) => {
+    const c = Number.isFinite(current) ? current : target;
+    return c + (target - c) * alpha;
+  };
+
+  qualityState.effective.particleRenderFraction = lerpNum(
+    qualityState.effective.particleRenderFraction,
+    qualityState.target.particleRenderFraction
+  );
+  qualityState.effective.particleRenderMinSpeed = lerpNum(
+    qualityState.effective.particleRenderMinSpeed,
+    qualityState.target.particleRenderMinSpeed
+  );
+  qualityState.effective.maxSeparationPairsPerTick = lerpNum(
+    qualityState.effective.maxSeparationPairsPerTick,
+    qualityState.target.maxSeparationPairsPerTick
+  );
+  qualityState.effective.maxSeparationCandidatesPerCell = lerpNum(
+    qualityState.effective.maxSeparationCandidatesPerCell,
+    qualityState.target.maxSeparationCandidatesPerCell
+  );
+  qualityState.effective.separationEveryNFrames = lerpNum(
+    qualityState.effective.separationEveryNFrames,
+    qualityState.target.separationEveryNFrames
+  );
+  qualityState.effective.enableWindShadow = qualityState.target.enableWindShadow;
+}
+
+function ensureQualityHud() {
+  if (!CONFIG.qualityHudEnabled) {
+    if (qualityState.hudEl) {
+      qualityState.hudEl.style.display = 'none';
+    }
+    return;
+  }
+  if (!qualityState.hudEl) {
+    const el = document.createElement('div');
+    el.id = 'perf-hud';
+    el.style.position = 'fixed';
+    el.style.left = '10px';
+    el.style.bottom = '10px';
+    el.style.zIndex = '20000';
+    el.style.padding = '6px 8px';
+    el.style.borderRadius = '6px';
+    el.style.background = 'rgba(0, 0, 0, 0.65)';
+    el.style.color = '#f4efe2';
+    el.style.font = '12px/1.3 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+    el.style.pointerEvents = 'none';
+    document.body.appendChild(el);
+    qualityState.hudEl = el;
+  }
+  qualityState.hudEl.style.display = 'block';
+}
+
+function detectRefreshRateFps(sampleCount = 45) {
+  return new Promise((resolve) => {
+    const deltas = [];
+    let prevTs = null;
+    let frames = 0;
+    const step = (ts) => {
+      if (prevTs !== null) {
+        const dt = ts - prevTs;
+        if (dt > 0 && dt < 40) {
+          deltas.push(dt);
+        }
+      }
+      prevTs = ts;
+      frames += 1;
+      if (frames >= sampleCount) {
+        if (deltas.length === 0) {
+          resolve(60);
+          return;
+        }
+        const sorted = deltas.slice().sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length * 0.5)];
+        resolve(constrain(Math.round(1000 / median), 30, 240));
+        return;
+      }
+      window.requestAnimationFrame(step);
+    };
+    window.requestAnimationFrame(step);
+  });
+}
+
+function applyQualityTargetFpsBounds(panel) {
+  if (!panel) return;
+  const targetInput = panel.querySelector('[data-key="qualityTargetFps"]');
+  if (!targetInput) return;
+  const maxFps = detectedRefreshRateFps || 120;
+  targetInput.max = String(maxFps);
+  if (CONFIG.qualityTargetFps > maxFps) {
+    CONFIG.qualityTargetFps = maxFps;
+    targetInput.value = String(maxFps);
+    updateControlOutput('qualityTargetFps', maxFps, 0);
+    syncUrlParamsFromConfig();
+  }
+}
+
+function applySimulationPauseState() {
+  const shouldPause = Boolean(CONFIG.pauseSimulation || document.hidden);
+  if (typeof window.__mournSetAutoScrollPaused === 'function') {
+    window.__mournSetAutoScrollPaused(shouldPause);
+  }
+  if (shouldPause && simulationLoopRunning) {
+    noLoop();
+    simulationLoopRunning = false;
+    syncPauseToggleButton();
+    return;
+  }
+  if (!shouldPause && !simulationLoopRunning) {
+    loop();
+    simulationLoopRunning = true;
+    qualityState.lastFrameMs = null;
+  }
+  syncPauseToggleButton();
+}
+
+function paintQualityHud(nowMs) {
+  if (!CONFIG.qualityHudEnabled) return;
+  ensureQualityHud();
+  if (!qualityState.hudEl) return;
+  if (nowMs - qualityState.lastHudPaintMs < 180) return;
+  qualityState.lastHudPaintMs = nowMs;
+  const fps = qualityState.avgFrameMs > 0.01 ? 1000 / qualityState.avgFrameMs : 0;
+  const targetFps = max(1, CONFIG.qualityTargetFps);
+  const rf = getQualityValue('particleRenderFraction');
+  const pairs = getQualityValue('maxSeparationPairsPerTick');
+  const maxParticles = max(1, floor(CONFIG.particleCount));
+  const viewportW = max(1, window.innerWidth || 0);
+  const viewportH = max(1, window.innerHeight || 0);
+  const internalW = max(1, width || 0);
+  const internalH = max(1, height || 0);
+  const autoScaleActive = CONFIG.enableAutoRenderScale && currentRenderScale < 0.999;
+  qualityState.hudEl.innerHTML =
+    `<div>FPS ${fps.toFixed(1)} (Target ${targetFps.toFixed(0)}) | Avg Frame ${qualityState.avgFrameMs.toFixed(2)} ms | Quality Tier ${qualityState.tier}` +
+    ` | Render Fraction ${rf.toFixed(2)} | Separation Pair Budget ${pairs} | Particles ${particles.length}/${maxParticles}</div>` +
+    `<div>Viewport ${viewportW}x${viewportH}px | Render Scale ${currentRenderScale.toFixed(2)}${autoScaleActive ? ' (auto)' : ''} | Internal Canvas ${internalW}x${internalH}px</div>`;
+}
+
+function getAdaptiveQualityThresholdsMs() {
+  const targetFps = max(1, CONFIG.qualityTargetFps);
+  const targetFrameMs = 1000 / targetFps;
+  return {
+    degrade: targetFrameMs * 1.08,
+    recover: targetFrameMs * 1.01,
+  };
+}
+
+function tickAdaptiveQuality(nowMs) {
+  if (!CONFIG.enableAdaptiveQuality) {
+    if (qualityState.tier !== 0) {
+      applyQualityTier(0);
+    }
+    smoothQualityEffective(16.7);
+    paintQualityHud(nowMs);
+    qualityState.lastFrameMs = nowMs;
+    return;
+  }
+
+  if (qualityState.lastFrameMs === null) {
+    qualityState.lastFrameMs = nowMs;
+    paintQualityHud(nowMs);
+    return;
+  }
+
+  const dt = constrain(nowMs - qualityState.lastFrameMs, 1, 120);
+  qualityState.lastFrameMs = nowMs;
+  qualityState.avgFrameMs += (dt - qualityState.avgFrameMs) * 0.08;
+  smoothQualityEffective(dt);
+
+  const thresholds = getAdaptiveQualityThresholdsMs();
+  const degradeThresholdMs = thresholds.degrade;
+  const recoverThresholdMs = thresholds.recover;
+
+  if (qualityState.avgFrameMs > degradeThresholdMs) {
+    qualityState.badMsAccum += dt;
+    qualityState.goodMsAccum = max(0, qualityState.goodMsAccum - dt * 0.5);
+  } else if (qualityState.avgFrameMs < recoverThresholdMs) {
+    qualityState.goodMsAccum += dt;
+    qualityState.badMsAccum = max(0, qualityState.badMsAccum - dt * 0.5);
+  } else {
+    qualityState.badMsAccum = max(0, qualityState.badMsAccum - dt * 0.2);
+    qualityState.goodMsAccum = max(0, qualityState.goodMsAccum - dt * 0.2);
+  }
+
+  const cooldownElapsed = nowMs - qualityState.lastTierChangeMs >= CONFIG.qualityCooldownMs;
+  if (cooldownElapsed && qualityState.badMsAccum >= CONFIG.qualityDecisionWindowMs) {
+    if (qualityState.tier < QUALITY_TIER_SETTINGS.length - 1) {
+      applyQualityTier(qualityState.tier + 1);
+      qualityState.lastTierChangeMs = nowMs;
+    }
+    qualityState.badMsAccum = 0;
+    qualityState.goodMsAccum = 0;
+  } else if (cooldownElapsed && qualityState.goodMsAccum >= CONFIG.qualityDecisionWindowMs) {
+    if (qualityState.tier > 0) {
+      applyQualityTier(qualityState.tier - 1);
+      qualityState.lastTierChangeMs = nowMs;
+    }
+    qualityState.badMsAccum = 0;
+    qualityState.goodMsAccum = 0;
+  }
+
+  paintQualityHud(nowMs);
+}
+
+function addParticles(count) {
+  const n = max(0, floor(count));
+  for (let i = 0; i < n; i++) {
+    const ignoresBoxCollision = random() >= CONFIG.boxCollisionParticipantRatio;
+    particles.push(createParticle(random(width), random(height), ignoresBoxCollision));
+  }
+}
+
+function removeParticles(count) {
+  const n = max(0, floor(count));
+  if (n <= 0) return;
+  if (n >= particles.length) {
+    particles.length = 0;
+    return;
+  }
+  particles.length = particles.length - n;
+}
 
 class FlowBox {
   constructor(x, y, w, h) {
@@ -203,13 +637,26 @@ class FlowBox {
 
 function setup() {
   frameRate(120);
-  const canvas = createCanvas(windowWidth, windowHeight);
+  currentRenderScale = getActiveRenderScale();
+  const canvas = createCanvas(
+    max(1, floor(windowWidth * currentRenderScale)),
+    max(1, floor(windowHeight * currentRenderScale))
+  );
   const mount = document.getElementById('poem-bg');
   if (mount) {
     canvas.parent(mount);
   }
+  canvas.style('width', '100%');
+  canvas.style('height', '100%');
   noStroke();
   setupDuneControls();
+  initQualityManager();
+  ensureQualityHud();
+  if (!simulationVisibilityListenerBound) {
+    document.addEventListener('visibilitychange', applySimulationPauseState);
+    simulationVisibilityListenerBound = true;
+  }
+  applySimulationPauseState();
 
   fill(...RENDER_COLORS.fade);
   rect(0, 0, width, height);
@@ -238,10 +685,11 @@ function setup() {
     for (let i = 0; i < nextBoxes.length; i++) {
       const src = nextBoxes[i];
       const box = boxes[i];
-      box.x = src.x;
-      box.y = src.y;
-      box.w = src.w;
-      box.h = src.h;
+      const simScale = currentRenderScale;
+      box.x = src.x * simScale;
+      box.y = src.y * simScale;
+      box.w = src.w * simScale;
+      box.h = src.h * simScale;
       box.vx = 0;
       box.vy = 0;
     }
@@ -258,6 +706,7 @@ function setup() {
 
 function draw() {
   const nowMs = millis();
+  tickAdaptiveQuality(nowMs);
   updateAdaptiveSeparationCadence(nowMs);
   fadeCanvas();
   updateBoxes();
@@ -268,7 +717,7 @@ function draw() {
 }
 
 function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
+  applyRenderScale(getActiveRenderScale());
 }
 
 function fadeCanvas() {
@@ -283,6 +732,7 @@ function setupDuneControls() {
   if (!panel) return;
 
   controlsBound = true;
+  applyControlTooltips(panel);
   const edgeRespawnMixInput = panel.querySelector('[data-key="edgeRespawnWeightedMixPercent"]');
   const syncEdgeRespawnMixDisabledState = () => {
     if (!edgeRespawnMixInput) return;
@@ -307,9 +757,40 @@ function setupDuneControls() {
       } else {
         const parsed = Number(input.value);
         if (!Number.isFinite(parsed)) return;
-        CONFIG[def.key] = parsed;
-        updateControlOutput(def.key, parsed, def.digits);
+        let nextValue = parsed;
+        if (def.key === 'particleCount') {
+          nextValue = max(1, floor(parsed));
+          input.value = String(nextValue);
+        }
+        if (def.key === 'autoRenderScaleThresholdPx') {
+          nextValue = max(320, floor(parsed));
+          input.value = String(nextValue);
+        }
+        if (def.key === 'qualityTargetFps' && detectedRefreshRateFps !== null) {
+          nextValue = constrain(parsed, 20, detectedRefreshRateFps);
+          input.value = String(nextValue);
+        }
+        CONFIG[def.key] = nextValue;
+        updateControlOutput(def.key, nextValue, def.digits);
+        if (def.key === 'particleCount') {
+          const target = max(1, floor(CONFIG.particleCount));
+          if (particles.length < target) {
+            addParticles(target - particles.length);
+          } else if (particles.length > target) {
+            removeParticles(particles.length - target);
+          }
+        }
       }
+      if (
+        def.key === 'enableAutoRenderScale' ||
+        def.key === 'autoRenderScaleThresholdPx'
+      ) {
+        applyRenderScale(getActiveRenderScale());
+      }
+      if (def.key === 'pauseSimulation') {
+        applySimulationPauseState();
+      }
+      updateQualityBaseline(def.key, CONFIG[def.key]);
       if (def.key === 'useWeightedEdgeRespawn') {
         syncEdgeRespawnMixDisabledState();
       }
@@ -321,12 +802,166 @@ function setupDuneControls() {
 
   bindColorControls(panel);
   bindColorAlphaControls(panel);
+  bindAngleControls(panel);
   bindAppControls(panel);
+  bindPauseToggleButton();
   setupDetailsPersistence(panel);
+  detectRefreshRateFps().then((fps) => {
+    detectedRefreshRateFps = fps;
+    applyQualityTargetFpsBounds(panel);
+  });
+}
+
+function bindAngleControls(panel) {
+  const angleControls = panel.querySelectorAll('[data-angle-key]');
+  for (let i = 0; i < angleControls.length; i++) {
+    const control = angleControls[i];
+    const key = control.getAttribute('data-angle-key');
+    if (!key) continue;
+    const input = panel.querySelector(`[data-key="${key}"]`);
+    if (!input) continue;
+
+    const getDisplayAngleDeg = (valueDeg) => {
+      if (key === 'ambientWindDirectionDeg') {
+        return valueDeg + 90;
+      }
+      return valueDeg;
+    };
+
+    const normalizeAngleDeg = (valueDeg) => {
+      let next = valueDeg;
+      while (next > 180) next -= 360;
+      while (next < -180) next += 360;
+      return next;
+    };
+
+    const syncVisual = () => {
+      const value = Number(input.value);
+      const safeValue = Number.isFinite(value) ? value : 0;
+      control.style.setProperty('--angle-deg', `${getDisplayAngleDeg(safeValue)}deg`);
+      control.setAttribute('aria-valuemin', String(input.min || -180));
+      control.setAttribute('aria-valuemax', String(input.max || 180));
+      control.setAttribute('aria-valuenow', String(safeValue));
+      control.setAttribute('aria-valuetext', `${safeValue} degrees`);
+      control.setAttribute('role', 'slider');
+      control.tabIndex = 0;
+    };
+
+    const setFromPointer = (clientX, clientY) => {
+      const rect = control.getBoundingClientRect();
+      const centerX = rect.left + rect.width * 0.5;
+      const centerY = rect.top + rect.height * 0.5;
+      const pointerAngleDeg = Math.round(Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI));
+      const valueAngleDeg = normalizeAngleDeg(
+        key === 'ambientWindDirectionDeg'
+          ? pointerAngleDeg - 90
+          : pointerAngleDeg
+      );
+      input.value = String(constrain(valueAngleDeg, -180, 180));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    const onPointerMove = (event) => {
+      setFromPointer(event.clientX, event.clientY);
+    };
+
+    control.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      control.setPointerCapture(event.pointerId);
+      setFromPointer(event.clientX, event.clientY);
+    });
+    control.addEventListener('pointermove', (event) => {
+      if ((event.buttons & 1) !== 1) return;
+      onPointerMove(event);
+    });
+    control.addEventListener('keydown', (event) => {
+      const current = Number(input.value);
+      const safeCurrent = Number.isFinite(current) ? current : 0;
+      let next = null;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+        next = safeCurrent - 1;
+      } else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+        next = safeCurrent + 1;
+      }
+      if (next === null) return;
+      event.preventDefault();
+      input.value = String(constrain(next, -180, 180));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    input.addEventListener('input', syncVisual);
+    syncVisual();
+  }
+}
+
+function syncPauseToggleButton() {
+  const button = document.getElementById('simulation-pause-toggle');
+  if (!button) return;
+  const label = button.querySelector('.pause-label');
+  const isPaused = Boolean(CONFIG.pauseSimulation);
+  button.classList.toggle('is-paused', isPaused);
+  button.setAttribute('aria-pressed', isPaused ? 'true' : 'false');
+  button.setAttribute('title', isPaused ? 'Resume simulation' : 'Pause simulation');
+  if (label) {
+    label.textContent = isPaused ? 'Play' : 'Pause';
+  }
+}
+
+function bindPauseToggleButton() {
+  if (pauseToggleBound) return;
+  const button = document.getElementById('simulation-pause-toggle');
+  if (!button) return;
+  pauseToggleBound = true;
+  syncPauseToggleButton();
+  button.addEventListener('click', () => {
+    CONFIG.pauseSimulation = !CONFIG.pauseSimulation;
+    syncStandardControlInput('pauseSimulation');
+    applySimulationPauseState();
+    syncUrlParamsFromConfig();
+  });
+}
+
+function applyControlTooltips(panel) {
+  const applyTitle = (input, text) => {
+    if (!input || !text) return;
+    input.title = text;
+    const row = input.closest('label');
+    if (row) {
+      row.title = text;
+    }
+  };
+
+  const keys = Object.keys(CONTROL_TOOLTIPS);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const input = panel.querySelector(`[data-key="${key}"]`);
+    applyTitle(input, CONTROL_TOOLTIPS[key]);
+  }
+
+  const appKeys = Object.keys(APP_CONTROL_TOOLTIPS);
+  for (let i = 0; i < appKeys.length; i++) {
+    const key = appKeys[i];
+    const input = panel.querySelector(`[data-app-key="${key}"]`);
+    applyTitle(input, APP_CONTROL_TOOLTIPS[key]);
+  }
 }
 
 function bindAppControls(panel) {
   const params = new URLSearchParams(window.location.search);
+  const appStoragePrefix = 'dune-controls:app:';
+  const readAppStorage = (key) => {
+    try {
+      return window.localStorage.getItem(appStoragePrefix + key);
+    } catch (error) {
+      return null;
+    }
+  };
+  const writeAppStorage = (key, value) => {
+    try {
+      window.localStorage.setItem(appStoragePrefix + key, value);
+    } catch (error) {
+      // Ignore storage failures (private mode, quotas, etc.).
+    }
+  };
   const wordBoxesInput = panel.querySelector('[data-app-key="wordBoxes"]');
   const wordInsetXInput = panel.querySelector('[data-app-key="wordInsetX"]');
   const wordInsetYInput = panel.querySelector('[data-app-key="wordInsetY"]');
@@ -335,26 +970,39 @@ function bindAppControls(panel) {
 
   if (wordBoxesInput) {
     const raw = params.get('wordBoxes');
-    const initial = raw === null ? true : raw === '1';
+    const stored = readAppStorage('wordBoxes');
+    const initial = raw !== null
+      ? raw === '1'
+      : (stored !== null ? stored === '1' : true);
     wordBoxesInput.checked = initial;
   }
 
-  const initialInsetFallbackRaw = params.get('wordInset');
+  const initialInsetFallbackRaw = params.get('wordInset') ?? readAppStorage('wordInset');
   const initialInsetXFallbackRaw = params.get('wordInsetX');
   const initialInsetYFallbackRaw = params.get('wordInsetY');
+  const storedInsetXRaw = readAppStorage('wordInsetX');
+  const storedInsetYRaw = readAppStorage('wordInsetY');
   const initialInsetXFallback = Number.isFinite(Number(initialInsetXFallbackRaw))
     ? Number(initialInsetXFallbackRaw)
     : (
+      Number.isFinite(Number(storedInsetXRaw))
+        ? Number(storedInsetXRaw)
+        : (
       Number.isFinite(Number(initialInsetFallbackRaw))
         ? Number(initialInsetFallbackRaw)
-        : 3
+        : 7.5
+        )
     );
   const initialInsetYFallback = Number.isFinite(Number(initialInsetYFallbackRaw))
     ? Number(initialInsetYFallbackRaw)
     : (
+      Number.isFinite(Number(storedInsetYRaw))
+        ? Number(storedInsetYRaw)
+        : (
       Number.isFinite(Number(initialInsetFallbackRaw))
         ? Number(initialInsetFallbackRaw)
-        : 5
+        : 20
+        )
     );
   if (wordInsetXInput) {
     const initialInsetRaw = params.get('wordInsetX');
@@ -363,7 +1011,7 @@ function bindAppControls(panel) {
       : initialInsetXFallback;
     wordInsetXInput.value = String(initialInset);
     if (wordInsetXOutput) {
-      wordInsetXOutput.textContent = initialInset.toFixed(1);
+      wordInsetXOutput.textContent = `${initialInset.toFixed(1)}%`;
     }
     if (typeof window.__mournSetWordInsetXPx === 'function') {
       window.__mournSetWordInsetXPx(initialInset);
@@ -377,7 +1025,7 @@ function bindAppControls(panel) {
       : initialInsetYFallback;
     wordInsetYInput.value = String(initialInset);
     if (wordInsetYOutput) {
-      wordInsetYOutput.textContent = initialInset.toFixed(1);
+      wordInsetYOutput.textContent = `${initialInset.toFixed(1)}%`;
     }
     if (typeof window.__mournSetWordInsetYPx === 'function') {
       window.__mournSetWordInsetYPx(initialInset);
@@ -388,6 +1036,7 @@ function bindAppControls(panel) {
     const nextParams = new URLSearchParams(window.location.search);
     if (wordBoxesInput) {
       const enabled = !!wordBoxesInput.checked;
+      writeAppStorage('wordBoxes', enabled ? '1' : '0');
       if (enabled) {
         nextParams.set('wordBoxes', '1');
       } else {
@@ -398,12 +1047,14 @@ function bindAppControls(panel) {
     if (wordInsetXInput) {
       const inset = Number(wordInsetXInput.value);
       if (Number.isFinite(inset)) {
+        writeAppStorage('wordInsetX', inset.toFixed(1));
         nextParams.set('wordInsetX', inset.toFixed(1));
       }
     }
     if (wordInsetYInput) {
       const inset = Number(wordInsetYInput.value);
       if (Number.isFinite(inset)) {
+        writeAppStorage('wordInsetY', inset.toFixed(1));
         nextParams.set('wordInsetY', inset.toFixed(1));
       }
     }
@@ -428,7 +1079,7 @@ function bindAppControls(panel) {
       const inset = Number(wordInsetXInput.value);
       if (!Number.isFinite(inset)) return;
       if (wordInsetXOutput) {
-        wordInsetXOutput.textContent = inset.toFixed(1);
+        wordInsetXOutput.textContent = `${inset.toFixed(1)}%`;
       }
       syncAppParams();
       if (typeof window.__mournSetWordInsetXPx === 'function') {
@@ -442,7 +1093,7 @@ function bindAppControls(panel) {
       const inset = Number(wordInsetYInput.value);
       if (!Number.isFinite(inset)) return;
       if (wordInsetYOutput) {
-        wordInsetYOutput.textContent = inset.toFixed(1);
+        wordInsetYOutput.textContent = `${inset.toFixed(1)}%`;
       }
       syncAppParams();
       if (typeof window.__mournSetWordInsetYPx === 'function') {
@@ -526,6 +1177,11 @@ function updateControlOutput(key, value, digits) {
   const output = document.querySelector(`[data-value-for="${key}"]`);
   if (!output) return;
 
+  if (key === 'ambientWindDirectionDeg' || key === 'duneBandRotationDeg') {
+    output.textContent = `${Math.round(Number(value))}deg`;
+    return;
+  }
+
   if (typeof digits === 'number') {
     output.textContent = Number(value).toFixed(digits);
   } else {
@@ -569,6 +1225,8 @@ function applyConfigFromUrlParams() {
 
 function syncUrlParamsFromConfig() {
   const params = new URLSearchParams(window.location.search);
+  params.delete('renderScale');
+  params.delete('autoRenderScaleMin');
   for (let i = 0; i < CONTROL_PARAM_DEFS.length; i++) {
     const def = CONTROL_PARAM_DEFS[i];
     const val = CONFIG[def.key];
@@ -843,7 +1501,7 @@ function updateParticles(nowMs = millis(), tickIndex = frameCount, allowSeparati
 }
 
 function updateAdaptiveSeparationCadence(nowMs) {
-  const baseCadence = max(1, floor(CONFIG.separationEveryNFrames));
+  const baseCadence = max(1, floor(getQualityValue('separationEveryNFrames')));
   if (!CONFIG.enableAdaptiveSeparationCadence) {
     dynamicSeparationEveryNFrames = baseCadence;
     lastDrawTimeMs = nowMs;
@@ -873,7 +1531,7 @@ function updateAdaptiveSeparationCadence(nowMs) {
 
 function getCurrentSeparationCadence() {
   if (!CONFIG.enableAdaptiveSeparationCadence) {
-    return max(1, floor(CONFIG.separationEveryNFrames));
+    return max(1, floor(getQualityValue('separationEveryNFrames')));
   }
   return max(1, floor(dynamicSeparationEveryNFrames));
 }
@@ -926,8 +1584,8 @@ function resolveParticleSeparation(nowMs) {
   const minDist = CONFIG.particleCollisionRadius * 2;
   const minDistSq = minDist * minDist;
   const velDamp = CONFIG.particleCollisionVelocityDamp;
-  const maxPairs = max(1, floor(CONFIG.maxSeparationPairsPerTick));
-  const maxCandidatesPerCell = max(1, floor(CONFIG.maxSeparationCandidatesPerCell));
+  const maxPairs = max(1, floor(getQualityValue('maxSeparationPairsPerTick')));
+  const maxCandidatesPerCell = max(1, floor(getQualityValue('maxSeparationCandidatesPerCell')));
   let solvedPairs = 0;
   let budgetReached = false;
 
@@ -1040,10 +1698,16 @@ function isNearBox(px, py, box, radius) {
 }
 
 function buildFrameCache(nowMs) {
-  const windDirX = -0.70710678;
-  const windDirY = 0.70710678;
+  const windAngle = radians(CONFIG.ambientWindDirectionDeg);
+  const windDirX = cos(windAngle);
+  const windDirY = sin(windAngle);
   const windPerpX = -windDirY;
   const windPerpY = windDirX;
+  const duneBandAngle = radians(CONFIG.duneBandRotationDeg);
+  const duneDirX = cos(duneBandAngle);
+  const duneDirY = sin(duneBandAngle);
+  const dunePerpX = -duneDirY;
+  const dunePerpY = duneDirX;
   const t = nowMs * 0.001;
   const driftPixels = t * CONFIG.duneDriftSpeed * 240;
 
@@ -1061,6 +1725,10 @@ function buildFrameCache(nowMs) {
     windDirY,
     windPerpX,
     windPerpY,
+    duneDirX,
+    duneDirY,
+    dunePerpX,
+    dunePerpY,
     driftPixels,
     shadowDirX,
     shadowDirY,
@@ -1072,8 +1740,8 @@ function buildFrameCache(nowMs) {
 function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
   const sampleX = px - frameCache.windDirX * frameCache.driftPixels;
   const sampleY = py - frameCache.windDirY * frameCache.driftPixels;
-  const along = sampleX * frameCache.windDirX + sampleY * frameCache.windDirY;
-  const across = sampleX * frameCache.windPerpX + sampleY * frameCache.windPerpY;
+  const along = sampleX * frameCache.duneDirX + sampleY * frameCache.duneDirY;
+  const across = sampleX * frameCache.dunePerpX + sampleY * frameCache.dunePerpY;
 
   const warpedAcross =
     across / CONFIG.duneBandScale +
@@ -1095,7 +1763,7 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
 }
 
 function getWindExposureMultiplierXY(px, py, frameCache) {
-  if (!CONFIG.enableWindShadow) return 1;
+  if (!getQualityValue('enableWindShadow')) return 1;
 
   let maxReduction = 0;
   for (let i = 0; i < activeBoxes.length; i++) {
@@ -1151,17 +1819,21 @@ function getWindShadowCenterXY(box, frameCache) {
 function sampleDuneMultiplierAt(x, y, nowMs) {
   if (!CONFIG.enableAmbientMotion) return 1;
 
-  const dirX = -0.70710678;
-  const dirY = 0.70710678;
-  const perpX = -dirY;
-  const perpY = dirX;
+  const windAngle = radians(CONFIG.ambientWindDirectionDeg);
+  const dirX = cos(windAngle);
+  const dirY = sin(windAngle);
+  const duneBandAngle = radians(CONFIG.duneBandRotationDeg);
+  const duneDirX = cos(duneBandAngle);
+  const duneDirY = sin(duneBandAngle);
+  const dunePerpX = -duneDirY;
+  const dunePerpY = duneDirX;
 
   const t = nowMs * 0.001;
   const driftPixels = t * CONFIG.duneDriftSpeed * 240;
   const sampleX = x - dirX * driftPixels;
   const sampleY = y - dirY * driftPixels;
-  const along = sampleX * dirX + sampleY * dirY;
-  const across = sampleX * perpX + sampleY * perpY;
+  const along = sampleX * duneDirX + sampleY * duneDirY;
+  const across = sampleX * dunePerpX + sampleY * dunePerpY;
 
   const warpedAcross =
     across / CONFIG.duneBandScale +
@@ -1523,10 +2195,11 @@ function renderParticles() {
   const baseG = RENDER_COLORS.particles[1];
   const baseB = RENDER_COLORS.particles[2];
   const baseA = RENDER_COLORS.particles.length > 3 ? RENDER_COLORS.particles[3] : 255;
-  const minSpeed = max(0, CONFIG.particleRenderMinSpeed);
+  const minSpeed = max(0, getQualityValue('particleRenderMinSpeed'));
+  const minSpeedRamp = max(0.02, minSpeed * 0.7);
   const alphaBoost = max(0, CONFIG.particleSpeedAlphaBoost);
   const widthBoost = max(0, CONFIG.particleSpeedWidthBoost);
-  const renderFraction = constrain(CONFIG.particleRenderFraction, 0.01, 1);
+  const renderFraction = constrain(getQualityValue('particleRenderFraction'), 0.01, 1);
   const tailAlphaWeight = renderFraction;
   const tailWidthWeight = max(0.2, sqrt(renderFraction));
   const particleCount = particles.length;
@@ -1538,12 +2211,13 @@ function renderParticles() {
     if (speed < minSpeed) {
       continue;
     }
+    const minSpeedAlphaRamp = constrain((speed - minSpeed) / minSpeedRamp, 0, 1);
     const t = particleCount > 1 ? i / (particleCount - 1) : 0;
     const renderAlphaWeight = lerp(1, tailAlphaWeight, t);
     const renderWidthWeight = lerp(1, tailWidthWeight, t);
     const speedFactor = 1 + speed;
     const alpha = constrain(
-      baseA * renderAlphaWeight * (1 + alphaBoost * (speedFactor - 1)),
+      baseA * renderAlphaWeight * minSpeedAlphaRamp * (1 + alphaBoost * (speedFactor - 1)),
       0,
       255
     );
@@ -1564,7 +2238,7 @@ function renderParticles() {
 
 function renderBoxes() {
   if (!CONFIG.showBoxes) return;
-  const shouldRenderWindShadow = CONFIG.enableWindShadow && CONFIG.showWindShadowZone;
+  const shouldRenderWindShadow = getQualityValue('enableWindShadow') && CONFIG.showWindShadowZone;
   let shadowDirX = 0;
   let shadowDirY = 0;
   if (shouldRenderWindShadow) {

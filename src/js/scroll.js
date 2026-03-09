@@ -2,6 +2,8 @@ const scrollDebug = mourn.debug.on && mourn.debug.includeScroll;
 const scrollDebugV = mourn.debug.verbose && mourn.debug.includeScroll;
 let autoScrollRafId = null;
 let autoScrollPrevFrameTs = null;
+let autoScrollSpeedMultiplier = null;
+let autoScrollPaused = false;
 let reducedMotionListener = null;
 let reducedMotionMediaQuery = null;
 let scrollTickRafId = null;
@@ -13,16 +15,16 @@ let flowWordBoxesEnabled = (() => {
     if (raw === null) return true;
     return raw === '1';
 })();
-let flowWordInsetXPx = (() => {
+let flowWordInsetXPercent = (() => {
     const raw = flowParams.get('wordInsetX') ?? flowParams.get('wordInset');
-    const parsed = raw === null ? 3 : parseFloat(raw);
-    if (!Number.isFinite(parsed)) return 3;
+    const parsed = raw === null ? 7.5 : parseFloat(raw);
+    if (!Number.isFinite(parsed)) return 7.5;
     return Math.max(0, Math.min(20, parsed));
 })();
-let flowWordInsetYPx = (() => {
+let flowWordInsetYPercent = (() => {
     const raw = flowParams.get('wordInsetY') ?? flowParams.get('wordInset');
-    const parsed = raw === null ? 5 : parseFloat(raw);
-    if (!Number.isFinite(parsed)) return 5;
+    const parsed = raw === null ? 20 : parseFloat(raw);
+    if (!Number.isFinite(parsed)) return 20;
     return Math.max(0, Math.min(20, parsed));
 })();
 
@@ -35,8 +37,8 @@ window.__mournSetWordInsetPx = function setWordInsetPx(value) {
     if (!Number.isFinite(parsed)) {
         return;
     }
-    flowWordInsetXPx = Math.max(0, Math.min(20, parsed));
-    flowWordInsetYPx = Math.max(0, Math.min(20, parsed));
+    flowWordInsetXPercent = Math.max(0, Math.min(20, parsed));
+    flowWordInsetYPercent = Math.max(0, Math.min(20, parsed));
     queueFlowFieldBoxSync();
 };
 window.__mournSetWordInsetXPx = function setWordInsetXPx(value) {
@@ -44,7 +46,7 @@ window.__mournSetWordInsetXPx = function setWordInsetXPx(value) {
     if (!Number.isFinite(parsed)) {
         return;
     }
-    flowWordInsetXPx = Math.max(0, Math.min(20, parsed));
+    flowWordInsetXPercent = Math.max(0, Math.min(20, parsed));
     queueFlowFieldBoxSync();
 };
 window.__mournSetWordInsetYPx = function setWordInsetYPx(value) {
@@ -52,8 +54,24 @@ window.__mournSetWordInsetYPx = function setWordInsetYPx(value) {
     if (!Number.isFinite(parsed)) {
         return;
     }
-    flowWordInsetYPx = Math.max(0, Math.min(20, parsed));
+    flowWordInsetYPercent = Math.max(0, Math.min(20, parsed));
     queueFlowFieldBoxSync();
+};
+window.__mournSetAutoScrollPaused = function setAutoScrollPaused(paused) {
+    autoScrollPaused = !!paused;
+
+    if (autoScrollPaused) {
+        if (autoScrollRafId !== null) {
+            window.cancelAnimationFrame(autoScrollRafId);
+            autoScrollRafId = null;
+        }
+        autoScrollPrevFrameTs = null;
+        return;
+    }
+
+    if (autoScrollSpeedMultiplier !== null && autoScrollRafId === null) {
+        startAutoScroll(autoScrollSpeedMultiplier);
+    }
 };
 const perfProbe = {
     enabled: false,
@@ -157,6 +175,9 @@ function snapOffset(value, precision = 10) {
 }
 
 function getRenderedStanzas() {
+    if (!mourn.trackers.anchor || !mourn.trackers.anchor.children) {
+        return [];
+    }
     return Array.from(mourn.trackers.anchor.children).filter((el) => el.classList.contains('stanza'));
 }
 
@@ -445,17 +466,24 @@ function stopAutoScroll() {
         window.cancelAnimationFrame(flowBoxesSyncRafId);
         flowBoxesSyncRafId = null;
     }
+
+    autoScrollSpeedMultiplier = null;
 }
 
 function startAutoScroll(speedMultiplier = 1) {
-    stopAutoScroll();
-
     if (prefersReducedMotion()) {
         console.info('Auto-scroll skipped due to prefers-reduced-motion setting.');
         return;
     }
 
     if (!Number.isFinite(speedMultiplier) || speedMultiplier === 0) {
+        return;
+    }
+
+    stopAutoScroll();
+    autoScrollSpeedMultiplier = speedMultiplier;
+
+    if (autoScrollPaused) {
         return;
     }
 
@@ -863,6 +891,9 @@ function syncFlowFieldBoxesFromPoem() {
     if (typeof window.setFlowBoxes !== 'function') {
         return;
     }
+    if (!mourn.trackers.anchor) {
+        return;
+    }
 
     const stanzasToSync = getRenderedStanzas();
     stanzasToSync.sort((a, b) => {
@@ -904,8 +935,14 @@ function syncFlowFieldBoxesFromPoem() {
                 if (!isNearViewport(bb)) {
                     return;
                 }
-                const insetX = flowWordInsetXPx;
-                const insetY = flowWordInsetYPx;
+                const insetX = Math.min(
+                    bb.width * (flowWordInsetXPercent / 100),
+                    Math.max(0, (bb.width - 1) * 0.5)
+                );
+                const insetY = Math.min(
+                    bb.height * (flowWordInsetYPercent / 100),
+                    Math.max(0, (bb.height - 1) * 0.5)
+                );
                 const shrunkWidth = Math.max(1, bb.width - insetX * 2);
                 const shrunkHeight = Math.max(1, bb.height - insetY * 2);
                 flowBoxes.push({
