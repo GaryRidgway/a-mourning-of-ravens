@@ -14,15 +14,6 @@ const CONFIG = {
   particleDuneSizeBoost: 0,
   particleSpeedWidthBoost: 1.3,
   particleRenderFraction: 1,
-  useWaveRenderer: true,
-  waveLineCount: 34,
-  waveAmplitude: 18,
-  wavePointStep: 18,
-  waveStrokeWeight: 1.15,
-  waveFieldInfluence: 120,
-  waveDriftMultiplier: 1,
-  waveDuneAlphaBoost: 1.25,
-  waveBoxGap: 8,
   enableAmbientMotion: true,
   enableDuneBands: true,
   ambientWindDirectionDeg: 135,
@@ -132,15 +123,6 @@ const CONTROL_PARAM_DEFS = [
   { key: 'particleDuneSizeBoost', type: 'number', digits: 2 },
   { key: 'particleSpeedWidthBoost', type: 'number', digits: 2 },
   { key: 'particleRenderFraction', type: 'number', digits: 2 },
-  { key: 'useWaveRenderer', type: 'bool' },
-  { key: 'waveLineCount', type: 'number', digits: 0 },
-  { key: 'waveAmplitude', type: 'number', digits: 1 },
-  { key: 'wavePointStep', type: 'number', digits: 0 },
-  { key: 'waveStrokeWeight', type: 'number', digits: 2 },
-  { key: 'waveFieldInfluence', type: 'number', digits: 0 },
-  { key: 'waveDriftMultiplier', type: 'number', digits: 2 },
-  { key: 'waveDuneAlphaBoost', type: 'number', digits: 2 },
-  { key: 'waveBoxGap', type: 'number', digits: 0 },
   { key: 'enableAdaptiveQuality', type: 'bool' },
   { key: 'lockQualityTier', type: 'bool' },
   { key: 'qualityTargetFps', type: 'number', digits: 0 },
@@ -217,15 +199,6 @@ const CONTROL_TOOLTIPS = {
   particleDuneSizeBoost: 'How strongly dune bands boost particle stroke size. Higher values make particles inside dune ridges thicker.',
   particleSpeedWidthBoost: 'How strongly faster particles get thicker strokes.',
   particleRenderFraction: 'Global streak density scaler. Lower values reduce accumulated ink while preserving continuity.',
-  useWaveRenderer: 'Renders flowing wave lines instead of the particle system.',
-  waveLineCount: 'How many wave rows are drawn across the screen.',
-  waveAmplitude: 'Base vertical displacement of the wave lines.',
-  wavePointStep: 'Horizontal sampling distance between wave points. Lower values are smoother but more expensive.',
-  waveStrokeWeight: 'Base stroke width of the wave lines.',
-  waveFieldInfluence: 'How strongly the ambient wind field bends and steers the waves.',
-  waveDriftMultiplier: 'Additional temporal drift applied to the wave phase.',
-  waveDuneAlphaBoost: 'How strongly dune ridges brighten the wave segments.',
-  waveBoxGap: 'Extra clearance around word collider boxes where wave segments are suppressed.',
   particleCount: 'Maximum particle budget used by the simulation and adaptive particle count system.',
   boxCollisionParticipantRatio: 'Fraction of particles that participate in poem collider box interactions.',
   enableAutoRenderScale: 'Automatically caps the internal canvas size on very large screens, then CSS stretches it to fill the viewport.',
@@ -897,13 +870,9 @@ function draw() {
   updateBoxes(dtFrames);
   updateActiveBoxes();
   simRenderAlpha = 1;
-  if (CONFIG.useWaveRenderer) {
-    renderWaves(nowMs);
-  } else {
-    updateParticles(nowMs, simStepCount, true, dtFrames);
-    updateAdaptiveSeparationCadence(nowMs);
-    renderParticles();
-  }
+  updateParticles(nowMs, simStepCount, true, dtFrames);
+  updateAdaptiveSeparationCadence(nowMs);
+  renderParticles();
   renderBoxes();
 }
 
@@ -2498,87 +2467,6 @@ function resetParticleInteractionState(particle) {
   particle.interactionDirX = 0;
   particle.interactionDirY = 0;
   particle.interactionSpeed = 0;
-}
-
-function isWavePointBlocked(px, py, gap = 0) {
-  const nearbyBoxes = getNearbyBoxesForPoint(px, py);
-  for (let i = 0; i < nearbyBoxes.length; i++) {
-    const box = nearbyBoxes[i];
-    if (
-      px >= box.x - gap &&
-      px <= box.x + box.w + gap &&
-      py >= box.y - gap &&
-      py <= box.y + box.h + gap
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function renderWaves(nowMs = simTimeMs) {
-  const baseR = RENDER_COLORS.particles[0];
-  const baseG = RENDER_COLORS.particles[1];
-  const baseB = RENDER_COLORS.particles[2];
-  const baseA = getCurrentParticleAlpha();
-  const renderFraction = constrain(getQualityValue('particleRenderFraction'), 0.01, 1);
-  const rowCount = max(4, floor(CONFIG.waveLineCount * lerp(0.45, 1, renderFraction)));
-  const pointStep = max(4, floor(CONFIG.wavePointStep / max(0.5, renderFraction)));
-  const spacing = height / (rowCount + 1);
-  const frameCache = buildFrameCache(nowMs);
-  const boxGap = max(0, CONFIG.waveBoxGap * currentRenderScale);
-  const strokeBase = max(0.2, CONFIG.waveStrokeWeight);
-  const fieldInfluence = CONFIG.waveFieldInfluence * currentRenderScale;
-  const timePhase = nowMs * 0.001 * CONFIG.waveDriftMultiplier;
-  const lineAlphaBase = baseA * lerp(0.55, 1, renderFraction);
-
-  noFill();
-  strokeCap(ROUND);
-
-  for (let row = 0; row < rowCount; row++) {
-    const baseY = spacing * (row + 1);
-    const rowPhase = row * 0.63 + timePhase;
-    let prev = null;
-
-    for (let x = -pointStep; x <= width + pointStep; x += pointStep) {
-      const ambient = sampleDuneWindForceXY(x, baseY, frameCache, 1);
-      const duneSignal = constrain(ambient.duneSignal || 0, 0, 1);
-      const localAmp = CONFIG.waveAmplitude * currentRenderScale * (0.45 + 0.55 * duneSignal);
-      const wavePhase =
-        rowPhase +
-        x / max(24, CONFIG.duneBandScale * 0.55) +
-        baseY / max(30, CONFIG.duneAlongWarpScale * 0.7);
-      const sampleX = x + ambient.x * fieldInfluence * 0.25;
-      const sampleY = baseY + sin(wavePhase) * localAmp + ambient.y * fieldInfluence;
-      const blocked = isWavePointBlocked(sampleX, sampleY, boxGap);
-
-      if (blocked) {
-        prev = null;
-        continue;
-      }
-
-      const point = {
-        x: sampleX,
-        y: sampleY,
-        duneSignal,
-      };
-
-      if (prev) {
-        const segmentAlpha = constrain(
-          lineAlphaBase * (1 + CONFIG.waveDuneAlphaBoost * point.duneSignal),
-          0,
-          255
-        );
-        stroke(baseR, baseG, baseB, segmentAlpha);
-        strokeWeight(strokeBase * (0.8 + 0.35 * point.duneSignal));
-        line(prev.x, prev.y, point.x, point.y);
-      }
-
-      prev = point;
-    }
-  }
-
-  noStroke();
 }
 
 function renderParticles() {
