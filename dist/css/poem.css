@@ -6,8 +6,8 @@ body {
   min-width: 100vw;
   min-height: 100vh;
   overflow: hidden;
-  background: rgb(0, 101, 130);
-  background: radial-gradient(circle, rgb(0, 101, 130) 0%, rgb(8, 71, 98) 76%, rgb(7, 54, 64) 100%);
+  background: rgb(130, 0, 0);
+  background: radial-gradient(circle, rgb(130, 0, 0) 0%, rgb(98, 8, 8) 76%, rgb(64, 7, 7) 100%);
   font-family: "Cinzel", serif;
 }
 
@@ -32,6 +32,24 @@ body {
   min-height: 100vh;
   max-width: none;
   max-height: none;
+}
+
+#flow-box-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.flow-box-overlay__box {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  border-style: solid;
+  border-radius: 0;
+  pointer-events: none;
 }
 
 :root {
@@ -155,7 +173,7 @@ body {
   overflow: auto;
   padding: 12px;
   border-radius: 8px;
-  background: rgba(7, 9, 10, 0.78);
+  background: rgba(7, 9, 10, 0.45);
   border: 1px solid rgba(245, 222, 179, 0.35);
   color: #f2e6ca;
   font-family: monospace;

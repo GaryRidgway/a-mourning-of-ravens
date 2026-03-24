@@ -3,19 +3,33 @@
 const CONFIG = {
   particleCount: 5000,
   enableAutoRenderScale: true,
-  autoRenderScaleThresholdPx: 1870,
-  particleSize: 0.65,
-  particleSizeRandomNegative: 0.12,
-  particleSizeRandomPositive: 0.9,
+  autoRenderScaleThresholdPx: 1080,
+  particleSize: 0.25,
+  particleSizeRandomNegative: 0,
+  particleSizeRandomPositive: 0,
+  boxCollisionParticipantRatio: 0.2,
   particleRenderMinSpeed: 0,
-  particleSpeedAlphaBoost: 3.24,
-  particleSpeedWidthBoost: 0.26,
+  particleSpeedAlphaBoost: 4.28,
+  particleDuneAlphaBoost: 0,
+  particleDuneSizeBoost: 0,
+  particleSpeedWidthBoost: 1.3,
   particleRenderFraction: 1,
+  useWaveRenderer: true,
+  waveLineCount: 34,
+  waveAmplitude: 18,
+  wavePointStep: 18,
+  waveStrokeWeight: 1.15,
+  waveFieldInfluence: 120,
+  waveDriftMultiplier: 1,
+  waveDuneAlphaBoost: 1.25,
+  waveBoxGap: 8,
   enableAmbientMotion: true,
+  enableDuneBands: true,
   ambientWindDirectionDeg: 135,
   ambientWindStrength: 0.281,
   duneBandRotationDeg: 135,
   duneBandScale: 100,
+  duneBandOffsetPx: 0,
   duneAlongWarpScale: 316,
   duneWarpStrength: 1.5,
   duneContrast: 1,
@@ -23,6 +37,9 @@ const CONFIG = {
   microNoiseScale: 596,
   microTurbulenceStrength: 0.014,
   windBoostParticleRatio: 0.02,
+  windBoostSizeMultiplier: 0.5,
+  windBoostAlphaMultiplier: 1,
+  windBoostLightnessShift: 0,
   windBoostMinMultiplier: 5,
   windBoostMaxMultiplier: 10,
   windBoostTurbulenceMinMultiplier: 4,
@@ -31,7 +48,7 @@ const CONFIG = {
   edgeRespawnWeightStrength: 0.45,
   edgeRespawnWeightExponent: 2,
   useWeightedEdgeRespawn: false,
-  edgeRespawnWeightedMixPercent: 0,
+  edgeRespawnWeightedMixPercent: 22,
   enableParticleSeparation: true,
   particleCollisionRadius: 0.95,
   particleCollisionStrength: 0.64,
@@ -39,7 +56,7 @@ const CONFIG = {
   separationEveryNFrames: 4,
   maxSeparationPairsPerTick: 70000,
   maxSeparationCandidatesPerCell: 24,
-  enableAdaptiveSeparationCadence: true,
+  enableAdaptiveSeparationCadence: false,
   adaptiveTargetFrameMs: 16.7,
   adaptiveCadenceMax: 8,
   adaptiveCadenceRecovery: 0.25,
@@ -53,16 +70,14 @@ const CONFIG = {
   surfaceInwardDamp: 0.7,
   surfacePosRelaxation: 0.4,
   surfaceMaxCorrection: 0.35,
-  boxCollisionParticipantRatio: 1,
-  enablePrewarm: false,
-  prewarmSteps: 550,
-  prewarmTimeStepMs: 10,
-  prewarmEnableSeparation: false,
   showSeparationZone: true,
   separationZoneAlpha: 0,
   damping: 0.86,
   maxSpeed: 1.7,
-  trailAlpha: 9,
+  trailAlpha: 3,
+  trailAlphaSecondary: 62,
+  backgroundFadeOscillationPeriodSec: 27.9,
+  particleAlphaSecondary: 67,
   insidePushStrength: 0.7,
   collisionEjectPadding: 0.02,
   collisionOutVelocity: 0.18,
@@ -76,15 +91,6 @@ const CONFIG = {
   wakeSwirlStrength: 10,
   wakeSwirlFrequency: 0.06,
   recentInteractionMs: 3000,
-  enableWindShadow: false,
-  windShadowLength: 188,
-  windShadowWidthGrowth: 0.24,
-  windShadowStrength: 1,
-  windShadowRotationDeg: -15,
-  windShadowOffsetAlong: -93,
-  windShadowOffsetLateral: 1,
-  showWindShadowZone: true,
-  windShadowZoneAlpha: 0,
   edgePadding: 0,
   edgeRestitution: 0.35,
   boxVelocityDecay: 0.86,
@@ -92,7 +98,8 @@ const CONFIG = {
   showBoxes: true,
   showDebug: false,
   enableAdaptiveQuality: true,
-  qualityTargetFps: 60,
+  lockQualityTier: true,
+  qualityTargetFps: 30,
   qualityDecisionWindowMs: 1200,
   qualityCooldownMs: 900,
   qualityTransitionMs: 700,
@@ -100,13 +107,15 @@ const CONFIG = {
   pauseSimulation: false,
 };
 
+const MAX_EFFECTIVE_DT_FRAMES = 1.75;
+const MAX_RENDER_SEGMENT_LENGTH_PX = 12;
+
 const RENDER_COLORS = {
-  fade: [20, 17, 11],
-  particles: [206, 39, 39, 97],
+  fade: [0, 0, 0],
+  particles: [255, 137, 0, 18],
   separationZone: [130, 175, 235],
   boxStrokeIdle: [200, 200, 180, 0],
   boxStrokeDragged: [250, 230, 190, 0],
-  windShadowZone: [120, 160, 220],
 };
 
 const CONTROL_PARAM_DEFS = [
@@ -116,11 +125,24 @@ const CONTROL_PARAM_DEFS = [
   { key: 'particleSize', type: 'number', digits: 2 },
   { key: 'particleSizeRandomNegative', type: 'number', digits: 2 },
   { key: 'particleSizeRandomPositive', type: 'number', digits: 2 },
+  { key: 'boxCollisionParticipantRatio', type: 'number', digits: 2 },
   { key: 'particleRenderMinSpeed', type: 'number', digits: 2 },
   { key: 'particleSpeedAlphaBoost', type: 'number', digits: 2 },
+  { key: 'particleDuneAlphaBoost', type: 'number', digits: 2 },
+  { key: 'particleDuneSizeBoost', type: 'number', digits: 2 },
   { key: 'particleSpeedWidthBoost', type: 'number', digits: 2 },
   { key: 'particleRenderFraction', type: 'number', digits: 2 },
+  { key: 'useWaveRenderer', type: 'bool' },
+  { key: 'waveLineCount', type: 'number', digits: 0 },
+  { key: 'waveAmplitude', type: 'number', digits: 1 },
+  { key: 'wavePointStep', type: 'number', digits: 0 },
+  { key: 'waveStrokeWeight', type: 'number', digits: 2 },
+  { key: 'waveFieldInfluence', type: 'number', digits: 0 },
+  { key: 'waveDriftMultiplier', type: 'number', digits: 2 },
+  { key: 'waveDuneAlphaBoost', type: 'number', digits: 2 },
+  { key: 'waveBoxGap', type: 'number', digits: 0 },
   { key: 'enableAdaptiveQuality', type: 'bool' },
+  { key: 'lockQualityTier', type: 'bool' },
   { key: 'qualityTargetFps', type: 'number', digits: 0 },
   { key: 'qualityDecisionWindowMs', type: 'number', digits: 0 },
   { key: 'qualityCooldownMs', type: 'number', digits: 0 },
@@ -128,16 +150,26 @@ const CONTROL_PARAM_DEFS = [
   { key: 'qualityHudEnabled', type: 'bool' },
   { key: 'pauseSimulation', type: 'bool' },
   { key: 'enableAmbientMotion', type: 'bool' },
+  { key: 'enableDuneBands', type: 'bool' },
   { key: 'ambientWindDirectionDeg', type: 'number', digits: 0 },
   { key: 'ambientWindStrength', type: 'number', digits: 3 },
   { key: 'duneBandRotationDeg', type: 'number', digits: 0 },
   { key: 'duneBandScale', type: 'number', digits: 0 },
+  { key: 'duneBandOffsetPx', type: 'number', digits: 0 },
   { key: 'duneAlongWarpScale', type: 'number', digits: 0 },
   { key: 'duneWarpStrength', type: 'number', digits: 2 },
   { key: 'duneContrast', type: 'number', digits: 2 },
   { key: 'duneDriftSpeed', type: 'number', digits: 2 },
   { key: 'microNoiseScale', type: 'number', digits: 0 },
   { key: 'microTurbulenceStrength', type: 'number', digits: 3 },
+  { key: 'windBoostParticleRatio', type: 'number', digits: 3 },
+  { key: 'windBoostSizeMultiplier', type: 'number', digits: 2 },
+  { key: 'windBoostAlphaMultiplier', type: 'number', digits: 2 },
+  { key: 'windBoostLightnessShift', type: 'number', digits: 2 },
+  { key: 'windBoostMinMultiplier', type: 'number', digits: 2 },
+  { key: 'windBoostMaxMultiplier', type: 'number', digits: 2 },
+  { key: 'windBoostTurbulenceMinMultiplier', type: 'number', digits: 2 },
+  { key: 'windBoostTurbulenceMaxMultiplier', type: 'number', digits: 2 },
   { key: 'edgeRespawnWeightBase', type: 'number', digits: 2 },
   { key: 'edgeRespawnWeightStrength', type: 'number', digits: 2 },
   { key: 'edgeRespawnWeightExponent', type: 'number', digits: 2 },
@@ -154,19 +186,7 @@ const CONTROL_PARAM_DEFS = [
   { key: 'surfaceSlideBand', type: 'number', digits: 2 },
   { key: 'staticInfluenceForwardDotMin', type: 'number', digits: 2 },
   { key: 'backsideDragStrength', type: 'number', digits: 2 },
-  { key: 'enableWindShadow', type: 'bool' },
-  { key: 'windShadowLength', type: 'number', digits: 0 },
-  { key: 'windShadowWidthGrowth', type: 'number', digits: 2 },
-  { key: 'windShadowStrength', type: 'number', digits: 2 },
-  { key: 'windShadowRotationDeg', type: 'number', digits: 0 },
-  { key: 'windShadowOffsetAlong', type: 'number', digits: 0 },
-  { key: 'windShadowOffsetLateral', type: 'number', digits: 0 },
-  { key: 'showWindShadowZone', type: 'bool' },
-  { key: 'windShadowZoneAlpha', type: 'number', digits: 0 },
-  { key: 'enablePrewarm', type: 'bool' },
-  { key: 'prewarmSteps', type: 'number', digits: 0 },
-  { key: 'prewarmTimeStepMs', type: 'number', digits: 0 },
-  { key: 'prewarmEnableSeparation', type: 'bool' },
+  { key: 'backgroundFadeOscillationPeriodSec', type: 'number', digits: 1 },
 ];
 
 const COLOR_PARAM_DEFS = [
@@ -175,24 +195,39 @@ const COLOR_PARAM_DEFS = [
   { key: 'separationZone', param: 'colorSeparationZone' },
   { key: 'boxStrokeIdle', param: 'colorBoxStrokeIdle' },
   { key: 'boxStrokeDragged', param: 'colorBoxStrokeDragged' },
-  { key: 'windShadowZone', param: 'colorWindShadowZone' },
 ];
 
 const COLOR_ALPHA_PARAM_DEFS = [
   { key: 'fade', param: 'colorFadeAlpha', source: 'config', configKey: 'trailAlpha', digits: 0 },
+  { key: 'fadeSecondary', param: 'colorFadeAlphaSecondary', source: 'config', configKey: 'trailAlphaSecondary', digits: 0 },
   { key: 'particles', param: 'colorParticlesAlpha', source: 'render', digits: 0 },
+  { key: 'particlesSecondary', param: 'colorParticlesAlphaSecondary', source: 'config', configKey: 'particleAlphaSecondary', digits: 0 },
   { key: 'separationZone', param: 'colorSeparationZoneAlpha', source: 'config', configKey: 'separationZoneAlpha', digits: 0 },
   { key: 'boxStrokeIdle', param: 'colorBoxStrokeIdleAlpha', source: 'render', digits: 0 },
   { key: 'boxStrokeDragged', param: 'colorBoxStrokeDraggedAlpha', source: 'render', digits: 0 },
-  { key: 'windShadowZone', param: 'colorWindShadowZoneAlpha', source: 'config', configKey: 'windShadowZoneAlpha', digits: 0 },
 ];
 
 const CONTROL_TOOLTIPS = {
+  particleSize: 'Base thickness of particle strokes before random size variation and speed-based width boosts.',
+  particleSizeRandomNegative: 'Maximum negative random size offset applied when a particle is spawned.',
+  particleSizeRandomPositive: 'Maximum positive random size offset applied when a particle is spawned.',
   particleRenderMinSpeed: 'Particles below this speed are hidden. Just above this threshold, alpha ramps in smoothly.',
   particleSpeedAlphaBoost: 'How strongly faster particles become brighter. Higher values emphasize fast streaks.',
+  particleDuneAlphaBoost: 'How strongly dune bands boost particle alpha. Higher values make particles inside dune ridges brighter.',
+  particleDuneSizeBoost: 'How strongly dune bands boost particle stroke size. Higher values make particles inside dune ridges thicker.',
   particleSpeedWidthBoost: 'How strongly faster particles get thicker strokes.',
   particleRenderFraction: 'Global streak density scaler. Lower values reduce accumulated ink while preserving continuity.',
+  useWaveRenderer: 'Renders flowing wave lines instead of the particle system.',
+  waveLineCount: 'How many wave rows are drawn across the screen.',
+  waveAmplitude: 'Base vertical displacement of the wave lines.',
+  wavePointStep: 'Horizontal sampling distance between wave points. Lower values are smoother but more expensive.',
+  waveStrokeWeight: 'Base stroke width of the wave lines.',
+  waveFieldInfluence: 'How strongly the ambient wind field bends and steers the waves.',
+  waveDriftMultiplier: 'Additional temporal drift applied to the wave phase.',
+  waveDuneAlphaBoost: 'How strongly dune ridges brighten the wave segments.',
+  waveBoxGap: 'Extra clearance around word collider boxes where wave segments are suppressed.',
   particleCount: 'Maximum particle budget used by the simulation and adaptive particle count system.',
+  boxCollisionParticipantRatio: 'Fraction of particles that participate in poem collider box interactions.',
   enableAutoRenderScale: 'Automatically caps the internal canvas size on very large screens, then CSS stretches it to fill the viewport.',
   autoRenderScaleThresholdPx: 'Maximum internal canvas size before auto render scaling caps it.',
   edgeRespawnWeightBase: 'Base chance weight for edge respawn bins before dune influence is applied.',
@@ -209,33 +244,73 @@ const CONTROL_TOOLTIPS = {
   separationMinSpeed: 'Particles moving slower than this may skip separation unless near a box or recently interacted.',
   maxSeparationPairsPerTick: 'Hard cap on pair solves per update tick to bound worst-case CPU load.',
   maxSeparationCandidatesPerCell: 'Limits neighbor candidates checked per cell in dense regions for performance stability.',
-  enableWindShadow: 'Reduces wind force in lee zones behind boxes. Can improve visual depth at extra CPU cost.',
-  windShadowLength: 'How far downwind the shadow influence extends.',
-  windShadowWidthGrowth: 'How quickly the wind shadow widens as distance increases.',
-  windShadowStrength: 'Maximum wind reduction applied inside shadow regions.',
   qualityTargetFps: 'Adaptive-quality target. The system throttles up/down to stay near this framerate.',
   enableAdaptiveQuality: 'Automatically changes quality tier based on sustained frame time.',
+  lockQualityTier: 'Freezes the current quality tier so adaptive quality can measure performance without changing budgets.',
   qualityDecisionWindowMs: 'How long performance must stay bad/good before changing quality tier.',
   qualityCooldownMs: 'Minimum delay between tier changes to avoid oscillation.',
   qualityTransitionMs: 'How quickly effective quality values blend to a new tier (higher is smoother/slower).',
   qualityHudEnabled: 'Shows a live on-screen performance HUD with FPS, quality tier, and active budgets.',
   pauseSimulation: 'Pauses the flow simulation loop. The simulation also auto-pauses when the tab is hidden.',
+  enableDuneBands: 'Turns dune band modulation on or off while leaving ambient wind and turbulence active.',
   ambientWindDirectionDeg: 'Sets the direction the ambient wind force pushes particles, in degrees.',
   ambientWindStrength: 'Overall strength of the ambient wind field.',
   duneBandRotationDeg: 'Rotates the dune band pattern independently from the wind direction, in degrees.',
+  duneBandScale: 'Controls the spacing between large dune bands. Lower values create tighter banding.',
+  duneBandOffsetPx: 'Shifts the dune band pattern across its own axis without changing angle or scale.',
+  duneAlongWarpScale: 'Sets the length scale of the along-wind warp that bends the dune bands.',
+  duneWarpStrength: 'How strongly the dune bands are warped and bent.',
+  duneContrast: 'Increases or softens contrast between high-wind and low-wind dune bands.',
+  duneDriftSpeed: 'How quickly the dune field drifts over time.',
+  microNoiseScale: 'Spatial scale of the fine turbulence noise field. Larger values make broader, smoother noise.',
+  microTurbulenceStrength: 'Strength of the fine-scale turbulent motion layered on top of the main wind.',
+  windBoostParticleRatio: 'Fraction of particles assigned to the boosted subgroup.',
+  windBoostSizeMultiplier: 'Size multiplier applied to boosted particles before other width boosts.',
+  windBoostAlphaMultiplier: 'Additive alpha applied only to boosted particles.',
+  windBoostLightnessShift: 'Shifts boosted particles toward black or white in HSL lightness space.',
+  windBoostMinMultiplier: 'Minimum wind-force multiplier for boosted particles.',
+  windBoostMaxMultiplier: 'Maximum wind-force multiplier for boosted particles.',
+  windBoostTurbulenceMinMultiplier: 'Minimum turbulence multiplier for boosted particles.',
+  windBoostTurbulenceMaxMultiplier: 'Maximum turbulence multiplier for boosted particles.',
+  boxForceMaxRadius: 'Maximum distance from a collider where box influence is allowed to affect particles.',
+  surfaceSlideBand: 'Thickness of the near-surface band where particles are encouraged to slide along collider faces.',
+  staticInfluenceForwardDotMin: 'Minimum forward alignment required before a moving box starts affecting nearby particles.',
+  backsideDragStrength: 'How strongly particles are slowed on the lee side of a moving collider.',
+  backgroundFadeOscillationPeriodSec: 'How many seconds it takes to complete one full ease-in-out background alpha cycle. Set to 0 to disable.',
 };
 
-const APP_CONTROL_TOOLTIPS = {
-  wordBoxes: 'Uses per-word colliders instead of one collider per stanza.',
-  wordInsetX: 'Shrinks each word collider horizontally by a percentage of that word box width.',
-  wordInsetY: 'Shrinks each word collider vertically by a percentage of that word box height.',
+const COLOR_CONTROL_TOOLTIPS = {
+  fade: 'Background clear or fade color used behind the particles.',
+  particles: 'Base particle trail color.',
+  separationZone: 'Debug color used for separation-zone visualization.',
+  boxStrokeIdle: 'Outline color for collider boxes when idle.',
+  boxStrokeDragged: 'Outline color for collider boxes while dragged.',
+};
+
+const COLOR_ALPHA_CONTROL_TOOLTIPS = {
+  fade: 'Alpha used for the background fade pass. Ignored when transparent trails are enabled.',
+  fadeSecondary: 'Secondary background fade alpha used as the other end of the oscillation range.',
+  particles: 'Base particle alpha before speed and trail fade adjustments.',
+  particlesSecondary: 'Secondary particle alpha used as the other end of the oscillation range.',
+  separationZone: 'Opacity of the separation-zone debug overlay.',
+  boxStrokeIdle: 'Opacity of idle collider box outlines.',
+  boxStrokeDragged: 'Opacity of dragged collider box outlines.',
 };
 
 const particles = [];
 const boxes = [];
 let activeBoxes = [];
+let sourceFlowBoxes = [];
+let flowBoxOverlayEl = null;
+let flowBoxOverlayNodes = [];
 let externalBoxSyncEnabled = false;
 const BOX_ACTIVE_MARGIN = 280;
+const boxSpatialGrid = new Map();
+const nearbyBoxesScratch = [];
+let nearbyBoxesQueryId = 0;
+const SIM_FIXED_STEP_MS = 1000 / 60;
+const SIM_MAX_FRAME_DELTA_MS = 250;
+const SIM_MAX_STEPS_PER_FRAME = 8;
 
 let draggedBoxIndex = -1;
 let dragOffsetX = 0;
@@ -255,14 +330,13 @@ const QUALITY_BASELINE_KEYS = [
   'maxSeparationPairsPerTick',
   'maxSeparationCandidatesPerCell',
   'separationEveryNFrames',
-  'enableWindShadow',
 ];
 const QUALITY_TIER_SETTINGS = [
-  { renderFractionMul: 1, minSpeedAdd: 0, pairMul: 1, candidateMul: 1, sepEveryAdd: 0, disableWindShadow: false },
-  { renderFractionMul: 0.86, minSpeedAdd: 0.03, pairMul: 0.85, candidateMul: 0.9, sepEveryAdd: 0, disableWindShadow: false },
-  { renderFractionMul: 0.7, minSpeedAdd: 0.08, pairMul: 0.68, candidateMul: 0.75, sepEveryAdd: 1, disableWindShadow: false },
-  { renderFractionMul: 0.55, minSpeedAdd: 0.13, pairMul: 0.52, candidateMul: 0.6, sepEveryAdd: 2, disableWindShadow: true },
-  { renderFractionMul: 0.4, minSpeedAdd: 0.18, pairMul: 0.38, candidateMul: 0.48, sepEveryAdd: 3, disableWindShadow: true },
+  { renderFractionMul: 1, minSpeedAdd: 0, pairMul: 1, candidateMul: 1, sepEveryAdd: 0 },
+  { renderFractionMul: 0.86, minSpeedAdd: 0.03, pairMul: 0.85, candidateMul: 0.9, sepEveryAdd: 0 },
+  { renderFractionMul: 0.7, minSpeedAdd: 0.08, pairMul: 0.68, candidateMul: 0.75, sepEveryAdd: 1 },
+  { renderFractionMul: 0.55, minSpeedAdd: 0.13, pairMul: 0.52, candidateMul: 0.6, sepEveryAdd: 2 },
+  { renderFractionMul: 0.4, minSpeedAdd: 0.18, pairMul: 0.38, candidateMul: 0.48, sepEveryAdd: 3 },
 ];
 const qualityState = {
   tier: 0,
@@ -282,6 +356,13 @@ let currentRenderScale = 1;
 let simulationLoopRunning = true;
 let simulationVisibilityListenerBound = false;
 let pauseToggleBound = false;
+let resetControlsBound = false;
+let simAccumulatorMs = 0;
+let simLastFrameMs = null;
+let simTimeMs = 0;
+let simStepCount = 0;
+let simRenderAlpha = 1;
+let lastSeparationCadenceAdjustMs = 0;
 
 applyConfigFromUrlParams();
 
@@ -299,6 +380,57 @@ function initQualityManager() {
   }
   applyQualityTier(0, true);
   window.__mournQuality = qualityState;
+}
+
+function ensureFlowBoxOverlay() {
+  if (flowBoxOverlayEl && document.body.contains(flowBoxOverlayEl)) {
+    return flowBoxOverlayEl;
+  }
+  flowBoxOverlayEl = document.getElementById('flow-box-overlay');
+  return flowBoxOverlayEl;
+}
+
+function colorToCssRgba(color) {
+  const r = clampColorByte(color?.[0] ?? 255);
+  const g = clampColorByte(color?.[1] ?? 255);
+  const b = clampColorByte(color?.[2] ?? 255);
+  const a = clampColorByte(color?.[3] ?? 255) / 255;
+  return `rgba(${r}, ${g}, ${b}, ${a.toFixed(4)})`;
+}
+
+function syncFlowBoxOverlay() {
+  const overlay = ensureFlowBoxOverlay();
+  if (!overlay) {
+    return;
+  }
+
+  const shouldShow = CONFIG.showBoxes && sourceFlowBoxes.length > 0;
+  overlay.style.display = shouldShow ? 'block' : 'none';
+  if (!shouldShow) {
+    return;
+  }
+
+  while (flowBoxOverlayNodes.length < sourceFlowBoxes.length) {
+    const node = document.createElement('div');
+    node.className = 'flow-box-overlay__box';
+    overlay.appendChild(node);
+    flowBoxOverlayNodes.push(node);
+  }
+  while (flowBoxOverlayNodes.length > sourceFlowBoxes.length) {
+    const node = flowBoxOverlayNodes.pop();
+    node.remove();
+  }
+
+  const idleBorderColor = colorToCssRgba(RENDER_COLORS.boxStrokeIdle);
+  for (let i = 0; i < sourceFlowBoxes.length; i++) {
+    const box = sourceFlowBoxes[i];
+    const node = flowBoxOverlayNodes[i];
+    node.style.transform = `translate(${box.x}px, ${box.y}px)`;
+    node.style.width = `${box.w}px`;
+    node.style.height = `${box.h}px`;
+    node.style.borderWidth = '1.5px';
+    node.style.borderColor = idleBorderColor;
+  }
 }
 
 function getActiveRenderScale() {
@@ -333,12 +465,16 @@ function applyRenderScale(nextScale) {
     p.pos.y *= scaleY;
     p.prevX *= scaleX;
     p.prevY *= scaleY;
+    p.displayX *= scaleX;
+    p.displayY *= scaleY;
     p.vel.x *= scaleX;
     p.vel.y *= scaleY;
   }
 
   for (let i = 0; i < boxes.length; i++) {
     const b = boxes[i];
+    b.prevX *= scaleX;
+    b.prevY *= scaleY;
     b.x *= scaleX;
     b.y *= scaleY;
     b.w *= scaleX;
@@ -380,16 +516,12 @@ function applyQualityTier(tier, snap = false) {
     1,
     floor(b.separationEveryNFrames + settings.sepEveryAdd)
   );
-  qualityState.target.enableWindShadow = settings.disableWindShadow
-    ? false
-    : Boolean(b.enableWindShadow);
   if (snap) {
     qualityState.effective.particleRenderFraction = qualityState.target.particleRenderFraction;
     qualityState.effective.particleRenderMinSpeed = qualityState.target.particleRenderMinSpeed;
     qualityState.effective.maxSeparationPairsPerTick = qualityState.target.maxSeparationPairsPerTick;
     qualityState.effective.maxSeparationCandidatesPerCell = qualityState.target.maxSeparationCandidatesPerCell;
     qualityState.effective.separationEveryNFrames = qualityState.target.separationEveryNFrames;
-    qualityState.effective.enableWindShadow = qualityState.target.enableWindShadow;
   }
 }
 
@@ -421,7 +553,6 @@ function smoothQualityEffective(dt) {
     qualityState.effective.separationEveryNFrames,
     qualityState.target.separationEveryNFrames
   );
-  qualityState.effective.enableWindShadow = qualityState.target.enableWindShadow;
 }
 
 function ensureQualityHud() {
@@ -509,6 +640,10 @@ function applySimulationPauseState() {
     loop();
     simulationLoopRunning = true;
     qualityState.lastFrameMs = null;
+    simLastFrameMs = null;
+    simAccumulatorMs = 0;
+    lastDrawTimeMs = 0;
+    lastSeparationCadenceAdjustMs = millis();
   }
   syncPauseToggleButton();
 }
@@ -529,10 +664,23 @@ function paintQualityHud(nowMs) {
   const internalW = max(1, width || 0);
   const internalH = max(1, height || 0);
   const autoScaleActive = CONFIG.enableAutoRenderScale && currentRenderScale < 0.999;
+  const oscillation = getOscillationState();
+  const currentFadeAlpha = getCurrentBackgroundFadeAlpha();
+  const currentParticleAlpha = getCurrentParticleAlpha();
+  const oscSlots = 9;
+  const oscIndex = oscillation.enabled
+    ? constrain(Math.round(oscillation.eased * (oscSlots - 1)), 0, oscSlots - 1)
+    : 0;
+  let oscTrack = '';
+  for (let i = 0; i < oscSlots; i++) {
+    oscTrack += i === oscIndex ? '●' : '·';
+  }
   qualityState.hudEl.innerHTML =
     `<div>FPS ${fps.toFixed(1)} (Target ${targetFps.toFixed(0)}) | Avg Frame ${qualityState.avgFrameMs.toFixed(2)} ms | Quality Tier ${qualityState.tier}` +
+    `${CONFIG.lockQualityTier ? ' (locked)' : ''}` +
     ` | Render Fraction ${rf.toFixed(2)} | Separation Pair Budget ${pairs} | Particles ${particles.length}/${maxParticles}</div>` +
-    `<div>Viewport ${viewportW}x${viewportH}px | Render Scale ${currentRenderScale.toFixed(2)}${autoScaleActive ? ' (auto)' : ''} | Internal Canvas ${internalW}x${internalH}px</div>`;
+    `<div>Viewport ${viewportW}x${viewportH}px | Render Scale ${currentRenderScale.toFixed(2)}${autoScaleActive ? ' (auto)' : ''} | Internal Canvas ${internalW}x${internalH}px</div>` +
+    `<div>Osc A ${oscTrack} B${oscillation.enabled ? ` | ${CONFIG.backgroundFadeOscillationPeriodSec.toFixed(1)}s` : ' | off'} | Bg ${currentFadeAlpha.toFixed(2)} | P ${currentParticleAlpha.toFixed(2)}</div>`;
 }
 
 function getAdaptiveQualityThresholdsMs() {
@@ -582,6 +730,11 @@ function tickAdaptiveQuality(nowMs) {
   }
 
   const cooldownElapsed = nowMs - qualityState.lastTierChangeMs >= CONFIG.qualityCooldownMs;
+  if (CONFIG.lockQualityTier) {
+    paintQualityHud(nowMs);
+    return;
+  }
+
   if (cooldownElapsed && qualityState.badMsAccum >= CONFIG.qualityDecisionWindowMs) {
     if (qualityState.tier < QUALITY_TIER_SETTINGS.length - 1) {
       applyQualityTier(qualityState.tier + 1);
@@ -619,8 +772,18 @@ function removeParticles(count) {
   particles.length = particles.length - n;
 }
 
+function syncParticleBoxCollisionParticipation() {
+  const ratio = constrain(CONFIG.boxCollisionParticipantRatio, 0, 1);
+  const count = particles.length;
+  for (let i = 0; i < count; i++) {
+    particles[i].ignoresBoxCollision = !particles[i].isBoosted && (i / max(1, count)) >= ratio;
+  }
+}
+
 class FlowBox {
   constructor(x, y, w, h) {
+    this.prevX = x;
+    this.prevY = y;
     this.x = x;
     this.y = y;
     this.w = w;
@@ -630,6 +793,8 @@ class FlowBox {
   }
 
   setPosition(x, y) {
+    this.prevX = this.x;
+    this.prevY = this.y;
     this.x = x;
     this.y = y;
   }
@@ -652,6 +817,7 @@ function setup() {
   setupDuneControls();
   initQualityManager();
   ensureQualityHud();
+  ensureFlowBoxOverlay();
   if (!simulationVisibilityListenerBound) {
     document.addEventListener('visibilitychange', applySimulationPauseState);
     simulationVisibilityListenerBound = true;
@@ -660,20 +826,29 @@ function setup() {
 
   fill(...RENDER_COLORS.fade);
   rect(0, 0, width, height);
+  simTimeMs = millis();
+  simLastFrameMs = null;
+  simAccumulatorMs = 0;
+  simStepCount = 0;
+  simRenderAlpha = 1;
+  lastSeparationCadenceAdjustMs = simTimeMs;
 
   for (let i = 0; i < CONFIG.particleCount; i++) {
     const ignoresBoxCollision = i / CONFIG.particleCount >= CONFIG.boxCollisionParticipantRatio;
     particles.push(createParticle(random(width), random(height), ignoresBoxCollision));
   }
 
-  if (CONFIG.enablePrewarm && CONFIG.prewarmSteps > 0) {
-    runPrewarmSimulation();
-  }
-
   // Expose API for external apps (poem) to drive box positions.
   window.setFlowBoxes = function setFlowBoxes(nextBoxes = []) {
     externalBoxSyncEnabled = true;
     draggedBoxIndex = -1;
+    sourceFlowBoxes = nextBoxes.map((box) => ({
+      x: box.x,
+      y: box.y,
+      w: box.w,
+      h: box.h,
+    }));
+    syncFlowBoxOverlay();
 
     while (boxes.length < nextBoxes.length) {
       boxes.push(new FlowBox(0, 0, 1, 1));
@@ -686,6 +861,8 @@ function setup() {
       const src = nextBoxes[i];
       const box = boxes[i];
       const simScale = currentRenderScale;
+      box.prevX = box.x;
+      box.prevY = box.y;
       box.x = src.x * simScale;
       box.y = src.y * simScale;
       box.w = src.w * simScale;
@@ -707,12 +884,26 @@ function setup() {
 function draw() {
   const nowMs = millis();
   tickAdaptiveQuality(nowMs);
-  updateAdaptiveSeparationCadence(nowMs);
+  if (simLastFrameMs === null) {
+    simLastFrameMs = nowMs;
+  }
+  let frameDeltaMs = nowMs - simLastFrameMs;
+  simLastFrameMs = nowMs;
+  frameDeltaMs = constrain(frameDeltaMs, 0, SIM_MAX_FRAME_DELTA_MS);
+  const dtFrames = constrain(frameDeltaMs / SIM_FIXED_STEP_MS, 0, MAX_EFFECTIVE_DT_FRAMES);
+  simTimeMs = nowMs;
+  simStepCount += 1;
   fadeCanvas();
-  updateBoxes();
+  updateBoxes(dtFrames);
   updateActiveBoxes();
-  updateParticles(nowMs, frameCount, true);
-  renderParticles();
+  simRenderAlpha = 1;
+  if (CONFIG.useWaveRenderer) {
+    renderWaves(nowMs);
+  } else {
+    updateParticles(nowMs, simStepCount, true, dtFrames);
+    updateAdaptiveSeparationCadence(nowMs);
+    renderParticles();
+  }
   renderBoxes();
 }
 
@@ -721,8 +912,38 @@ function windowResized() {
 }
 
 function fadeCanvas() {
-  fill(...RENDER_COLORS.fade, CONFIG.trailAlpha);
+  fill(...RENDER_COLORS.fade, getCurrentBackgroundFadeAlpha());
   rect(0, 0, width, height);
+}
+
+function getCurrentBackgroundFadeAlpha() {
+  const alphaA = clampColorByte(CONFIG.trailAlpha);
+  const alphaB = clampColorByte(CONFIG.trailAlphaSecondary);
+  return getOscillatingAlpha(alphaA, alphaB);
+}
+
+function getCurrentParticleAlpha() {
+  const alphaA = clampColorByte(RENDER_COLORS.particles.length > 3 ? RENDER_COLORS.particles[3] : 255);
+  const alphaB = clampColorByte(CONFIG.particleAlphaSecondary);
+  return getOscillatingAlpha(alphaA, alphaB);
+}
+
+function getOscillationState() {
+  const periodSec = max(0, CONFIG.backgroundFadeOscillationPeriodSec);
+  if (periodSec <= 0) {
+    return { enabled: false, phase: 0, eased: 0 };
+  }
+  const phase = (millis() * 0.001 / periodSec) % 1;
+  const eased = 0.5 - 0.5 * cos(phase * TWO_PI);
+  return { enabled: true, phase, eased };
+}
+
+function getOscillatingAlpha(alphaA, alphaB) {
+  const state = getOscillationState();
+  if (!state.enabled || alphaA === alphaB) {
+    return alphaA;
+  }
+  return lerp(alphaA, alphaB, state.eased);
 }
 
 function setupDuneControls() {
@@ -734,6 +955,14 @@ function setupDuneControls() {
   controlsBound = true;
   applyControlTooltips(panel);
   const edgeRespawnMixInput = panel.querySelector('[data-key="edgeRespawnWeightedMixPercent"]');
+  const BOOSTED_CONTROL_KEYS = new Set([
+    'windBoostParticleRatio',
+    'windBoostSizeMultiplier',
+    'windBoostMinMultiplier',
+    'windBoostMaxMultiplier',
+    'windBoostTurbulenceMinMultiplier',
+    'windBoostTurbulenceMaxMultiplier',
+  ]);
   const syncEdgeRespawnMixDisabledState = () => {
     if (!edgeRespawnMixInput) return;
     edgeRespawnMixInput.disabled = Boolean(CONFIG.useWeightedEdgeRespawn);
@@ -762,6 +991,10 @@ function setupDuneControls() {
           nextValue = max(1, floor(parsed));
           input.value = String(nextValue);
         }
+        if (def.key === 'boxCollisionParticipantRatio') {
+          nextValue = constrain(parsed, 0, 1);
+          input.value = String(nextValue);
+        }
         if (def.key === 'autoRenderScaleThresholdPx') {
           nextValue = max(320, floor(parsed));
           input.value = String(nextValue);
@@ -779,6 +1012,10 @@ function setupDuneControls() {
           } else if (particles.length > target) {
             removeParticles(particles.length - target);
           }
+          syncParticleBoxCollisionParticipation();
+        }
+        if (def.key === 'boxCollisionParticipantRatio') {
+          syncParticleBoxCollisionParticipation();
         }
       }
       if (
@@ -794,6 +1031,9 @@ function setupDuneControls() {
       if (def.key === 'useWeightedEdgeRespawn') {
         syncEdgeRespawnMixDisabledState();
       }
+      if (BOOSTED_CONTROL_KEYS.has(def.key)) {
+        syncBoostedParticleConfig(def.key === 'windBoostParticleRatio');
+      }
       syncColorAlphaInputsForConfigKey(def.key);
       syncUrlParamsFromConfig();
     });
@@ -803,8 +1043,8 @@ function setupDuneControls() {
   bindColorControls(panel);
   bindColorAlphaControls(panel);
   bindAngleControls(panel);
-  bindAppControls(panel);
   bindPauseToggleButton();
+  bindResetControlsButton();
   setupDetailsPersistence(panel);
   detectRefreshRateFps().then((fps) => {
     detectedRefreshRateFps = fps;
@@ -820,6 +1060,7 @@ function bindAngleControls(panel) {
     if (!key) continue;
     const input = panel.querySelector(`[data-key="${key}"]`);
     if (!input) continue;
+    let pointerAngleOffsetDeg = 0;
 
     const getDisplayAngleDeg = (valueDeg) => {
       if (key === 'ambientWindDirectionDeg') {
@@ -847,15 +1088,24 @@ function bindAngleControls(panel) {
       control.tabIndex = 0;
     };
 
-    const setFromPointer = (clientX, clientY) => {
+    const getPointerAngleDeg = (clientX, clientY) => {
       const rect = control.getBoundingClientRect();
       const centerX = rect.left + rect.width * 0.5;
       const centerY = rect.top + rect.height * 0.5;
-      const pointerAngleDeg = Math.round(Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI));
+      return Math.round(Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI));
+    };
+
+    const displayAngleToValueAngle = (displayAngleDeg) => normalizeAngleDeg(
+      key === 'ambientWindDirectionDeg'
+        ? displayAngleDeg - 90
+        : displayAngleDeg
+    );
+
+    const setFromPointer = (clientX, clientY) => {
+      const pointerAngleDeg = getPointerAngleDeg(clientX, clientY);
+      const displayAngleDeg = normalizeAngleDeg(pointerAngleDeg - pointerAngleOffsetDeg);
       const valueAngleDeg = normalizeAngleDeg(
-        key === 'ambientWindDirectionDeg'
-          ? pointerAngleDeg - 90
-          : pointerAngleDeg
+        displayAngleToValueAngle(displayAngleDeg)
       );
       input.value = String(constrain(valueAngleDeg, -180, 180));
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -868,7 +1118,10 @@ function bindAngleControls(panel) {
     control.addEventListener('pointerdown', (event) => {
       event.preventDefault();
       control.setPointerCapture(event.pointerId);
-      setFromPointer(event.clientX, event.clientY);
+      const current = Number(input.value);
+      const safeCurrent = Number.isFinite(current) ? current : 0;
+      const pointerAngleDeg = getPointerAngleDeg(event.clientX, event.clientY);
+      pointerAngleOffsetDeg = normalizeAngleDeg(pointerAngleDeg - getDisplayAngleDeg(safeCurrent));
     });
     control.addEventListener('pointermove', (event) => {
       if ((event.buttons & 1) !== 1) return;
@@ -920,11 +1173,36 @@ function bindPauseToggleButton() {
   });
 }
 
+function bindResetControlsButton() {
+  if (resetControlsBound) return;
+  const button = document.getElementById('reset-controls-button');
+  if (!button) return;
+  resetControlsBound = true;
+  button.addEventListener('click', () => {
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (!key) continue;
+        if (key.startsWith('dune-controls:')) {
+          keysToRemove.push(key);
+        }
+      }
+      for (let i = 0; i < keysToRemove.length; i++) {
+        window.localStorage.removeItem(keysToRemove[i]);
+      }
+    } catch (error) {
+      // Ignore storage failures.
+    }
+    window.location.href = window.location.pathname;
+  });
+}
+
 function applyControlTooltips(panel) {
-  const applyTitle = (input, text) => {
-    if (!input || !text) return;
-    input.title = text;
-    const row = input.closest('label');
+  const applyTitle = (target, text) => {
+    if (!target || !text) return;
+    target.title = text;
+    const row = target.closest('label');
     if (row) {
       row.title = text;
     }
@@ -935,178 +1213,22 @@ function applyControlTooltips(panel) {
     const key = keys[i];
     const input = panel.querySelector(`[data-key="${key}"]`);
     applyTitle(input, CONTROL_TOOLTIPS[key]);
+    const angleButton = panel.querySelector(`[data-angle-key="${key}"]`);
+    applyTitle(angleButton, CONTROL_TOOLTIPS[key]);
   }
 
-  const appKeys = Object.keys(APP_CONTROL_TOOLTIPS);
-  for (let i = 0; i < appKeys.length; i++) {
-    const key = appKeys[i];
-    const input = panel.querySelector(`[data-app-key="${key}"]`);
-    applyTitle(input, APP_CONTROL_TOOLTIPS[key]);
-  }
-}
-
-function bindAppControls(panel) {
-  const params = new URLSearchParams(window.location.search);
-  const appStoragePrefix = 'dune-controls:app:';
-  const readAppStorage = (key) => {
-    try {
-      return window.localStorage.getItem(appStoragePrefix + key);
-    } catch (error) {
-      return null;
-    }
-  };
-  const writeAppStorage = (key, value) => {
-    try {
-      window.localStorage.setItem(appStoragePrefix + key, value);
-    } catch (error) {
-      // Ignore storage failures (private mode, quotas, etc.).
-    }
-  };
-  const wordBoxesInput = panel.querySelector('[data-app-key="wordBoxes"]');
-  const wordInsetXInput = panel.querySelector('[data-app-key="wordInsetX"]');
-  const wordInsetYInput = panel.querySelector('[data-app-key="wordInsetY"]');
-  const wordInsetXOutput = panel.querySelector('[data-app-value-for="wordInsetX"]');
-  const wordInsetYOutput = panel.querySelector('[data-app-value-for="wordInsetY"]');
-
-  if (wordBoxesInput) {
-    const raw = params.get('wordBoxes');
-    const stored = readAppStorage('wordBoxes');
-    const initial = raw !== null
-      ? raw === '1'
-      : (stored !== null ? stored === '1' : true);
-    wordBoxesInput.checked = initial;
+  const colorKeys = Object.keys(COLOR_CONTROL_TOOLTIPS);
+  for (let i = 0; i < colorKeys.length; i++) {
+    const key = colorKeys[i];
+    const input = panel.querySelector(`[data-color-key="${key}"]`);
+    applyTitle(input, COLOR_CONTROL_TOOLTIPS[key]);
   }
 
-  const initialInsetFallbackRaw = params.get('wordInset') ?? readAppStorage('wordInset');
-  const initialInsetXFallbackRaw = params.get('wordInsetX');
-  const initialInsetYFallbackRaw = params.get('wordInsetY');
-  const storedInsetXRaw = readAppStorage('wordInsetX');
-  const storedInsetYRaw = readAppStorage('wordInsetY');
-  const initialInsetXFallback = Number.isFinite(Number(initialInsetXFallbackRaw))
-    ? Number(initialInsetXFallbackRaw)
-    : (
-      Number.isFinite(Number(storedInsetXRaw))
-        ? Number(storedInsetXRaw)
-        : (
-      Number.isFinite(Number(initialInsetFallbackRaw))
-        ? Number(initialInsetFallbackRaw)
-        : 7.5
-        )
-    );
-  const initialInsetYFallback = Number.isFinite(Number(initialInsetYFallbackRaw))
-    ? Number(initialInsetYFallbackRaw)
-    : (
-      Number.isFinite(Number(storedInsetYRaw))
-        ? Number(storedInsetYRaw)
-        : (
-      Number.isFinite(Number(initialInsetFallbackRaw))
-        ? Number(initialInsetFallbackRaw)
-        : 20
-        )
-    );
-  if (wordInsetXInput) {
-    const initialInsetRaw = params.get('wordInsetX');
-    const initialInset = Number.isFinite(Number(initialInsetRaw))
-      ? Number(initialInsetRaw)
-      : initialInsetXFallback;
-    wordInsetXInput.value = String(initialInset);
-    if (wordInsetXOutput) {
-      wordInsetXOutput.textContent = `${initialInset.toFixed(1)}%`;
-    }
-    if (typeof window.__mournSetWordInsetXPx === 'function') {
-      window.__mournSetWordInsetXPx(initialInset);
-    }
-  }
-
-  if (wordInsetYInput) {
-    const initialInsetRaw = params.get('wordInsetY');
-    const initialInset = Number.isFinite(Number(initialInsetRaw))
-      ? Number(initialInsetRaw)
-      : initialInsetYFallback;
-    wordInsetYInput.value = String(initialInset);
-    if (wordInsetYOutput) {
-      wordInsetYOutput.textContent = `${initialInset.toFixed(1)}%`;
-    }
-    if (typeof window.__mournSetWordInsetYPx === 'function') {
-      window.__mournSetWordInsetYPx(initialInset);
-    }
-  }
-
-  const syncAppParams = () => {
-    const nextParams = new URLSearchParams(window.location.search);
-    if (wordBoxesInput) {
-      const enabled = !!wordBoxesInput.checked;
-      writeAppStorage('wordBoxes', enabled ? '1' : '0');
-      if (enabled) {
-        nextParams.set('wordBoxes', '1');
-      } else {
-        nextParams.delete('wordBoxes');
-      }
-    }
-
-    if (wordInsetXInput) {
-      const inset = Number(wordInsetXInput.value);
-      if (Number.isFinite(inset)) {
-        writeAppStorage('wordInsetX', inset.toFixed(1));
-        nextParams.set('wordInsetX', inset.toFixed(1));
-      }
-    }
-    if (wordInsetYInput) {
-      const inset = Number(wordInsetYInput.value);
-      if (Number.isFinite(inset)) {
-        writeAppStorage('wordInsetY', inset.toFixed(1));
-        nextParams.set('wordInsetY', inset.toFixed(1));
-      }
-    }
-    nextParams.delete('wordInset');
-
-    const next = `${window.location.pathname}?${nextParams.toString()}`;
-    window.history.replaceState({}, '', next);
-  };
-
-  if (wordBoxesInput) {
-    wordBoxesInput.addEventListener('input', () => {
-      const enabled = !!wordBoxesInput.checked;
-      syncAppParams();
-      if (typeof window.__mournSetWordBoxes === 'function') {
-        window.__mournSetWordBoxes(enabled);
-      }
-    });
-  }
-
-  if (wordInsetXInput) {
-    wordInsetXInput.addEventListener('input', () => {
-      const inset = Number(wordInsetXInput.value);
-      if (!Number.isFinite(inset)) return;
-      if (wordInsetXOutput) {
-        wordInsetXOutput.textContent = `${inset.toFixed(1)}%`;
-      }
-      syncAppParams();
-      if (typeof window.__mournSetWordInsetXPx === 'function') {
-        window.__mournSetWordInsetXPx(inset);
-      }
-    });
-  }
-
-  if (wordInsetYInput) {
-    wordInsetYInput.addEventListener('input', () => {
-      const inset = Number(wordInsetYInput.value);
-      if (!Number.isFinite(inset)) return;
-      if (wordInsetYOutput) {
-        wordInsetYOutput.textContent = `${inset.toFixed(1)}%`;
-      }
-      syncAppParams();
-      if (typeof window.__mournSetWordInsetYPx === 'function') {
-        window.__mournSetWordInsetYPx(inset);
-      }
-    });
-  }
-
-  if (wordBoxesInput) {
-    const enabled = !!wordBoxesInput.checked;
-    if (typeof window.__mournSetWordBoxes === 'function') {
-      window.__mournSetWordBoxes(enabled);
-    }
+  const colorAlphaKeys = Object.keys(COLOR_ALPHA_CONTROL_TOOLTIPS);
+  for (let i = 0; i < colorAlphaKeys.length; i++) {
+    const key = colorAlphaKeys[i];
+    const input = panel.querySelector(`[data-color-alpha-key="${key}"]`);
+    applyTitle(input, COLOR_ALPHA_CONTROL_TOOLTIPS[key]);
   }
 }
 
@@ -1227,6 +1349,22 @@ function syncUrlParamsFromConfig() {
   const params = new URLSearchParams(window.location.search);
   params.delete('renderScale');
   params.delete('autoRenderScaleMin');
+  params.delete('enableTransparentTrails');
+  params.delete('particleTrailHistoryLength');
+  params.delete('particleTrailRenderPoints');
+  params.delete('particleTrailCurved');
+  params.delete('particleTrailFadeStrength');
+  params.delete('enableWindShadow');
+  params.delete('windShadowLength');
+  params.delete('windShadowWidthGrowth');
+  params.delete('windShadowStrength');
+  params.delete('windShadowRotationDeg');
+  params.delete('windShadowOffsetAlong');
+  params.delete('windShadowOffsetLateral');
+  params.delete('showWindShadowZone');
+  params.delete('windShadowZoneAlpha');
+  params.delete('colorWindShadowZone');
+  params.delete('colorWindShadowZoneAlpha');
   for (let i = 0; i < CONTROL_PARAM_DEFS.length; i++) {
     const def = CONTROL_PARAM_DEFS[i];
     const val = CONFIG[def.key];
@@ -1360,6 +1498,111 @@ function hexToRgb(rawHex) {
   };
 }
 
+function rgbToHsl(r, g, b) {
+  const rn = clampColorByte(r) / 255;
+  const gn = clampColorByte(g) / 255;
+  const bn = clampColorByte(b) / 255;
+  const maxC = Math.max(rn, gn, bn);
+  const minC = Math.min(rn, gn, bn);
+  const delta = maxC - minC;
+  let h = 0;
+  let s = 0;
+  const l = (maxC + minC) * 0.5;
+
+  if (delta > 0) {
+    s = delta / (1 - Math.abs(2 * l - 1));
+    switch (maxC) {
+      case rn:
+        h = ((gn - bn) / delta) % 6;
+        break;
+      case gn:
+        h = (bn - rn) / delta + 2;
+        break;
+      default:
+        h = (rn - gn) / delta + 4;
+        break;
+    }
+    h /= 6;
+    if (h < 0) h += 1;
+  }
+
+  return { h, s, l };
+}
+
+function hslToRgb(h, s, l) {
+  const hue2rgb = (p, q, t) => {
+    let tt = t;
+    if (tt < 0) tt += 1;
+    if (tt > 1) tt -= 1;
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2) return q;
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+
+  if (s <= 0) {
+    const gray = clampColorByte(l * 255);
+    return { r: gray, g: gray, b: gray };
+  }
+
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return {
+    r: clampColorByte(hue2rgb(p, q, h + 1 / 3) * 255),
+    g: clampColorByte(hue2rgb(p, q, h) * 255),
+    b: clampColorByte(hue2rgb(p, q, h - 1 / 3) * 255),
+  };
+}
+
+function applyLightnessShiftToRgb(r, g, b, shift) {
+  const amount = constrain(shift, -1, 1);
+  if (amount === 0) {
+    return { r: clampColorByte(r), g: clampColorByte(g), b: clampColorByte(b) };
+  }
+  const hsl = rgbToHsl(r, g, b);
+  const nextL = amount >= 0
+    ? hsl.l + (1 - hsl.l) * amount
+    : hsl.l * (1 + amount);
+  return hslToRgb(hsl.h, hsl.s, constrain(nextL, 0, 1));
+}
+
+function applyBoostedConfigToParticle(particle, reseedBoosted = false) {
+  if (reseedBoosted) {
+    particle.isBoosted = random() < CONFIG.windBoostParticleRatio;
+  }
+
+  const baseSizeMultiplier =
+    particle.baseRandomSizeMultiplier ??
+    max(
+      0.05,
+      particle.sizeMultiplier / (particle.isBoosted ? max(CONFIG.windBoostSizeMultiplier, 0.0001) : 1)
+    );
+  particle.baseRandomSizeMultiplier = baseSizeMultiplier;
+
+  if (particle.isBoosted) {
+    particle.windBoostMultiplier = random(
+      CONFIG.windBoostMinMultiplier,
+      CONFIG.windBoostMaxMultiplier + Number.EPSILON
+    );
+    particle.turbulenceBoostMultiplier = random(
+      CONFIG.windBoostTurbulenceMinMultiplier,
+      CONFIG.windBoostTurbulenceMaxMultiplier + Number.EPSILON
+    );
+    particle.sizeMultiplier = CONFIG.windBoostSizeMultiplier * baseSizeMultiplier;
+    particle.ignoresBoxCollision = false;
+  } else {
+    particle.windBoostMultiplier = 1;
+    particle.turbulenceBoostMultiplier = 1;
+    particle.sizeMultiplier = baseSizeMultiplier;
+  }
+}
+
+function syncBoostedParticleConfig(reseedBoosted = false) {
+  for (let i = 0; i < particles.length; i++) {
+    applyBoostedConfigToParticle(particles[i], reseedBoosted);
+  }
+}
+
 function createParticle(x, y, ignoresBoxCollision = false) {
   const boosted = random() < CONFIG.windBoostParticleRatio;
   const randomSizeModifier = random(
@@ -1385,11 +1628,15 @@ function createParticle(x, y, ignoresBoxCollision = false) {
     vel: createVector(0, 0),
     prevX: x,
     prevY: y,
-    ignoresBoxCollision,
+    displayX: x,
+    displayY: y,
+    ignoresBoxCollision: boosted ? false : ignoresBoxCollision,
     isBoosted: boosted,
     windBoostMultiplier,
     turbulenceBoostMultiplier,
-    sizeMultiplier: (boosted ? 0.5 : 1) * randomSizeMultiplier,
+    baseRandomSizeMultiplier: randomSizeMultiplier,
+    sizeMultiplier: (boosted ? CONFIG.windBoostSizeMultiplier : 1) * randomSizeMultiplier,
+    duneAlphaSignal: 0,
     interactedUntilMs: 0,
     interactionDirX: 0,
     interactionDirY: 0,
@@ -1399,16 +1646,58 @@ function createParticle(x, y, ignoresBoxCollision = false) {
   };
 }
 
-function updateBoxes() {
+function syncParticleDisplayState(particle, x = particle.pos.x, y = particle.pos.y) {
+  particle.prevX = x;
+  particle.prevY = y;
+  particle.displayX = x;
+  particle.displayY = y;
+}
+
+function getInterpolatedParticlePosition(particle) {
+  return {
+    x: lerp(particle.prevX, particle.pos.x, simRenderAlpha),
+    y: lerp(particle.prevY, particle.pos.y, simRenderAlpha),
+  };
+}
+
+function getInterpolatedBoxPosition(box) {
+  return {
+    x: lerp(box.prevX, box.x, simRenderAlpha),
+    y: lerp(box.prevY, box.y, simRenderAlpha),
+  };
+}
+
+function clampRenderedSegment(fromX, fromY, toX, toY, maxLen = MAX_RENDER_SEGMENT_LENGTH_PX) {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const lenSq = dx * dx + dy * dy;
+  const maxLenSq = maxLen * maxLen;
+  if (lenSq <= maxLenSq || lenSq <= 1e-9) {
+    return { fromX, fromY, toX, toY };
+  }
+  const len = sqrt(lenSq);
+  const scale = maxLen / len;
+  return {
+    fromX,
+    fromY,
+    toX: fromX + dx * scale,
+    toY: fromY + dy * scale,
+  };
+}
+
+function updateBoxes(dtFrames = 1) {
   if (externalBoxSyncEnabled) {
     return;
   }
 
+  const decay = pow(CONFIG.boxVelocityDecay, max(0, dtFrames));
   for (let i = 0; i < boxes.length; i++) {
     const box = boxes[i];
+    box.prevX = box.x;
+    box.prevY = box.y;
     if (i !== draggedBoxIndex) {
-      box.vx *= CONFIG.boxVelocityDecay;
-      box.vy *= CONFIG.boxVelocityDecay;
+      box.vx *= decay;
+      box.vy *= decay;
     }
 
     if (box.vx * box.vx + box.vy * box.vy < CONFIG.boxStationarySpeedThreshold * CONFIG.boxStationarySpeedThreshold) {
@@ -1437,11 +1726,85 @@ function updateActiveBoxes() {
     }
     activeBoxes.push(box);
   }
+
+  rebuildActiveBoxSpatialGrid();
 }
 
-function updateParticles(nowMs = millis(), tickIndex = frameCount, allowSeparation = true) {
+function getBoxSpatialCellSize() {
+  return max(
+    24,
+    ceil(max(
+      CONFIG.separationNearBoxRadius,
+      CONFIG.boxForceMaxRadius,
+      CONFIG.surfaceSlideBand * CONFIG.particleSize * 2
+    ) * 2)
+  );
+}
+
+function rebuildActiveBoxSpatialGrid() {
+  boxSpatialGrid.clear();
+  const cellSize = getBoxSpatialCellSize();
+  const inverseCellSize = 1 / cellSize;
+  const broadphasePad = max(
+    CONFIG.separationNearBoxRadius,
+    CONFIG.boxForceMaxRadius,
+    CONFIG.surfaceSlideBand * CONFIG.particleSize
+  );
+
+  for (let i = 0; i < activeBoxes.length; i++) {
+    const box = activeBoxes[i];
+    const minCellX = floor((box.x - broadphasePad) * inverseCellSize);
+    const maxCellX = floor((box.x + box.w + broadphasePad) * inverseCellSize);
+    const minCellY = floor((box.y - broadphasePad) * inverseCellSize);
+    const maxCellY = floor((box.y + box.h + broadphasePad) * inverseCellSize);
+
+    for (let cy = minCellY; cy <= maxCellY; cy++) {
+      for (let cx = minCellX; cx <= maxCellX; cx++) {
+        const key = getCellKey(cx, cy);
+        let bucket = boxSpatialGrid.get(key);
+        if (!bucket) {
+          bucket = [];
+          boxSpatialGrid.set(key, bucket);
+        }
+        bucket.push(box);
+      }
+    }
+  }
+}
+
+function getNearbyBoxesForPoint(px, py) {
+  nearbyBoxesScratch.length = 0;
+  if (activeBoxes.length === 0) {
+    return nearbyBoxesScratch;
+  }
+
+  const cellSize = getBoxSpatialCellSize();
+  const inverseCellSize = 1 / cellSize;
+  const cx = floor(px * inverseCellSize);
+  const cy = floor(py * inverseCellSize);
+  nearbyBoxesQueryId += 1;
+
+  for (let oy = -1; oy <= 1; oy++) {
+    for (let ox = -1; ox <= 1; ox++) {
+      const bucket = boxSpatialGrid.get(getCellKey(cx + ox, cy + oy));
+      if (!bucket) continue;
+      for (let i = 0; i < bucket.length; i++) {
+        const box = bucket[i];
+        if (box._nearbyQueryId === nearbyBoxesQueryId) continue;
+        box._nearbyQueryId = nearbyBoxesQueryId;
+        nearbyBoxesScratch.push(box);
+      }
+    }
+  }
+
+  return nearbyBoxesScratch;
+}
+
+function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSeparation = true, dtFrames = 1) {
   const frameCache = buildFrameCache(nowMs);
   const useAmbient = CONFIG.enableAmbientMotion;
+  const safeDtFrames = max(0, dtFrames);
+  const damping = pow(CONFIG.damping, safeDtFrames);
   for (let i = 0; i < particles.length; i++) {
     const particle = particles[i];
     particle.prevX = particle.pos.x;
@@ -1456,32 +1819,35 @@ function updateParticles(nowMs = millis(), tickIndex = frameCount, allowSeparati
         frameCache,
         particle.turbulenceBoostMultiplier
       );
-      const exposure = particle.ignoresBoxCollision
-        ? 1
-        : getWindExposureMultiplierXY(particle.pos.x, particle.pos.y, frameCache);
-      accX += ambient.x * exposure * particle.windBoostMultiplier;
-      accY += ambient.y * exposure * particle.windBoostMultiplier;
+      accX += ambient.x * particle.windBoostMultiplier;
+      accY += ambient.y * particle.windBoostMultiplier;
+      particle.duneAlphaSignal = ambient.duneSignal;
+    } else {
+      particle.duneAlphaSignal = 0;
     }
 
     if (!particle.ignoresBoxCollision) {
-      for (let j = 0; j < activeBoxes.length; j++) {
-        const boxForce = applyBoxInfluence(particle, activeBoxes[j], nowMs);
+      const nearbyBoxes = getNearbyBoxesForPoint(particle.pos.x, particle.pos.y);
+      for (let j = 0; j < nearbyBoxes.length; j++) {
+        const boxForce = applyBoxInfluence(particle, nearbyBoxes[j], nowMs);
         accX += boxForce.x;
         accY += boxForce.y;
       }
     }
 
-    particle.vel.x += accX;
-    particle.vel.y += accY;
-    particle.vel.mult(CONFIG.damping);
+    particle.vel.x += accX * safeDtFrames;
+    particle.vel.y += accY * safeDtFrames;
+    particle.vel.mult(damping);
     particle.vel.limit(CONFIG.maxSpeed);
-    particle.pos.add(particle.vel);
+    particle.pos.x += particle.vel.x * safeDtFrames;
+    particle.pos.y += particle.vel.y * safeDtFrames;
 
     // Strict occupancy: particles are not allowed to remain inside boxes.
     if (!particle.ignoresBoxCollision) {
-      for (let j = 0; j < activeBoxes.length; j++) {
-        resolveParticleBoxContainment(particle, activeBoxes[j]);
-        resolveParticleSurfaceSlide(particle, activeBoxes[j]);
+      const nearbyBoxes = getNearbyBoxesForPoint(particle.pos.x, particle.pos.y);
+      for (let j = 0; j < nearbyBoxes.length; j++) {
+        resolveParticleBoxContainment(particle, nearbyBoxes[j]);
+        resolveParticleSurfaceSlide(particle, nearbyBoxes[j]);
       }
     }
 
@@ -1494,7 +1860,7 @@ function updateParticles(nowMs = millis(), tickIndex = frameCount, allowSeparati
     CONFIG.enableParticleSeparation &&
     tickIndex % getCurrentSeparationCadence() === 0
   ) {
-    resolveParticleSeparation(nowMs);
+    resolveParticleSeparation(nowMs, tickIndex);
     // Separation can nudge particles into colliders; clamp them back out immediately.
     enforceAllParticleBoxContainment();
   }
@@ -1505,28 +1871,37 @@ function updateAdaptiveSeparationCadence(nowMs) {
   if (!CONFIG.enableAdaptiveSeparationCadence) {
     dynamicSeparationEveryNFrames = baseCadence;
     lastDrawTimeMs = nowMs;
+    lastSeparationCadenceAdjustMs = nowMs;
     return;
   }
 
   if (lastDrawTimeMs <= 0) {
     dynamicSeparationEveryNFrames = baseCadence;
     lastDrawTimeMs = nowMs;
+    lastSeparationCadenceAdjustMs = nowMs;
     return;
   }
 
   const frameMs = nowMs - lastDrawTimeMs;
   lastDrawTimeMs = nowMs;
-  const target = max(1, CONFIG.adaptiveTargetFrameMs);
   const maxCadence = max(baseCadence, floor(CONFIG.adaptiveCadenceMax));
 
-  if (frameMs > target * 1.05) {
-    dynamicSeparationEveryNFrames = min(maxCadence, dynamicSeparationEveryNFrames + 1);
-  } else if (frameMs < target * 0.9) {
-    dynamicSeparationEveryNFrames = max(
-      baseCadence,
-      dynamicSeparationEveryNFrames - CONFIG.adaptiveCadenceRecovery
-    );
+  if (nowMs - lastSeparationCadenceAdjustMs < 240) {
+    return;
   }
+  lastSeparationCadenceAdjustMs = nowMs;
+
+  const target = max(1, CONFIG.adaptiveTargetFrameMs);
+  const avgFrameMs = qualityState.avgFrameMs;
+  const currentCadence = max(1, Math.round(dynamicSeparationEveryNFrames));
+  let nextCadence = currentCadence;
+
+  if (avgFrameMs > target * 1.1) {
+    nextCadence = min(maxCadence, currentCadence + 1);
+  } else if (avgFrameMs < target * 0.9) {
+    nextCadence = max(baseCadence, currentCadence - 1);
+  }
+  dynamicSeparationEveryNFrames = nextCadence;
 }
 
 function getCurrentSeparationCadence() {
@@ -1536,22 +1911,11 @@ function getCurrentSeparationCadence() {
   return max(1, floor(dynamicSeparationEveryNFrames));
 }
 
-function runPrewarmSimulation() {
-  const steps = max(0, floor(CONFIG.prewarmSteps));
-  const dt = max(1, floor(CONFIG.prewarmTimeStepMs));
-  const startMs = millis();
-
-  for (let i = 0; i < steps; i++) {
-    const simTimeMs = startMs + i * dt;
-    updateParticles(simTimeMs, i, CONFIG.prewarmEnableSeparation);
-  }
-}
-
 function getCellKey(cx, cy) {
   return (cx + CELL_KEY_OFFSET) * CELL_KEY_STRIDE + (cy + CELL_KEY_OFFSET);
 }
 
-function resolveParticleSeparation(nowMs) {
+function resolveParticleSeparation(nowMs, tickIndex = simStepCount) {
   const cellSize = CONFIG.particleCollisionRadius * 2;
   if (cellSize <= 0) return;
   const invCellSize = 1 / cellSize;
@@ -1609,7 +1973,7 @@ function resolveParticleSeparation(nowMs) {
             i * 1315423911 +
             (cx + ox) * 92821 +
             (cy + oy) * 68917 +
-            frameCount;
+            tickIndex;
           k = ((hash % bucketLen) + bucketLen) % bucketLen;
         }
 
@@ -1681,8 +2045,9 @@ function isParticleSeparationActive(particle, nowMs) {
     return true;
   }
 
-  for (let i = 0; i < activeBoxes.length; i++) {
-    if (isNearBox(particle.pos.x, particle.pos.y, activeBoxes[i], CONFIG.separationNearBoxRadius)) {
+  const nearbyBoxes = getNearbyBoxesForPoint(particle.pos.x, particle.pos.y);
+  for (let i = 0; i < nearbyBoxes.length; i++) {
+    if (isNearBox(particle.pos.x, particle.pos.y, nearbyBoxes[i], CONFIG.separationNearBoxRadius)) {
       return true;
     }
   }
@@ -1711,14 +2076,6 @@ function buildFrameCache(nowMs) {
   const t = nowMs * 0.001;
   const driftPixels = t * CONFIG.duneDriftSpeed * 240;
 
-  const rot = radians(CONFIG.windShadowRotationDeg);
-  const c = cos(rot);
-  const s = sin(rot);
-  const shadowDirX = windDirX * c - windDirY * s;
-  const shadowDirY = windDirX * s + windDirY * c;
-  const shadowPerpX = -shadowDirY;
-  const shadowPerpY = shadowDirX;
-
   return {
     nowMs,
     windDirX,
@@ -1729,11 +2086,8 @@ function buildFrameCache(nowMs) {
     duneDirY,
     dunePerpX,
     dunePerpY,
+    duneBandOffsetPx: CONFIG.duneBandOffsetPx,
     driftPixels,
-    shadowDirX,
-    shadowDirY,
-    shadowPerpX,
-    shadowPerpY,
   };
 }
 
@@ -1741,13 +2095,18 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
   const sampleX = px - frameCache.windDirX * frameCache.driftPixels;
   const sampleY = py - frameCache.windDirY * frameCache.driftPixels;
   const along = sampleX * frameCache.duneDirX + sampleY * frameCache.duneDirY;
-  const across = sampleX * frameCache.dunePerpX + sampleY * frameCache.dunePerpY;
+  const across =
+    sampleX * frameCache.dunePerpX +
+    sampleY * frameCache.dunePerpY +
+    frameCache.duneBandOffsetPx;
 
   const warpedAcross =
     across / CONFIG.duneBandScale +
     sin(along / CONFIG.duneAlongWarpScale) * CONFIG.duneWarpStrength;
   const ridge01 = (sin(warpedAcross) + 1) * 0.5;
-  const duneMultiplier = 0.25 + 0.95 * pow(ridge01, CONFIG.duneContrast);
+  const duneMultiplier = CONFIG.enableDuneBands
+    ? 0.25 + 0.95 * pow(ridge01, CONFIG.duneContrast)
+    : 1;
   const windAmp = CONFIG.ambientWindStrength * duneMultiplier;
 
   const n = noise(
@@ -1759,60 +2118,7 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
   return {
     x: frameCache.windDirX * windAmp + frameCache.windPerpX * microAmp,
     y: frameCache.windDirY * windAmp + frameCache.windPerpY * microAmp,
-  };
-}
-
-function getWindExposureMultiplierXY(px, py, frameCache) {
-  if (!getQualityValue('enableWindShadow')) return 1;
-
-  let maxReduction = 0;
-  for (let i = 0; i < activeBoxes.length; i++) {
-    const reduction = computeWindShadowReductionXY(px, py, activeBoxes[i], frameCache);
-    if (reduction > maxReduction) maxReduction = reduction;
-  }
-  return constrain(1 - maxReduction, 0, 1);
-}
-
-function computeWindShadowReductionXY(px, py, box, frameCache) {
-  const center = getWindShadowCenterXY(box, frameCache);
-  const relX = px - center.x;
-  const relY = py - center.y;
-
-  const along = relX * frameCache.shadowDirX + relY * frameCache.shadowDirY;
-  const halfAlong =
-    abs(frameCache.shadowDirX) * box.w * 0.5 +
-    abs(frameCache.shadowDirY) * box.h * 0.5;
-  const downwindDist = along - halfAlong;
-  if (downwindDist <= 0 || downwindDist > CONFIG.windShadowLength) return 0;
-
-  const lateral = abs(relX * frameCache.shadowPerpX + relY * frameCache.shadowPerpY);
-  const halfLateral =
-    abs(frameCache.shadowPerpX) * box.w * 0.5 +
-    abs(frameCache.shadowPerpY) * box.h * 0.5;
-  const shadowHalfWidth = halfLateral + CONFIG.windShadowWidthGrowth * downwindDist;
-  if (lateral > shadowHalfWidth || shadowHalfWidth <= 0) return 0;
-
-  const alongFalloff = 1 - downwindDist / CONFIG.windShadowLength;
-  const lateralFalloff = 1 - lateral / shadowHalfWidth;
-  return constrain(
-    CONFIG.windShadowStrength * alongFalloff * lateralFalloff,
-    0,
-    0.98
-  );
-}
-
-function getWindShadowCenterXY(box, frameCache) {
-  const cx = box.x + box.w * 0.5;
-  const cy = box.y + box.h * 0.5;
-  return {
-    x:
-      cx +
-      frameCache.shadowDirX * CONFIG.windShadowOffsetAlong +
-      frameCache.shadowPerpX * CONFIG.windShadowOffsetLateral,
-    y:
-      cy +
-      frameCache.shadowDirY * CONFIG.windShadowOffsetAlong +
-      frameCache.shadowPerpY * CONFIG.windShadowOffsetLateral,
+    duneSignal: constrain((duneMultiplier - 0.25) / 0.95, 0, 1),
   };
 }
 
@@ -1833,13 +2139,17 @@ function sampleDuneMultiplierAt(x, y, nowMs) {
   const sampleX = x - dirX * driftPixels;
   const sampleY = y - dirY * driftPixels;
   const along = sampleX * duneDirX + sampleY * duneDirY;
-  const across = sampleX * dunePerpX + sampleY * dunePerpY;
+  const across = sampleX * dunePerpX + sampleY * dunePerpY + CONFIG.duneBandOffsetPx;
 
   const warpedAcross =
     across / CONFIG.duneBandScale +
     sin(along / CONFIG.duneAlongWarpScale) * CONFIG.duneWarpStrength;
   const ridgeWave = sin(warpedAcross);
   const ridge01 = (ridgeWave + 1) * 0.5;
+  if (!CONFIG.enableDuneBands) {
+    return 1;
+  }
+
   return 0.25 + 0.95 * pow(ridge01, CONFIG.duneContrast);
 }
 
@@ -2038,9 +2348,10 @@ function resolveParticleBoxContainment(particle, box) {
 function enforceAllParticleBoxContainment() {
   for (let i = 0; i < particles.length; i++) {
     if (particles[i].ignoresBoxCollision) continue;
-    for (let j = 0; j < activeBoxes.length; j++) {
-      resolveParticleBoxContainment(particles[i], activeBoxes[j]);
-      resolveParticleSurfaceSlide(particles[i], activeBoxes[j]);
+    const nearbyBoxes = getNearbyBoxesForPoint(particles[i].pos.x, particles[i].pos.y);
+    for (let j = 0; j < nearbyBoxes.length; j++) {
+      resolveParticleBoxContainment(particles[i], nearbyBoxes[j]);
+      resolveParticleSurfaceSlide(particles[i], nearbyBoxes[j]);
     }
   }
 }
@@ -2178,8 +2489,7 @@ function resolveParticleBounds(particle, nowMs = millis()) {
   }
 
   if (wrapped) {
-    particle.prevX = p.x;
-    particle.prevY = p.y;
+    syncParticleDisplayState(particle, p.x, p.y);
   }
 }
 
@@ -2190,127 +2500,183 @@ function resetParticleInteractionState(particle) {
   particle.interactionSpeed = 0;
 }
 
+function isWavePointBlocked(px, py, gap = 0) {
+  const nearbyBoxes = getNearbyBoxesForPoint(px, py);
+  for (let i = 0; i < nearbyBoxes.length; i++) {
+    const box = nearbyBoxes[i];
+    if (
+      px >= box.x - gap &&
+      px <= box.x + box.w + gap &&
+      py >= box.y - gap &&
+      py <= box.y + box.h + gap
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function renderWaves(nowMs = simTimeMs) {
+  const baseR = RENDER_COLORS.particles[0];
+  const baseG = RENDER_COLORS.particles[1];
+  const baseB = RENDER_COLORS.particles[2];
+  const baseA = getCurrentParticleAlpha();
+  const renderFraction = constrain(getQualityValue('particleRenderFraction'), 0.01, 1);
+  const rowCount = max(4, floor(CONFIG.waveLineCount * lerp(0.45, 1, renderFraction)));
+  const pointStep = max(4, floor(CONFIG.wavePointStep / max(0.5, renderFraction)));
+  const spacing = height / (rowCount + 1);
+  const frameCache = buildFrameCache(nowMs);
+  const boxGap = max(0, CONFIG.waveBoxGap * currentRenderScale);
+  const strokeBase = max(0.2, CONFIG.waveStrokeWeight);
+  const fieldInfluence = CONFIG.waveFieldInfluence * currentRenderScale;
+  const timePhase = nowMs * 0.001 * CONFIG.waveDriftMultiplier;
+  const lineAlphaBase = baseA * lerp(0.55, 1, renderFraction);
+
+  noFill();
+  strokeCap(ROUND);
+
+  for (let row = 0; row < rowCount; row++) {
+    const baseY = spacing * (row + 1);
+    const rowPhase = row * 0.63 + timePhase;
+    let prev = null;
+
+    for (let x = -pointStep; x <= width + pointStep; x += pointStep) {
+      const ambient = sampleDuneWindForceXY(x, baseY, frameCache, 1);
+      const duneSignal = constrain(ambient.duneSignal || 0, 0, 1);
+      const localAmp = CONFIG.waveAmplitude * currentRenderScale * (0.45 + 0.55 * duneSignal);
+      const wavePhase =
+        rowPhase +
+        x / max(24, CONFIG.duneBandScale * 0.55) +
+        baseY / max(30, CONFIG.duneAlongWarpScale * 0.7);
+      const sampleX = x + ambient.x * fieldInfluence * 0.25;
+      const sampleY = baseY + sin(wavePhase) * localAmp + ambient.y * fieldInfluence;
+      const blocked = isWavePointBlocked(sampleX, sampleY, boxGap);
+
+      if (blocked) {
+        prev = null;
+        continue;
+      }
+
+      const point = {
+        x: sampleX,
+        y: sampleY,
+        duneSignal,
+      };
+
+      if (prev) {
+        const segmentAlpha = constrain(
+          lineAlphaBase * (1 + CONFIG.waveDuneAlphaBoost * point.duneSignal),
+          0,
+          255
+        );
+        stroke(baseR, baseG, baseB, segmentAlpha);
+        strokeWeight(strokeBase * (0.8 + 0.35 * point.duneSignal));
+        line(prev.x, prev.y, point.x, point.y);
+      }
+
+      prev = point;
+    }
+  }
+
+  noStroke();
+}
+
 function renderParticles() {
   const baseR = RENDER_COLORS.particles[0];
   const baseG = RENDER_COLORS.particles[1];
   const baseB = RENDER_COLORS.particles[2];
-  const baseA = RENDER_COLORS.particles.length > 3 ? RENDER_COLORS.particles[3] : 255;
+  const baseA = getCurrentParticleAlpha();
+  const fastLightnessShift = constrain(CONFIG.windBoostLightnessShift, -1, 1);
   const minSpeed = max(0, getQualityValue('particleRenderMinSpeed'));
   const minSpeedRamp = max(0.02, minSpeed * 0.7);
   const alphaBoost = max(0, CONFIG.particleSpeedAlphaBoost);
+  const duneAlphaBoost = max(0, CONFIG.particleDuneAlphaBoost);
+  const duneSizeBoost = max(0, CONFIG.particleDuneSizeBoost);
   const widthBoost = max(0, CONFIG.particleSpeedWidthBoost);
   const renderFraction = constrain(getQualityValue('particleRenderFraction'), 0.01, 1);
   const tailAlphaWeight = renderFraction;
   const tailWidthWeight = max(0.2, sqrt(renderFraction));
   const particleCount = particles.length;
-  noFill();
-  strokeCap(ROUND);
-  for (let i = 0; i < particleCount; i++) {
-    const p = particles[i];
+  const renderParticleAt = (p, i) => {
     const speed = sqrt(p.vel.x * p.vel.x + p.vel.y * p.vel.y);
+    const interpolatedPos = getInterpolatedParticlePosition(p);
     if (speed < minSpeed) {
-      continue;
+      p.displayX = interpolatedPos.x;
+      p.displayY = interpolatedPos.y;
+      return;
     }
     const minSpeedAlphaRamp = constrain((speed - minSpeed) / minSpeedRamp, 0, 1);
     const t = particleCount > 1 ? i / (particleCount - 1) : 0;
     const renderAlphaWeight = lerp(1, tailAlphaWeight, t);
     const renderWidthWeight = lerp(1, tailWidthWeight, t);
     const speedFactor = 1 + speed;
+    const duneSignal = constrain(p.duneAlphaSignal || 0, 0, 1);
+    const duneAlphaFactor = 1 + duneAlphaBoost * duneSignal;
+    const duneSizeFactor = 1 + duneSizeBoost * duneSignal;
+    const fastAlphaAdd = p.isBoosted ? max(0, CONFIG.windBoostAlphaMultiplier) : 0;
+    const renderColor = p.isBoosted
+      ? applyLightnessShiftToRgb(baseR, baseG, baseB, fastLightnessShift)
+      : { r: baseR, g: baseG, b: baseB };
     const alpha = constrain(
-      baseA * renderAlphaWeight * minSpeedAlphaRamp * (1 + alphaBoost * (speedFactor - 1)),
+      baseA * renderAlphaWeight * minSpeedAlphaRamp * (1 + alphaBoost * (speedFactor - 1)) * duneAlphaFactor + fastAlphaAdd,
       0,
       255
     );
-    stroke(baseR, baseG, baseB, alpha);
+    stroke(renderColor.r, renderColor.g, renderColor.b, alpha);
     strokeWeight(
       Math.max(
         0.5,
         CONFIG.particleSize *
         p.sizeMultiplier *
         renderWidthWeight *
-        (1 + widthBoost * (speedFactor - 1))
+        (1 + widthBoost * (speedFactor - 1)) *
+        duneSizeFactor
       )
     );
-    line(p.prevX, p.prevY, p.pos.x, p.pos.y);
+    const segment = clampRenderedSegment(
+      p.displayX,
+      p.displayY,
+      interpolatedPos.x,
+      interpolatedPos.y
+    );
+    line(segment.fromX, segment.fromY, segment.toX, segment.toY);
+    p.displayX = segment.toX;
+    p.displayY = segment.toY;
+  };
+  noFill();
+  strokeCap(ROUND);
+  for (let i = 0; i < particleCount; i++) {
+    const p = particles[i];
+    if (p.isBoosted) continue;
+    renderParticleAt(p, i);
+  }
+  for (let i = 0; i < particleCount; i++) {
+    const p = particles[i];
+    if (!p.isBoosted) continue;
+    renderParticleAt(p, i);
   }
   noStroke();
 }
 
 function renderBoxes() {
-  if (!CONFIG.showBoxes) return;
-  const shouldRenderWindShadow = getQualityValue('enableWindShadow') && CONFIG.showWindShadowZone;
-  let shadowDirX = 0;
-  let shadowDirY = 0;
-  if (shouldRenderWindShadow) {
-    const a = radians(CONFIG.windShadowRotationDeg);
-    const c = cos(a);
-    const s = sin(a);
-    shadowDirX = -0.70710678 * c - 0.70710678 * s;
-    shadowDirY = -0.70710678 * s + 0.70710678 * c;
+  if (!CONFIG.showBoxes) {
+    sourceFlowBoxes = [];
+    syncFlowBoxOverlay();
+    return;
   }
+  syncFlowBoxOverlay();
 
   for (let i = 0; i < activeBoxes.length; i++) {
     const box = activeBoxes[i];
-    const isDragged = boxes[draggedBoxIndex] === box;
-
-    if (shouldRenderWindShadow) {
-      drawWindShadowZone(box, shadowDirX, shadowDirY);
-    }
+    const displayBox = getInterpolatedBoxPosition(box);
 
     if (CONFIG.enableParticleSeparation && CONFIG.showSeparationZone) {
       const r = CONFIG.separationNearBoxRadius;
       noStroke();
       fill(...RENDER_COLORS.separationZone, CONFIG.separationZoneAlpha);
-      rect(box.x - r, box.y - r, box.w + r * 2, box.h + r * 2, 6);
+      rect(displayBox.x - r, displayBox.y - r, box.w + r * 2, box.h + r * 2, 6);
     }
-
-    noFill();
-    strokeWeight(isDragged ? 2.5 : 1.5);
-    stroke(...(isDragged ? RENDER_COLORS.boxStrokeDragged : RENDER_COLORS.boxStrokeIdle));
-    rect(box.x, box.y, box.w, box.h, 4);
-    noStroke();
   }
-}
-
-function drawWindShadowZone(box, shadowDirX, shadowDirY) {
-  const perpX = -shadowDirY;
-  const perpY = shadowDirX;
-  const centerX =
-    box.x +
-    box.w * 0.5 +
-    shadowDirX * CONFIG.windShadowOffsetAlong +
-    perpX * CONFIG.windShadowOffsetLateral;
-  const centerY =
-    box.y +
-    box.h * 0.5 +
-    shadowDirY * CONFIG.windShadowOffsetAlong +
-    perpY * CONFIG.windShadowOffsetLateral;
-  const halfAlong = abs(shadowDirX) * box.w * 0.5 + abs(shadowDirY) * box.h * 0.5;
-  const halfLateral = abs(perpX) * box.w * 0.5 + abs(perpY) * box.h * 0.5;
-
-  const startCenterX = centerX + shadowDirX * halfAlong;
-  const startCenterY = centerY + shadowDirY * halfAlong;
-  const endDist = CONFIG.windShadowLength;
-  const endCenterX = startCenterX + shadowDirX * endDist;
-  const endCenterY = startCenterY + shadowDirY * endDist;
-  const endHalfWidth = halfLateral + CONFIG.windShadowWidthGrowth * endDist;
-  const startLeftX = startCenterX + perpX * halfLateral;
-  const startLeftY = startCenterY + perpY * halfLateral;
-  const startRightX = startCenterX - perpX * halfLateral;
-  const startRightY = startCenterY - perpY * halfLateral;
-  const endLeftX = endCenterX + perpX * endHalfWidth;
-  const endLeftY = endCenterY + perpY * endHalfWidth;
-  const endRightX = endCenterX - perpX * endHalfWidth;
-  const endRightY = endCenterY - perpY * endHalfWidth;
-
-  noStroke();
-  fill(...RENDER_COLORS.windShadowZone, CONFIG.windShadowZoneAlpha);
-  beginShape();
-  vertex(startLeftX, startLeftY);
-  vertex(startRightX, startRightY);
-  vertex(endRightX, endRightY);
-  vertex(endLeftX, endLeftY);
-  endShape(CLOSE);
 }
 
 function mousePressed() {

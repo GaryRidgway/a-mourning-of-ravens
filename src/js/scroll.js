@@ -9,25 +9,48 @@ let reducedMotionMediaQuery = null;
 let scrollTickRafId = null;
 let refreshRingMetricsRafId = null;
 let flowBoxesSyncRafId = null;
+const glyphMeasureCanvas = document.createElement('canvas');
+const glyphMeasureCtx = glyphMeasureCanvas.getContext('2d');
 const flowParams = new URLSearchParams(window.location.search);
+let flowCollidersEnabled = (() => {
+    const raw = flowParams.get('enableWordColliders');
+    if (raw === null) return true;
+    return raw === '1';
+})();
 let flowWordBoxesEnabled = (() => {
     const raw = flowParams.get('wordBoxes');
     if (raw === null) return true;
     return raw === '1';
 })();
-let flowWordInsetXPercent = (() => {
+let flowWordInsetXPx = (() => {
     const raw = flowParams.get('wordInsetX') ?? flowParams.get('wordInset');
-    const parsed = raw === null ? 7.5 : parseFloat(raw);
-    if (!Number.isFinite(parsed)) return 7.5;
-    return Math.max(0, Math.min(20, parsed));
+    const parsed = raw === null ? 0 : parseFloat(raw);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, parsed);
 })();
-let flowWordInsetYPercent = (() => {
+let flowWordInsetYPx = (() => {
     const raw = flowParams.get('wordInsetY') ?? flowParams.get('wordInset');
-    const parsed = raw === null ? 20 : parseFloat(raw);
-    if (!Number.isFinite(parsed)) return 20;
-    return Math.max(0, Math.min(20, parsed));
+    const parsed = raw === null ? 0 : parseFloat(raw);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(0, parsed);
+})();
+let flowWordOffsetXPx = (() => {
+    const raw = flowParams.get('wordOffsetX');
+    const parsed = raw === null ? -0.5 : parseFloat(raw);
+    if (!Number.isFinite(parsed)) return -0.5;
+    return parsed;
+})();
+let flowWordOffsetYPx = (() => {
+    const raw = flowParams.get('wordOffsetY');
+    const parsed = raw === null ? 0 : parseFloat(raw);
+    if (!Number.isFinite(parsed)) return 0;
+    return parsed;
 })();
 
+window.__mournSetWordCollidersEnabled = function setWordCollidersEnabled(enabled) {
+    flowCollidersEnabled = !!enabled;
+    queueFlowFieldBoxSync();
+};
 window.__mournSetWordBoxes = function setWordBoxes(enabled) {
     flowWordBoxesEnabled = !!enabled;
     queueFlowFieldBoxSync();
@@ -37,8 +60,8 @@ window.__mournSetWordInsetPx = function setWordInsetPx(value) {
     if (!Number.isFinite(parsed)) {
         return;
     }
-    flowWordInsetXPercent = Math.max(0, Math.min(20, parsed));
-    flowWordInsetYPercent = Math.max(0, Math.min(20, parsed));
+    flowWordInsetXPx = Math.max(0, parsed);
+    flowWordInsetYPx = Math.max(0, parsed);
     queueFlowFieldBoxSync();
 };
 window.__mournSetWordInsetXPx = function setWordInsetXPx(value) {
@@ -46,7 +69,7 @@ window.__mournSetWordInsetXPx = function setWordInsetXPx(value) {
     if (!Number.isFinite(parsed)) {
         return;
     }
-    flowWordInsetXPercent = Math.max(0, Math.min(20, parsed));
+    flowWordInsetXPx = Math.max(0, parsed);
     queueFlowFieldBoxSync();
 };
 window.__mournSetWordInsetYPx = function setWordInsetYPx(value) {
@@ -54,7 +77,23 @@ window.__mournSetWordInsetYPx = function setWordInsetYPx(value) {
     if (!Number.isFinite(parsed)) {
         return;
     }
-    flowWordInsetYPercent = Math.max(0, Math.min(20, parsed));
+    flowWordInsetYPx = Math.max(0, parsed);
+    queueFlowFieldBoxSync();
+};
+window.__mournSetWordOffsetX = function setWordOffsetX(value) {
+    const parsed = parseFloat(value);
+    if (!Number.isFinite(parsed)) {
+        return;
+    }
+    flowWordOffsetXPx = parsed;
+    queueFlowFieldBoxSync();
+};
+window.__mournSetWordOffsetY = function setWordOffsetY(value) {
+    const parsed = parseFloat(value);
+    if (!Number.isFinite(parsed)) {
+        return;
+    }
+    flowWordOffsetYPx = parsed;
     queueFlowFieldBoxSync();
 };
 window.__mournSetAutoScrollPaused = function setAutoScrollPaused(paused) {
@@ -894,6 +933,10 @@ function syncFlowFieldBoxesFromPoem() {
     if (!mourn.trackers.anchor) {
         return;
     }
+    if (!flowCollidersEnabled) {
+        window.setFlowBoxes([]);
+        return;
+    }
 
     const stanzasToSync = getRenderedStanzas();
     stanzasToSync.sort((a, b) => {
@@ -931,23 +974,25 @@ function syncFlowFieldBoxesFromPoem() {
                 if (word.length === 0) {
                     return;
                 }
-                const bb = wordSpan.getBoundingClientRect();
+                const bb = getWordGlyphRect(wordSpan);
                 if (!isNearViewport(bb)) {
                     return;
                 }
                 const insetX = Math.min(
-                    bb.width * (flowWordInsetXPercent / 100),
+                    flowWordInsetXPx,
                     Math.max(0, (bb.width - 1) * 0.5)
                 );
                 const insetY = Math.min(
-                    bb.height * (flowWordInsetYPercent / 100),
+                    flowWordInsetYPx,
                     Math.max(0, (bb.height - 1) * 0.5)
                 );
+                const offsetX = flowWordOffsetXPx;
+                const offsetY = flowWordOffsetYPx;
                 const shrunkWidth = Math.max(1, bb.width - insetX * 2);
                 const shrunkHeight = Math.max(1, bb.height - insetY * 2);
                 flowBoxes.push({
-                    x: bb.left + insetX,
-                    y: bb.top + insetY,
+                    x: bb.left + insetX + offsetX,
+                    y: bb.top + insetY + offsetY,
                     w: shrunkWidth,
                     h: shrunkHeight,
                 });
@@ -964,4 +1009,111 @@ function syncFlowFieldBoxesFromPoem() {
     });
 
     window.setFlowBoxes(flowBoxes);
+}
+
+function getWordGlyphRect(wordSpan) {
+    const fallback = wordSpan.getBoundingClientRect();
+    const textNode = wordSpan.firstChild;
+    const text = textNode?.textContent ?? wordSpan.textContent;
+    if (!text || text.trim().length === 0) {
+        return fallback;
+    }
+
+    if (textNode?.nodeType === Node.TEXT_NODE && glyphMeasureCtx) {
+        const punctuationPattern = /[\s'"`,.;:!?()[\]{}\-]/;
+        const computed = window.getComputedStyle(wordSpan);
+        glyphMeasureCtx.font = buildCanvasFont(computed);
+        let minLeft = Infinity;
+        let minTop = Infinity;
+        let maxRight = -Infinity;
+        let maxBottom = -Infinity;
+        let foundGlyph = false;
+
+        for (let index = 0; index < text.length; index += 1) {
+            const char = text[index];
+            if (punctuationPattern.test(char)) {
+                continue;
+            }
+            const range = document.createRange();
+            range.setStart(textNode, index);
+            range.setEnd(textNode, index + 1);
+            const charBB = range.getBoundingClientRect();
+            const metrics = glyphMeasureCtx.measureText(char);
+            const metricsWidth = (metrics.actualBoundingBoxLeft || 0) + (metrics.actualBoundingBoxRight || 0);
+            const metricsHeight = (metrics.actualBoundingBoxAscent || 0) + (metrics.actualBoundingBoxDescent || 0);
+            if (
+                Number.isFinite(charBB.width) &&
+                Number.isFinite(charBB.height) &&
+                charBB.width > 0 &&
+                charBB.height > 0 &&
+                Number.isFinite(metricsWidth) &&
+                Number.isFinite(metricsHeight) &&
+                metricsWidth > 0 &&
+                metricsHeight > 0
+            ) {
+                const glyphLeft = charBB.left + Math.max(0, (charBB.width - metricsWidth) * 0.5);
+                const glyphTop = charBB.top + Math.max(0, (charBB.height - metricsHeight) * 0.5);
+                minLeft = Math.min(minLeft, glyphLeft);
+                minTop = Math.min(minTop, glyphTop);
+                maxRight = Math.max(maxRight, glyphLeft + metricsWidth);
+                maxBottom = Math.max(maxBottom, glyphTop + metricsHeight);
+                foundGlyph = true;
+            }
+        }
+
+        if (foundGlyph) {
+            return {
+                left: minLeft,
+                top: minTop,
+                right: maxRight,
+                bottom: maxBottom,
+                width: maxRight - minLeft,
+                height: maxBottom - minTop,
+                x: minLeft,
+                y: minTop,
+                toJSON() {
+                    return {
+                        left: minLeft,
+                        top: minTop,
+                        right: maxRight,
+                        bottom: maxBottom,
+                        width: maxRight - minLeft,
+                        height: maxBottom - minTop,
+                        x: minLeft,
+                        y: minTop,
+                    };
+                },
+            };
+        }
+    }
+
+    const range = document.createRange();
+    range.selectNodeContents(wordSpan);
+    const glyphBB = range.getBoundingClientRect();
+
+    if (
+        Number.isFinite(glyphBB.width) &&
+        Number.isFinite(glyphBB.height) &&
+        glyphBB.width > 0 &&
+        glyphBB.height > 0
+    ) {
+        return glyphBB;
+    }
+
+    return fallback;
+}
+
+function buildCanvasFont(computed) {
+    if (computed.font && computed.font !== '') {
+        return computed.font;
+    }
+    const style = computed.fontStyle || 'normal';
+    const variant = computed.fontVariant || 'normal';
+    const weight = computed.fontWeight || '400';
+    const stretch = computed.fontStretch && computed.fontStretch !== 'normal'
+        ? `${computed.fontStretch} `
+        : '';
+    const size = computed.fontSize || '16px';
+    const family = computed.fontFamily || 'serif';
+    return `${style} ${variant} ${weight} ${stretch}${size} ${family}`;
 }
