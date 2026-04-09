@@ -25,7 +25,8 @@
   <div id="poem-staging"></div>
   <div id="poem-container"></div>
     <aside id="dune-controls" class="controls">
-      <h3>Dune Controls</h3>
+      <details class="control-panel" open>
+      <summary>Dune Controls</summary>
 
       <details class="control-group" open>
         <summary>Particles</summary>
@@ -98,6 +99,76 @@
 
       </details>
 
+      <details class="control-group" open>
+        <summary>Hillshade</summary>
+
+        <label class="control-row">
+          <span>Sun Angle</span>
+          <input type="range" min="-180" max="180" step="1" data-key="hillshadeSunAngleDeg" />
+          <output data-value-for="hillshadeSunAngleDeg"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Sun Elevation</span>
+          <input type="range" min="1" max="89" step="1" data-key="hillshadeSunElevationDeg" />
+          <output data-value-for="hillshadeSunElevationDeg"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Ambient</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="hillshadeAmbient" />
+          <output data-value-for="hillshadeAmbient"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Normal Strength</span>
+          <input type="range" min="0.5" max="30" step="0.5" data-key="hillshadeNormalStrength" />
+          <output data-value-for="hillshadeNormalStrength"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Resolution Divisor</span>
+          <input type="range" min="1" max="12" step="1" data-key="hillshadeResolutionDivisor" />
+          <output data-value-for="hillshadeResolutionDivisor"></output>
+        </label>
+
+        <label class="control-row control-toggle">
+          <span>Poly Shade</span>
+          <input type="checkbox" data-key="usePolyShade" />
+        </label>
+
+        <label class="control-row">
+          <span>Grid Columns</span>
+          <input type="range" min="4" max="120" step="1" data-key="polyGridCols" />
+          <output data-value-for="polyGridCols"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Grid Rows</span>
+          <input type="range" min="4" max="80" step="1" data-key="polyGridRows" />
+          <output data-value-for="polyGridRows"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Vertex Jitter</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="polyJitter" />
+          <output data-value-for="polyJitter"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Edge Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-key="polyEdgeAlpha" />
+          <output data-value-for="polyEdgeAlpha"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Slope Contrast</span>
+          <input type="range" min="0.1" max="40" step="0.1" data-key="polySlopeContrast" />
+          <output data-value-for="polySlopeContrast"></output>
+        </label>
+
+      </details>
+
       <details class="control-group">
         <summary>Boosted Particles</summary>
 
@@ -147,6 +218,69 @@
           <span>Boosted Turbulence Max</span>
           <input type="range" min="1" max="30" step="0.1" data-key="windBoostTurbulenceMaxMultiplier" />
           <output data-value-for="windBoostTurbulenceMaxMultiplier"></output>
+        </label>
+      </details>
+
+      <details class="control-group">
+        <summary>Boid Flocking</summary>
+
+        <label class="control-row control-toggle">
+          <span>Enable Flocking</span>
+          <input type="checkbox" data-key="enableBoidFlocking" />
+        </label>
+
+        <label class="control-row">
+          <span>Neighbor Radius</span>
+          <input type="range" min="10" max="200" step="1" data-key="boidNeighborRadius" />
+          <output data-value-for="boidNeighborRadius"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Separation Radius</span>
+          <input type="range" min="2" max="100" step="1" data-key="boidSeparationRadius" />
+          <output data-value-for="boidSeparationRadius"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Separation Strength</span>
+          <input type="range" min="0" max="5" step="0.01" data-key="boidSeparationStrength" />
+          <output data-value-for="boidSeparationStrength"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Alignment Strength</span>
+          <input type="range" min="0" max="5" step="0.01" data-key="boidAlignmentStrength" />
+          <output data-value-for="boidAlignmentStrength"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Cohesion Strength</span>
+          <input type="range" min="0" max="5" step="0.01" data-key="boidCohesionStrength" />
+          <output data-value-for="boidCohesionStrength"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Max Steer Force</span>
+          <input type="range" min="0.001" max="1" step="0.001" data-key="boidMaxSteerForce" />
+          <output data-value-for="boidMaxSteerForce"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Wind Blend</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="boidWindBlend" />
+          <output data-value-for="boidWindBlend"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Max Group Size</span>
+          <input type="range" min="1" max="30" step="1" data-key="boidMaxGroupSize" />
+          <output data-value-for="boidMaxGroupSize"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Dispersal Strength</span>
+          <input type="range" min="0" max="5" step="0.01" data-key="boidDispersalStrength" />
+          <output data-value-for="boidDispersalStrength"></output>
         </label>
       </details>
 
@@ -231,6 +365,23 @@
           <output data-value-for="ambientWindStrength"></output>
         </label>
 
+        <label class="control-row">
+          <span>Micro Noise Scale</span>
+          <input type="range" min="40" max="1000" step="1" data-key="microNoiseScale" />
+          <output data-value-for="microNoiseScale"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Micro Turbulence</span>
+          <input type="range" min="0" max="0.1" step="0.001" data-key="microTurbulenceStrength" />
+          <output data-value-for="microTurbulenceStrength"></output>
+        </label>
+
+      </details>
+
+      <details class="control-group" open>
+        <summary>Dunes</summary>
+
         <label class="control-row control-angle-row">
           <span>Dune Band Angle</span>
           <input class="control-angle-input" type="range" min="-180" max="180" step="1" data-key="duneBandRotationDeg" />
@@ -275,18 +426,6 @@
         </label>
 
         <label class="control-row">
-          <span>Micro Noise Scale</span>
-          <input type="range" min="40" max="1000" step="1" data-key="microNoiseScale" />
-          <output data-value-for="microNoiseScale"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Micro Turbulence</span>
-          <input type="range" min="0" max="0.1" step="0.001" data-key="microTurbulenceStrength" />
-          <output data-value-for="microTurbulenceStrength"></output>
-        </label>
-
-        <label class="control-row">
           <span>Edge Respawn Base</span>
           <input type="range" min="0" max="0.5" step="0.01" data-key="edgeRespawnWeightBase" />
           <output data-value-for="edgeRespawnWeightBase"></output>
@@ -314,6 +453,7 @@
           <input type="range" min="0" max="100" step="1" data-key="edgeRespawnWeightedMixPercent" />
           <output data-value-for="edgeRespawnWeightedMixPercent"></output>
         </label>
+
       </details>
 
       <details class="control-group">
@@ -461,12 +601,113 @@
       </details>
 
       <details class="control-group">
+        <summary>Box Glow</summary>
+
+        <label class="control-row control-toggle">
+          <span>Enable Glow</span>
+          <input type="checkbox" data-key="enableBoxGlow" />
+        </label>
+
+        <label class="control-row">
+          <span>Glow Proximity</span>
+          <input type="range" min="1" max="60" step="1" data-key="boxGlowRadius" />
+          <output data-value-for="boxGlowRadius"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Core Diameter</span>
+          <input type="range" min="0.5" max="12" step="0.1" data-key="boxGlowCoreDiameter" />
+          <output data-value-for="boxGlowCoreDiameter"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Halo Size</span>
+          <input type="range" min="1" max="10" step="0.1" data-key="boxGlowHaloSize" />
+          <output data-value-for="boxGlowHaloSize"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Halo Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-key="boxGlowHaloAlpha" />
+          <output data-value-for="boxGlowHaloAlpha"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Core Blend</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="boxGlowCoreWhite" />
+          <output data-value-for="boxGlowCoreWhite"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Core Color</span>
+          <input type="color" data-color-key="boxGlowCore" />
+          <output data-color-value-for="boxGlowCore"></output>
+        </label>
+        <label class="control-row">
+          <span>Core Color Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxGlowCore" />
+          <output data-color-alpha-value-for="boxGlowCore"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Fade Delay (ms)</span>
+          <input type="range" min="0" max="2000" step="10" data-key="boxGlowFadeDelayMs" />
+          <output data-value-for="boxGlowFadeDelayMs"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Fade Duration (ms)</span>
+          <input type="range" min="0" max="3000" step="10" data-key="boxGlowFadeDurationMs" />
+          <output data-value-for="boxGlowFadeDurationMs"></output>
+        </label>
+      </details>
+
+      <details class="control-group">
+        <summary>Word Colliders</summary>
+
+        <label class="control-row control-toggle">
+          <span>Enable Colliders</span>
+          <input type="checkbox" id="word-collider-enabled" checked />
+        </label>
+
+        <label class="control-row control-toggle">
+          <span>Per-Word Boxes</span>
+          <input type="checkbox" id="word-boxes-enabled" checked />
+        </label>
+
+        <label class="control-row">
+          <span>Padding X (px)</span>
+          <input type="range" min="-100" max="100" step="1" value="0" id="word-inset-x" />
+          <output id="word-inset-x-out">0</output>
+        </label>
+
+        <label class="control-row">
+          <span>Padding Y (px)</span>
+          <input type="range" min="-100" max="100" step="1" value="0" id="word-inset-y" />
+          <output id="word-inset-y-out">0</output>
+        </label>
+
+        <label class="control-row">
+          <span>Offset X (px)</span>
+          <input type="range" min="-100" max="100" step="1" value="0" id="word-offset-x" />
+          <output id="word-offset-x-out">0</output>
+        </label>
+
+        <label class="control-row">
+          <span>Offset Y (px)</span>
+          <input type="range" min="-100" max="100" step="1" value="0" id="word-offset-y" />
+          <output id="word-offset-y-out">0</output>
+        </label>
+      </details>
+
+      <details class="control-group">
         <summary>Reset</summary>
 
         <div class="control-row">
           <span>Clear saved control cache and restore baked defaults.</span>
           <button type="button" id="reset-controls-button">Reset Defaults</button>
         </div>
+      </details>
       </details>
     </aside>
     <button id="simulation-pause-toggle" type="button" aria-pressed="false" title="Pause simulation">

@@ -6,8 +6,7 @@ body {
   min-width: 100vw;
   min-height: 100vh;
   overflow: hidden;
-  background: rgb(130, 0, 0);
-  background: radial-gradient(circle, rgb(130, 0, 0) 0%, rgb(98, 8, 8) 76%, rgb(64, 7, 7) 100%);
+  background: black;
   font-family: "Cinzel", serif;
 }
 
@@ -181,7 +180,8 @@ body {
   pointer-events: auto;
 }
 
-#dune-controls h3 {
+#dune-controls .control-panel > summary {
+  cursor: pointer;
   margin: 0 0 10px;
   font-size: 13px;
   letter-spacing: 0.04em;

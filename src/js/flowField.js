@@ -2,18 +2,29 @@
 
 const CONFIG = {
   particleCount: 5000,
-  enableAutoRenderScale: true,
+  enableAutoRenderScale: false,
   autoRenderScaleThresholdPx: 1080,
   particleSize: 0.25,
   particleSizeRandomNegative: 0,
   particleSizeRandomPositive: 0,
-  boxCollisionParticipantRatio: 0.2,
+  boxCollisionParticipantRatio: 1,
   particleRenderMinSpeed: 0,
   particleSpeedAlphaBoost: 4.28,
   particleDuneAlphaBoost: 0,
   particleDuneSizeBoost: 0,
   particleSpeedWidthBoost: 1.3,
   particleRenderFraction: 1,
+  hillshadeSunAngleDeg: 225,
+  hillshadeSunElevationDeg: 45,
+  hillshadeAmbient: 0.25,
+  hillshadeNormalStrength: 8,
+  hillshadeResolutionDivisor: 4,
+  usePolyShade: true,
+  polyGridCols: 30,
+  polyGridRows: 18,
+  polyJitter: 0.6,
+  polyEdgeAlpha: 0,
+  polySlopeContrast: 10,
   enableAmbientMotion: true,
   enableDuneBands: true,
   ambientWindDirectionDeg: 135,
@@ -29,19 +40,37 @@ const CONFIG = {
   microTurbulenceStrength: 0.014,
   windBoostParticleRatio: 0.02,
   windBoostSizeMultiplier: 0.5,
-  windBoostAlphaMultiplier: 1,
-  windBoostLightnessShift: 0,
+  windBoostAlphaMultiplier: 206,
+  windBoostLightnessShift: 0.57,
   windBoostMinMultiplier: 5,
   windBoostMaxMultiplier: 10,
   windBoostTurbulenceMinMultiplier: 4,
   windBoostTurbulenceMaxMultiplier: 8,
+  enableBoidFlocking: true,
+  boidNeighborRadius: 25,
+  boidSeparationRadius: 18,
+  boidSeparationStrength: 3.0,
+  boidAlignmentStrength: 1.2,
+  boidCohesionStrength: 0.4,
+  boidMaxSteerForce: 0.4,
+  boidWindBlend: 0.45,
+  boidMaxGroupSize: 4,
+  boidDispersalStrength: 2.5,
+  enableBoxGlow: true,
+  boxGlowRadius: 3,
+  boxGlowHaloSize: 4.8,
+  boxGlowHaloAlpha: 37,
+  boxGlowCoreWhite: 1,
+  boxGlowCoreDiameter: 1.4,
+  boxGlowFadeDelayMs: 380,
+  boxGlowFadeDurationMs: 2650,
   edgeRespawnWeightBase: 0.05,
   edgeRespawnWeightStrength: 0.45,
   edgeRespawnWeightExponent: 2,
   useWeightedEdgeRespawn: false,
   edgeRespawnWeightedMixPercent: 22,
   enableParticleSeparation: true,
-  particleCollisionRadius: 0.95,
+  particleCollisionRadius: 0.65,
   particleCollisionStrength: 0.64,
   particleCollisionVelocityDamp: 0.22,
   separationEveryNFrames: 4,
@@ -67,7 +96,7 @@ const CONFIG = {
   maxSpeed: 1.7,
   trailAlpha: 3,
   trailAlphaSecondary: 62,
-  backgroundFadeOscillationPeriodSec: 27.9,
+  backgroundFadeOscillationPeriodSec: 0,
   particleAlphaSecondary: 67,
   insidePushStrength: 0.7,
   collisionEjectPadding: 0.02,
@@ -89,7 +118,7 @@ const CONFIG = {
   showBoxes: true,
   showDebug: false,
   enableAdaptiveQuality: true,
-  lockQualityTier: true,
+  lockQualityTier: false,
   qualityTargetFps: 30,
   qualityDecisionWindowMs: 1200,
   qualityCooldownMs: 900,
@@ -98,16 +127,24 @@ const CONFIG = {
   pauseSimulation: false,
 };
 
+const CONFIG_DEFAULTS = Object.assign({}, CONFIG);
+
 const MAX_EFFECTIVE_DT_FRAMES = 1.75;
 const MAX_RENDER_SEGMENT_LENGTH_PX = 12;
 
 const RENDER_COLORS = {
   fade: [0, 0, 0],
-  particles: [255, 137, 0, 18],
+  particles: [71, 225, 81, 15],
   separationZone: [130, 175, 235],
-  boxStrokeIdle: [200, 200, 180, 0],
+  boxStrokeIdle: [200, 200, 180, 205],
   boxStrokeDragged: [250, 230, 190, 0],
+  boxGlowCore: [66, 183, 255, 255],
 };
+
+const RENDER_COLORS_DEFAULTS = {};
+for (const k in RENDER_COLORS) {
+  RENDER_COLORS_DEFAULTS[k] = RENDER_COLORS[k].slice();
+}
 
 const CONTROL_PARAM_DEFS = [
   { key: 'particleCount', type: 'number', digits: 0 },
@@ -123,6 +160,17 @@ const CONTROL_PARAM_DEFS = [
   { key: 'particleDuneSizeBoost', type: 'number', digits: 2 },
   { key: 'particleSpeedWidthBoost', type: 'number', digits: 2 },
   { key: 'particleRenderFraction', type: 'number', digits: 2 },
+  { key: 'hillshadeSunAngleDeg', type: 'number', digits: 0 },
+  { key: 'hillshadeSunElevationDeg', type: 'number', digits: 0 },
+  { key: 'hillshadeAmbient', type: 'number', digits: 2 },
+  { key: 'hillshadeNormalStrength', type: 'number', digits: 1 },
+  { key: 'hillshadeResolutionDivisor', type: 'number', digits: 0 },
+  { key: 'usePolyShade', type: 'bool' },
+  { key: 'polyGridCols', type: 'number', digits: 0 },
+  { key: 'polyGridRows', type: 'number', digits: 0 },
+  { key: 'polyJitter', type: 'number', digits: 2 },
+  { key: 'polyEdgeAlpha', type: 'number', digits: 0 },
+  { key: 'polySlopeContrast', type: 'number', digits: 1 },
   { key: 'enableAdaptiveQuality', type: 'bool' },
   { key: 'lockQualityTier', type: 'bool' },
   { key: 'qualityTargetFps', type: 'number', digits: 0 },
@@ -152,6 +200,24 @@ const CONTROL_PARAM_DEFS = [
   { key: 'windBoostMaxMultiplier', type: 'number', digits: 2 },
   { key: 'windBoostTurbulenceMinMultiplier', type: 'number', digits: 2 },
   { key: 'windBoostTurbulenceMaxMultiplier', type: 'number', digits: 2 },
+  { key: 'enableBoidFlocking', type: 'bool' },
+  { key: 'boidNeighborRadius', type: 'number', digits: 0 },
+  { key: 'boidSeparationRadius', type: 'number', digits: 0 },
+  { key: 'boidSeparationStrength', type: 'number', digits: 2 },
+  { key: 'boidAlignmentStrength', type: 'number', digits: 2 },
+  { key: 'boidCohesionStrength', type: 'number', digits: 2 },
+  { key: 'boidMaxSteerForce', type: 'number', digits: 3 },
+  { key: 'boidWindBlend', type: 'number', digits: 2 },
+  { key: 'boidMaxGroupSize', type: 'number', digits: 0 },
+  { key: 'boidDispersalStrength', type: 'number', digits: 2 },
+  { key: 'enableBoxGlow', type: 'bool' },
+  { key: 'boxGlowRadius', type: 'number', digits: 0 },
+  { key: 'boxGlowHaloSize', type: 'number', digits: 1 },
+  { key: 'boxGlowHaloAlpha', type: 'number', digits: 0 },
+  { key: 'boxGlowCoreWhite', type: 'number', digits: 2 },
+  { key: 'boxGlowCoreDiameter', type: 'number', digits: 1 },
+  { key: 'boxGlowFadeDelayMs', type: 'number', digits: 0 },
+  { key: 'boxGlowFadeDurationMs', type: 'number', digits: 0 },
   { key: 'edgeRespawnWeightBase', type: 'number', digits: 2 },
   { key: 'edgeRespawnWeightStrength', type: 'number', digits: 2 },
   { key: 'edgeRespawnWeightExponent', type: 'number', digits: 2 },
@@ -177,6 +243,7 @@ const COLOR_PARAM_DEFS = [
   { key: 'separationZone', param: 'colorSeparationZone' },
   { key: 'boxStrokeIdle', param: 'colorBoxStrokeIdle' },
   { key: 'boxStrokeDragged', param: 'colorBoxStrokeDragged' },
+  { key: 'boxGlowCore', param: 'colorBoxGlowCore' },
 ];
 
 const COLOR_ALPHA_PARAM_DEFS = [
@@ -187,6 +254,7 @@ const COLOR_ALPHA_PARAM_DEFS = [
   { key: 'separationZone', param: 'colorSeparationZoneAlpha', source: 'config', configKey: 'separationZoneAlpha', digits: 0 },
   { key: 'boxStrokeIdle', param: 'colorBoxStrokeIdleAlpha', source: 'render', digits: 0 },
   { key: 'boxStrokeDragged', param: 'colorBoxStrokeDraggedAlpha', source: 'render', digits: 0 },
+  { key: 'boxGlowCore', param: 'colorBoxGlowCoreAlpha', source: 'render', digits: 0 },
 ];
 
 const CONTROL_TOOLTIPS = {
@@ -199,6 +267,17 @@ const CONTROL_TOOLTIPS = {
   particleDuneSizeBoost: 'How strongly dune bands boost particle stroke size. Higher values make particles inside dune ridges thicker.',
   particleSpeedWidthBoost: 'How strongly faster particles get thicker strokes.',
   particleRenderFraction: 'Global streak density scaler. Lower values reduce accumulated ink while preserving continuity.',
+  hillshadeSunAngleDeg: 'Direction the light source comes from, in degrees (0 = right, 90 = down, 225 = upper-left).',
+  hillshadeSunElevationDeg: 'Sun elevation above the horizon in degrees. Lower values produce longer, more dramatic shadows.',
+  hillshadeAmbient: 'Minimum brightness in fully shadowed areas. 0 = pure black, 1 = no shading.',
+  hillshadeNormalStrength: 'Exaggerates slope steepness when computing surface normals. Higher values increase contrast.',
+  hillshadeResolutionDivisor: 'Offscreen buffer size = screen size divided by this. Higher = cheaper but softer.',
+  usePolyShade: 'When enabled, renders flat-shaded polygons instead of a smooth pixel hillshade.',
+  polyGridCols: 'Number of polygon columns across the canvas. Lower = larger, more visible facets.',
+  polyGridRows: 'Number of polygon rows down the canvas. Lower = larger, more visible facets.',
+  polyJitter: 'Randomly offsets interior vertices by this fraction of cell size. Higher values look more organic.',
+  polyEdgeAlpha: 'Alpha of the edge stroke drawn on polygon outlines. 0 disables edges.',
+  polySlopeContrast: 'Scales raw slope values before clamping. Higher values make slope-based size variation more aggressive.',
   particleCount: 'Maximum particle budget used by the simulation and adaptive particle count system.',
   boxCollisionParticipantRatio: 'Fraction of particles that participate in poem collider box interactions.',
   enableAutoRenderScale: 'Automatically caps the internal canvas size on very large screens, then CSS stretches it to fill the viewport.',
@@ -245,6 +324,24 @@ const CONTROL_TOOLTIPS = {
   windBoostMaxMultiplier: 'Maximum wind-force multiplier for boosted particles.',
   windBoostTurbulenceMinMultiplier: 'Minimum turbulence multiplier for boosted particles.',
   windBoostTurbulenceMaxMultiplier: 'Maximum turbulence multiplier for boosted particles.',
+  enableBoidFlocking: 'Enables boid flocking (separation, alignment, cohesion) for boosted particles.',
+  boidNeighborRadius: 'Perception radius for alignment and cohesion. Boosted particles within this distance are flock neighbors.',
+  boidSeparationRadius: 'Distance below which boosted particles repel each other to avoid crowding.',
+  boidSeparationStrength: 'How strongly boosted particles push apart when closer than the separation radius.',
+  boidAlignmentStrength: 'How strongly boosted particles steer to match the average heading of nearby flock members.',
+  boidCohesionStrength: 'How strongly boosted particles steer toward the center of mass of nearby flock members.',
+  boidMaxSteerForce: 'Caps the magnitude of each individual boid steering vector before combining them.',
+  boidWindBlend: 'Blends between boid forces (0) and wind/dune forces (1). 0.5 uses both equally.',
+  boidMaxGroupSize: 'Preferred max neighbors. When a boid has more neighbors than this, cohesion flips to dispersal.',
+  boidDispersalStrength: 'How strongly boids steer away from overcrowded groups.',
+  enableBoxGlow: 'Gives particles near collision boxes a glow — halo in base color, white-hot center.',
+  boxGlowRadius: 'How far from a box surface a particle can be and still glow. Intensity fades with distance.',
+  boxGlowHaloSize: 'Multiplier for the halo stroke width relative to the normal particle stroke.',
+  boxGlowHaloAlpha: 'Peak alpha of the halo glow at full intensity.',
+  boxGlowCoreWhite: 'How much the particle core shifts toward the core color at full glow. 0 = no shift, 1 = full core color.',
+  boxGlowCoreDiameter: 'Stroke diameter of the glowing core in pixels. Larger values make the core color more visible.',
+  boxGlowFadeDelayMs: 'How long a particle holds full glow after leaving the box surface, in milliseconds.',
+  boxGlowFadeDurationMs: 'How long the glow takes to fade out after the delay, in milliseconds.',
   boxForceMaxRadius: 'Maximum distance from a collider where box influence is allowed to affect particles.',
   surfaceSlideBand: 'Thickness of the near-surface band where particles are encouraged to slide along collider faces.',
   staticInfluenceForwardDotMin: 'Minimum forward alignment required before a moving box starts affecting nearby particles.',
@@ -258,6 +355,7 @@ const COLOR_CONTROL_TOOLTIPS = {
   separationZone: 'Debug color used for separation-zone visualization.',
   boxStrokeIdle: 'Outline color for collider boxes when idle.',
   boxStrokeDragged: 'Outline color for collider boxes while dragged.',
+  boxGlowCore: 'Color that particle cores blend toward when glowing near collision boxes.',
 };
 
 const COLOR_ALPHA_CONTROL_TOOLTIPS = {
@@ -268,6 +366,7 @@ const COLOR_ALPHA_CONTROL_TOOLTIPS = {
   separationZone: 'Opacity of the separation-zone debug overlay.',
   boxStrokeIdle: 'Opacity of idle collider box outlines.',
   boxStrokeDragged: 'Opacity of dragged collider box outlines.',
+  boxGlowCore: 'Opacity of the glow core color applied to particles near collision boxes.',
 };
 
 const particles = [];
@@ -285,6 +384,27 @@ const SIM_FIXED_STEP_MS = 1000 / 60;
 const SIM_MAX_FRAME_DELTA_MS = 250;
 const SIM_MAX_STEPS_PER_FRAME = 8;
 
+// Pre-allocated scratch objects to avoid per-particle-per-frame GC pressure.
+const _duneWindResult = { x: 0, y: 0, duneSignal: 0 };
+const _boxInfluenceResult = { x: 0, y: 0 };
+const _wakeSwirlResult = { x: 0, y: 0 };
+const _interpolatedPos = { x: 0, y: 0 };
+const _segmentResult = { fromX: 0, fromY: 0, toX: 0, toY: 0 };
+const _frameCacheScratch = {
+  nowMs: 0, windDirX: 0, windDirY: 0, windPerpX: 0, windPerpY: 0,
+  duneDirX: 0, duneDirY: 0, dunePerpX: 0, dunePerpY: 0,
+  duneBandOffsetPx: 0, driftPixels: 0,
+};
+const _interpolatedBoxPos = { x: 0, y: 0 };
+
+// Boid flocking spatial grid and scratch data for boosted particles.
+const boidGrid = new Map();
+const boidActiveIndices = [];
+const boidCellXs = [];
+const boidCellYs = [];
+const _boidSteer = { x: 0, y: 0 };
+
+let hillshadeBuffer = null;
 let draggedBoxIndex = -1;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
@@ -431,6 +551,7 @@ function applyRenderScale(nextScale) {
 
   resizeCanvas(nextW, nextH);
   currentRenderScale = safeScale;
+  hillshadeBuffer = createHillshadeBuffer(nextW, nextH);
 
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
@@ -552,36 +673,6 @@ function ensureQualityHud() {
     qualityState.hudEl = el;
   }
   qualityState.hudEl.style.display = 'block';
-}
-
-function detectRefreshRateFps(sampleCount = 45) {
-  return new Promise((resolve) => {
-    const deltas = [];
-    let prevTs = null;
-    let frames = 0;
-    const step = (ts) => {
-      if (prevTs !== null) {
-        const dt = ts - prevTs;
-        if (dt > 0 && dt < 40) {
-          deltas.push(dt);
-        }
-      }
-      prevTs = ts;
-      frames += 1;
-      if (frames >= sampleCount) {
-        if (deltas.length === 0) {
-          resolve(60);
-          return;
-        }
-        const sorted = deltas.slice().sort((a, b) => a - b);
-        const median = sorted[Math.floor(sorted.length * 0.5)];
-        resolve(constrain(Math.round(1000 / median), 30, 240));
-        return;
-      }
-      window.requestAnimationFrame(step);
-    };
-    window.requestAnimationFrame(step);
-  });
 }
 
 function applyQualityTargetFpsBounds(panel) {
@@ -774,7 +865,8 @@ class FlowBox {
 }
 
 function setup() {
-  frameRate(120);
+  frameRate(60);
+  detectedRefreshRateFps = 60;
   currentRenderScale = getActiveRenderScale();
   const canvas = createCanvas(
     max(1, floor(windowWidth * currentRenderScale)),
@@ -786,8 +878,18 @@ function setup() {
   }
   canvas.style('width', '100%');
   canvas.style('height', '100%');
+  hillshadeBuffer = createHillshadeBuffer(width, height);
   noStroke();
-  setupDuneControls();
+  const showDebugUI = new URLSearchParams(window.location.search).has('debug');
+  if (showDebugUI) {
+    setupDuneControls();
+  } else {
+    const panel = document.getElementById('dune-controls');
+    if (panel) panel.style.display = 'none';
+    const pauseBtn = document.getElementById('simulation-pause-toggle');
+    if (pauseBtn) pauseBtn.style.display = 'none';
+    CONFIG.qualityHudEnabled = false;
+  }
   initQualityManager();
   ensureQualityHud();
   ensureFlowBoxOverlay();
@@ -872,7 +974,7 @@ function draw() {
   simRenderAlpha = 1;
   updateParticles(nowMs, simStepCount, true, dtFrames);
   updateAdaptiveSeparationCadence(nowMs);
-  renderParticles();
+  renderParticles(dtFrames);
   renderBoxes();
 }
 
@@ -949,6 +1051,16 @@ function setupDuneControls() {
       updateControlOutput(def.key, CONFIG[def.key], def.digits);
     }
 
+    input.addEventListener('dblclick', () => {
+      const defaultVal = CONFIG_DEFAULTS[def.key];
+      if (def.type === 'bool') {
+        input.checked = Boolean(defaultVal);
+      } else {
+        input.value = String(defaultVal);
+      }
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
     input.addEventListener('input', () => {
       if (def.type === 'bool') {
         CONFIG[def.key] = input.checked;
@@ -986,6 +1098,9 @@ function setupDuneControls() {
         if (def.key === 'boxCollisionParticipantRatio') {
           syncParticleBoxCollisionParticipation();
         }
+        if (def.key === 'hillshadeResolutionDivisor') {
+          hillshadeBuffer = createHillshadeBuffer(width, height);
+        }
       }
       if (
         def.key === 'enableAutoRenderScale' ||
@@ -1014,11 +1129,9 @@ function setupDuneControls() {
   bindAngleControls(panel);
   bindPauseToggleButton();
   bindResetControlsButton();
+  bindWordColliderControls(panel);
   setupDetailsPersistence(panel);
-  detectRefreshRateFps().then((fps) => {
-    detectedRefreshRateFps = fps;
-    applyQualityTargetFpsBounds(panel);
-  });
+  applyQualityTargetFpsBounds(panel);
 }
 
 function bindAngleControls(panel) {
@@ -1142,6 +1255,76 @@ function bindPauseToggleButton() {
   });
 }
 
+function bindWordColliderControls(panel) {
+  const enabledInput = panel.querySelector('#word-collider-enabled');
+  const wordBoxesInput = panel.querySelector('#word-boxes-enabled');
+  const insetXInput = panel.querySelector('#word-inset-x');
+  const insetYInput = panel.querySelector('#word-inset-y');
+  const offsetXInput = panel.querySelector('#word-offset-x');
+  const offsetYInput = panel.querySelector('#word-offset-y');
+  const insetXOut = panel.querySelector('#word-inset-x-out');
+  const insetYOut = panel.querySelector('#word-inset-y-out');
+  const offsetXOut = panel.querySelector('#word-offset-x-out');
+  const offsetYOut = panel.querySelector('#word-offset-y-out');
+
+  if (enabledInput) {
+    enabledInput.addEventListener('change', () => {
+      if (typeof window.__mournSetWordCollidersEnabled === 'function') {
+        window.__mournSetWordCollidersEnabled(enabledInput.checked);
+      }
+    });
+  }
+  if (wordBoxesInput) {
+    wordBoxesInput.addEventListener('change', () => {
+      if (typeof window.__mournSetWordBoxes === 'function') {
+        window.__mournSetWordBoxes(wordBoxesInput.checked);
+      }
+    });
+  }
+  const wordColliderDefaults = { insetX: 0, insetY: 0, offsetX: 0, offsetY: 0 };
+  const resetWordSlider = (input, output, defaultVal) => {
+    input.value = String(defaultVal);
+    if (output) output.textContent = String(defaultVal);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  if (insetXInput) {
+    insetXInput.addEventListener('dblclick', () => resetWordSlider(insetXInput, insetXOut, wordColliderDefaults.insetX));
+    insetXInput.addEventListener('input', () => {
+      if (insetXOut) insetXOut.textContent = insetXInput.value;
+      if (typeof window.__mournSetWordInsetXPx === 'function') {
+        window.__mournSetWordInsetXPx(-Number(insetXInput.value));
+      }
+    });
+  }
+  if (insetYInput) {
+    insetYInput.addEventListener('dblclick', () => resetWordSlider(insetYInput, insetYOut, wordColliderDefaults.insetY));
+    insetYInput.addEventListener('input', () => {
+      if (insetYOut) insetYOut.textContent = insetYInput.value;
+      if (typeof window.__mournSetWordInsetYPx === 'function') {
+        window.__mournSetWordInsetYPx(-Number(insetYInput.value));
+      }
+    });
+  }
+  if (offsetXInput) {
+    offsetXInput.addEventListener('dblclick', () => resetWordSlider(offsetXInput, offsetXOut, wordColliderDefaults.offsetX));
+    offsetXInput.addEventListener('input', () => {
+      if (offsetXOut) offsetXOut.textContent = offsetXInput.value;
+      if (typeof window.__mournSetWordOffsetX === 'function') {
+        window.__mournSetWordOffsetX(offsetXInput.value);
+      }
+    });
+  }
+  if (offsetYInput) {
+    offsetYInput.addEventListener('dblclick', () => resetWordSlider(offsetYInput, offsetYOut, wordColliderDefaults.offsetY));
+    offsetYInput.addEventListener('input', () => {
+      if (offsetYOut) offsetYOut.textContent = offsetYInput.value;
+      if (typeof window.__mournSetWordOffsetY === 'function') {
+        window.__mournSetWordOffsetY(offsetYInput.value);
+      }
+    });
+  }
+}
+
 function bindResetControlsButton() {
   if (resetControlsBound) return;
   const button = document.getElementById('reset-controls-button');
@@ -1210,6 +1393,14 @@ function bindColorControls(panel) {
     input.value = rgbArrayToHex(RENDER_COLORS[def.key]);
     updateColorControlOutput(def.key);
 
+    input.addEventListener('dblclick', () => {
+      const defaultArr = RENDER_COLORS_DEFAULTS[def.key];
+      if (defaultArr) {
+        input.value = rgbArrayToHex(defaultArr);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+
     input.addEventListener('input', () => {
       applyHexToColorKey(def.key, input.value);
       updateColorControlOutput(def.key);
@@ -1227,6 +1418,18 @@ function bindColorAlphaControls(panel) {
     const initial = getColorAlpha(def);
     input.value = String(initial);
     updateColorAlphaControlOutput(def, initial);
+
+    input.addEventListener('dblclick', () => {
+      let defaultAlpha = 255;
+      if (def.source === 'config') {
+        defaultAlpha = CONFIG_DEFAULTS[def.configKey] ?? 255;
+      } else {
+        const arr = RENDER_COLORS_DEFAULTS[def.key];
+        defaultAlpha = (arr && arr.length > 3) ? arr[3] : 255;
+      }
+      input.value = String(defaultAlpha);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
 
     input.addEventListener('input', () => {
       const parsed = Number(input.value);
@@ -1612,6 +1815,11 @@ function createParticle(x, y, ignoresBoxCollision = false) {
     interactionAnchorX: x,
     interactionAnchorY: y,
     interactionSpeed: 0,
+    boidAccX: 0,
+    boidAccY: 0,
+    boxGlowIntensity: 0,
+    boxGlowPeakIntensity: 0,
+    boxGlowPeakMs: 0,
   };
 }
 
@@ -1623,17 +1831,15 @@ function syncParticleDisplayState(particle, x = particle.pos.x, y = particle.pos
 }
 
 function getInterpolatedParticlePosition(particle) {
-  return {
-    x: lerp(particle.prevX, particle.pos.x, simRenderAlpha),
-    y: lerp(particle.prevY, particle.pos.y, simRenderAlpha),
-  };
+  _interpolatedPos.x = lerp(particle.prevX, particle.pos.x, simRenderAlpha);
+  _interpolatedPos.y = lerp(particle.prevY, particle.pos.y, simRenderAlpha);
+  return _interpolatedPos;
 }
 
 function getInterpolatedBoxPosition(box) {
-  return {
-    x: lerp(box.prevX, box.x, simRenderAlpha),
-    y: lerp(box.prevY, box.y, simRenderAlpha),
-  };
+  _interpolatedBoxPos.x = lerp(box.prevX, box.x, simRenderAlpha);
+  _interpolatedBoxPos.y = lerp(box.prevY, box.y, simRenderAlpha);
+  return _interpolatedBoxPos;
 }
 
 function clampRenderedSegment(fromX, fromY, toX, toY, maxLen = MAX_RENDER_SEGMENT_LENGTH_PX) {
@@ -1641,17 +1847,17 @@ function clampRenderedSegment(fromX, fromY, toX, toY, maxLen = MAX_RENDER_SEGMEN
   const dy = toY - fromY;
   const lenSq = dx * dx + dy * dy;
   const maxLenSq = maxLen * maxLen;
+  _segmentResult.fromX = fromX;
+  _segmentResult.fromY = fromY;
   if (lenSq <= maxLenSq || lenSq <= 1e-9) {
-    return { fromX, fromY, toX, toY };
+    _segmentResult.toX = toX;
+    _segmentResult.toY = toY;
+  } else {
+    const scale = maxLen / sqrt(lenSq);
+    _segmentResult.toX = fromX + dx * scale;
+    _segmentResult.toY = fromY + dy * scale;
   }
-  const len = sqrt(lenSq);
-  const scale = maxLen / len;
-  return {
-    fromX,
-    fromY,
-    toX: fromX + dx * scale,
-    toY: fromY + dy * scale,
-  };
+  return _segmentResult;
 }
 
 function updateBoxes(dtFrames = 1) {
@@ -1774,6 +1980,11 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
   const useAmbient = CONFIG.enableAmbientMotion;
   const safeDtFrames = max(0, dtFrames);
   const damping = pow(CONFIG.damping, safeDtFrames);
+  const boidEnabled = CONFIG.enableBoidFlocking;
+  if (boidEnabled) {
+    buildBoidGrid();
+    applyBoidAccelerations();
+  }
   for (let i = 0; i < particles.length; i++) {
     const particle = particles[i];
     particle.prevX = particle.pos.x;
@@ -1795,6 +2006,12 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
       particle.duneAlphaSignal = 0;
     }
 
+    if (boidEnabled && particle.isBoosted) {
+      const wb = constrain(CONFIG.boidWindBlend, 0, 1);
+      accX = accX * wb + particle.boidAccX * (1 - wb);
+      accY = accY * wb + particle.boidAccY * (1 - wb);
+    }
+
     if (!particle.ignoresBoxCollision) {
       const nearbyBoxes = getNearbyBoxesForPoint(particle.pos.x, particle.pos.y);
       for (let j = 0; j < nearbyBoxes.length; j++) {
@@ -1806,8 +2023,15 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
 
     particle.vel.x += accX * safeDtFrames;
     particle.vel.y += accY * safeDtFrames;
-    particle.vel.mult(damping);
-    particle.vel.limit(CONFIG.maxSpeed);
+    particle.vel.x *= damping;
+    particle.vel.y *= damping;
+    const spdSq = particle.vel.x * particle.vel.x + particle.vel.y * particle.vel.y;
+    const maxSpdSq = CONFIG.maxSpeed * CONFIG.maxSpeed;
+    if (spdSq > maxSpdSq) {
+      const scale = CONFIG.maxSpeed / sqrt(spdSq);
+      particle.vel.x *= scale;
+      particle.vel.y *= scale;
+    }
     particle.pos.x += particle.vel.x * safeDtFrames;
     particle.pos.y += particle.vel.y * safeDtFrames;
 
@@ -1818,6 +2042,63 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
         resolveParticleBoxContainment(particle, nearbyBoxes[j]);
         resolveParticleSurfaceSlide(particle, nearbyBoxes[j]);
       }
+      // Compute glow: proximity triggers it, fade timer always governs output.
+      if (CONFIG.enableBoxGlow) {
+        // Measure proximity to nearest box surface.
+        let proximityGlow = 0;
+        if (nearbyBoxes.length > 0) {
+          const glowRad = CONFIG.boxGlowRadius;
+          let minDist = glowRad;
+          for (let j = 0; j < nearbyBoxes.length; j++) {
+            const box = nearbyBoxes[j];
+            const nearX = constrain(particle.pos.x, box.x, box.x + box.w);
+            const nearY = constrain(particle.pos.y, box.y, box.y + box.h);
+            const dx = particle.pos.x - nearX;
+            const dy = particle.pos.y - nearY;
+            const d = sqrt(dx * dx + dy * dy);
+            if (d < minDist) minDist = d;
+          }
+          proximityGlow = max(0, 1 - minDist / glowRad);
+        }
+        // Re-stamp peak whenever proximity is active and stronger than current fade.
+        if (proximityGlow > 0) {
+          const elapsed = nowMs - particle.boxGlowPeakMs;
+          const delay = CONFIG.boxGlowFadeDelayMs;
+          const duration = CONFIG.boxGlowFadeDurationMs;
+          let currentFade = 0;
+          if (particle.boxGlowPeakMs > 0) {
+            if (elapsed < delay) {
+              currentFade = particle.boxGlowPeakIntensity;
+            } else if (duration > 0 && elapsed < delay + duration) {
+              currentFade = particle.boxGlowPeakIntensity * (1 - (elapsed - delay) / duration);
+            }
+          }
+          if (proximityGlow > currentFade) {
+            particle.boxGlowPeakIntensity = proximityGlow;
+            particle.boxGlowPeakMs = nowMs;
+          }
+        }
+        // Fade timer always governs output.
+        if (particle.boxGlowPeakMs > 0) {
+          const elapsed = nowMs - particle.boxGlowPeakMs;
+          const delay = CONFIG.boxGlowFadeDelayMs;
+          const duration = CONFIG.boxGlowFadeDurationMs;
+          if (elapsed < delay) {
+            particle.boxGlowIntensity = particle.boxGlowPeakIntensity;
+          } else if (duration > 0 && elapsed < delay + duration) {
+            particle.boxGlowIntensity = particle.boxGlowPeakIntensity * (1 - (elapsed - delay) / duration);
+          } else {
+            particle.boxGlowIntensity = 0;
+            particle.boxGlowPeakMs = 0;
+          }
+        } else {
+          particle.boxGlowIntensity = 0;
+        }
+      } else {
+        particle.boxGlowIntensity = 0;
+      }
+    } else {
+      particle.boxGlowIntensity = 0;
     }
 
     resolveParticleBounds(particle, nowMs);
@@ -2031,33 +2312,164 @@ function isNearBox(px, py, box, radius) {
   return dx * dx + dy * dy <= radius * radius;
 }
 
+// ── Boid flocking for boosted particles ──────────────────────────────
+
+function buildBoidGrid() {
+  boidGrid.clear();
+  boidActiveIndices.length = 0;
+  boidCellXs.length = 0;
+  boidCellYs.length = 0;
+  const cellSize = max(1, CONFIG.boidNeighborRadius);
+  const inv = 1 / cellSize;
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    if (!p.isBoosted) continue;
+    const cx = floor(p.pos.x * inv);
+    const cy = floor(p.pos.y * inv);
+    boidActiveIndices.push(i);
+    boidCellXs.push(cx);
+    boidCellYs.push(cy);
+    const key = getCellKey(cx, cy);
+    let bucket = boidGrid.get(key);
+    if (!bucket) { bucket = []; boidGrid.set(key, bucket); }
+    bucket.push(i);
+  }
+}
+
+function computeBoidForces(particleIndex, boidIdx) {
+  const a = particles[particleIndex];
+  const neighborRadSq = CONFIG.boidNeighborRadius * CONFIG.boidNeighborRadius;
+  const sepRadSq = CONFIG.boidSeparationRadius * CONFIG.boidSeparationRadius;
+  const maxSteer = CONFIG.boidMaxSteerForce;
+  const cx = boidCellXs[boidIdx];
+  const cy = boidCellYs[boidIdx];
+
+  let sepX = 0, sepY = 0, sepCount = 0;
+  let alignVx = 0, alignVy = 0, alignCount = 0;
+  let cohX = 0, cohY = 0, cohCount = 0;
+
+  for (let oy = -1; oy <= 1; oy++) {
+    for (let ox = -1; ox <= 1; ox++) {
+      const bucket = boidGrid.get(getCellKey(cx + ox, cy + oy));
+      if (!bucket) continue;
+      for (let b = 0; b < bucket.length; b++) {
+        const j = bucket[b];
+        if (j === particleIndex) continue;
+        const other = particles[j];
+        const dx = other.pos.x - a.pos.x;
+        const dy = other.pos.y - a.pos.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq >= neighborRadSq || distSq < 1e-12) continue;
+
+        // Alignment: accumulate neighbor velocities.
+        alignVx += other.vel.x;
+        alignVy += other.vel.y;
+        alignCount++;
+
+        // Cohesion: accumulate neighbor positions.
+        cohX += other.pos.x;
+        cohY += other.pos.y;
+        cohCount++;
+
+        // Separation: push away from very close neighbors.
+        if (distSq < sepRadSq) {
+          const dist = sqrt(distSq);
+          const weight = 1 - dist / CONFIG.boidSeparationRadius;
+          sepX -= (dx / dist) * weight;
+          sepY -= (dy / dist) * weight;
+          sepCount++;
+        }
+      }
+    }
+  }
+
+  let steerX = 0, steerY = 0;
+
+  // Separation.
+  if (sepCount > 0) {
+    let sx = sepX * CONFIG.boidSeparationStrength;
+    let sy = sepY * CONFIG.boidSeparationStrength;
+    const sMag = sx * sx + sy * sy;
+    if (sMag > maxSteer * maxSteer) {
+      const s = maxSteer / sqrt(sMag);
+      sx *= s; sy *= s;
+    }
+    steerX += sx;
+    steerY += sy;
+  }
+
+  // Alignment: steer toward average heading.
+  if (alignCount > 0) {
+    let ax = (alignVx / alignCount - a.vel.x) * CONFIG.boidAlignmentStrength;
+    let ay = (alignVy / alignCount - a.vel.y) * CONFIG.boidAlignmentStrength;
+    const aMag = ax * ax + ay * ay;
+    if (aMag > maxSteer * maxSteer) {
+      const s = maxSteer / sqrt(aMag);
+      ax *= s; ay *= s;
+    }
+    steerX += ax;
+    steerY += ay;
+  }
+
+  // Cohesion or dispersal based on group size.
+  if (cohCount > 0) {
+    const overcrowded = cohCount > CONFIG.boidMaxGroupSize;
+    // Direction toward center of mass.
+    let cx2 = cohX / cohCount - a.pos.x;
+    let cy2 = cohY / cohCount - a.pos.y;
+    if (overcrowded) {
+      // Flip: steer away from the group center.
+      cx2 *= -CONFIG.boidDispersalStrength;
+      cy2 *= -CONFIG.boidDispersalStrength;
+    } else {
+      cx2 *= CONFIG.boidCohesionStrength;
+      cy2 *= CONFIG.boidCohesionStrength;
+    }
+    const cMag = cx2 * cx2 + cy2 * cy2;
+    if (cMag > maxSteer * maxSteer) {
+      const s = maxSteer / sqrt(cMag);
+      cx2 *= s; cy2 *= s;
+    }
+    steerX += cx2;
+    steerY += cy2;
+  }
+
+  _boidSteer.x = steerX;
+  _boidSteer.y = steerY;
+  return _boidSteer;
+}
+
+function applyBoidAccelerations() {
+  for (let b = 0; b < boidActiveIndices.length; b++) {
+    const i = boidActiveIndices[b];
+    const force = computeBoidForces(i, b);
+    particles[i].boidAccX = force.x;
+    particles[i].boidAccY = force.y;
+  }
+}
+
+// ── End boid flocking ────────────────────────────────────────────────
+
 function buildFrameCache(nowMs) {
   const windAngle = radians(CONFIG.ambientWindDirectionDeg);
   const windDirX = cos(windAngle);
   const windDirY = sin(windAngle);
-  const windPerpX = -windDirY;
-  const windPerpY = windDirX;
   const duneBandAngle = radians(CONFIG.duneBandRotationDeg);
   const duneDirX = cos(duneBandAngle);
   const duneDirY = sin(duneBandAngle);
-  const dunePerpX = -duneDirY;
-  const dunePerpY = duneDirX;
-  const t = nowMs * 0.001;
-  const driftPixels = t * CONFIG.duneDriftSpeed * 240;
-
-  return {
-    nowMs,
-    windDirX,
-    windDirY,
-    windPerpX,
-    windPerpY,
-    duneDirX,
-    duneDirY,
-    dunePerpX,
-    dunePerpY,
-    duneBandOffsetPx: CONFIG.duneBandOffsetPx,
-    driftPixels,
-  };
+  const fc = _frameCacheScratch;
+  fc.nowMs = nowMs;
+  fc.windDirX = windDirX;
+  fc.windDirY = windDirY;
+  fc.windPerpX = -windDirY;
+  fc.windPerpY = windDirX;
+  fc.duneDirX = duneDirX;
+  fc.duneDirY = duneDirY;
+  fc.dunePerpX = -duneDirY;
+  fc.dunePerpY = duneDirX;
+  fc.duneBandOffsetPx = CONFIG.duneBandOffsetPx;
+  fc.driftPixels = nowMs * 0.001 * CONFIG.duneDriftSpeed * 240;
+  return fc;
 }
 
 function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
@@ -2084,11 +2496,10 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
   ) * 2 - 1;
   const microAmp = n * CONFIG.microTurbulenceStrength * turbulenceMultiplier;
 
-  return {
-    x: frameCache.windDirX * windAmp + frameCache.windPerpX * microAmp,
-    y: frameCache.windDirY * windAmp + frameCache.windPerpY * microAmp,
-    duneSignal: constrain((duneMultiplier - 0.25) / 0.95, 0, 1),
-  };
+  _duneWindResult.x = frameCache.windDirX * windAmp + frameCache.windPerpX * microAmp;
+  _duneWindResult.y = frameCache.windDirY * windAmp + frameCache.windPerpY * microAmp;
+  _duneWindResult.duneSignal = constrain((duneMultiplier - 0.25) / 0.95, 0, 1);
+  return _duneWindResult;
 }
 
 function sampleDuneMultiplierAt(x, y, nowMs) {
@@ -2122,12 +2533,14 @@ function sampleDuneMultiplierAt(x, y, nowMs) {
   return 0.25 + 0.95 * pow(ridge01, CONFIG.duneContrast);
 }
 
+const _respawnWeights = new Float64Array(24);
+
 function pickWeightedRespawnCoordinate(isVerticalEdge, fixedCoord, minCoord, maxCoord, nowMs) {
   const bins = 24;
   const span = maxCoord - minCoord;
   if (span <= 0) return minCoord;
 
-  const weights = new Array(bins);
+  const weights = _respawnWeights;
   let totalWeight = 0;
 
   for (let i = 0; i < bins; i++) {
@@ -2165,7 +2578,9 @@ function applyBoxInfluence(particle, box, nowMs) {
   const boxVelX = box.vx;
   const boxVelY = box.vy;
   const boxSpeed = sqrt(boxVelX * boxVelX + boxVelY * boxVelY);
-  if (boxSpeed < CONFIG.boxStationarySpeedThreshold) return { x: 0, y: 0 };
+  if (boxSpeed < CONFIG.boxStationarySpeedThreshold) {
+    _boxInfluenceResult.x = 0; _boxInfluenceResult.y = 0; return _boxInfluenceResult;
+  }
   const boxDirX = boxVelX / boxSpeed;
   const boxDirY = boxVelY / boxSpeed;
 
@@ -2223,22 +2638,26 @@ function applyBoxInfluence(particle, box, nowMs) {
     }
 
     const wakeSwirl = computeWakeSwirlForce(particle, box, boxSpeed, nowMs);
-    return {
-      x: boundaryForceX + wakeSwirl.x,
-      y: boundaryForceY + wakeSwirl.y,
-    };
+    // Read wake values before writing to _boxInfluenceResult (wake uses its own scratch)
+    _boxInfluenceResult.x = boundaryForceX + wakeSwirl.x;
+    _boxInfluenceResult.y = boundaryForceY + wakeSwirl.y;
+    return _boxInfluenceResult;
   }
   // Inside particles are handled only by containment projection (no force push).
-  return { x: 0, y: 0 };
+  _boxInfluenceResult.x = 0; _boxInfluenceResult.y = 0; return _boxInfluenceResult;
 }
 
 function computeWakeSwirlForce(particle, box, boxSpeed, nowMs) {
-  if (!isParticleRecentlyInteracted(particle, nowMs)) return { x: 0, y: 0 };
+  if (!isParticleRecentlyInteracted(particle, nowMs)) {
+    _wakeSwirlResult.x = 0; _wakeSwirlResult.y = 0; return _wakeSwirlResult;
+  }
 
   let wakeDirX = particle.interactionDirX;
   let wakeDirY = particle.interactionDirY;
   const wakeDirMag = sqrt(wakeDirX * wakeDirX + wakeDirY * wakeDirY);
-  if (wakeDirMag < 0.0001) return { x: 0, y: 0 };
+  if (wakeDirMag < 0.0001) {
+    _wakeSwirlResult.x = 0; _wakeSwirlResult.y = 0; return _wakeSwirlResult;
+  }
   wakeDirX /= wakeDirMag;
   wakeDirY /= wakeDirMag;
 
@@ -2250,28 +2669,31 @@ function computeWakeSwirlForce(particle, box, boxSpeed, nowMs) {
     abs(wakeDirX) * box.w * 0.5 + abs(wakeDirY) * box.h * 0.5;
   const behindTrailingFace = along - halfExtentAlong;
   if (behindTrailingFace <= 0 || behindTrailingFace > CONFIG.wakeSwirlLength) {
-    return { x: 0, y: 0 };
+    _wakeSwirlResult.x = 0; _wakeSwirlResult.y = 0; return _wakeSwirlResult;
   }
 
   const perpX = -wakeDirY;
   const perpY = wakeDirX;
   const lateral = relX * perpX + relY * perpY;
   const absLateral = abs(lateral);
-  if (absLateral > CONFIG.wakeSwirlWidth) return { x: 0, y: 0 };
+  if (absLateral > CONFIG.wakeSwirlWidth) {
+    _wakeSwirlResult.x = 0; _wakeSwirlResult.y = 0; return _wakeSwirlResult;
+  }
 
   const alongFalloff = 1 - behindTrailingFace / CONFIG.wakeSwirlLength;
   const lateralFalloff = 1 - absLateral / CONFIG.wakeSwirlWidth;
   const envelope = max(0, alongFalloff * lateralFalloff);
-  if (envelope <= 0) return { x: 0, y: 0 };
+  if (envelope <= 0) {
+    _wakeSwirlResult.x = 0; _wakeSwirlResult.y = 0; return _wakeSwirlResult;
+  }
 
   const phase = behindTrailingFace * CONFIG.wakeSwirlFrequency;
   const swirlSign = sin(phase);
   const swirlScale = CONFIG.wakeSwirlStrength * speedScale * envelope * swirlSign;
   const advectionScale = CONFIG.wakeDragStrength * 0.7 * speedScale * envelope;
-  return {
-    x: perpX * swirlScale + wakeDirX * advectionScale,
-    y: perpY * swirlScale + wakeDirY * advectionScale,
-  };
+  _wakeSwirlResult.x = perpX * swirlScale + wakeDirX * advectionScale;
+  _wakeSwirlResult.y = perpY * swirlScale + wakeDirY * advectionScale;
+  return _wakeSwirlResult;
 }
 
 function resolveParticleBoxContainment(particle, box) {
@@ -2358,11 +2780,9 @@ function resolveParticleSurfaceSlide(particle, box) {
 
 function settleParticleState(particle) {
   // Snap tiny residual velocity to exact zero, then clear interaction state.
-  if (particle.vel.magSq() < 1e-4) {
-    particle.vel.set(0, 0);
-  }
-
-  if (particle.vel.x === 0 && particle.vel.y === 0) {
+  if (particle.vel.x * particle.vel.x + particle.vel.y * particle.vel.y < 1e-4) {
+    particle.vel.x = 0;
+    particle.vel.y = 0;
     particle.interactedUntilMs = 0;
   }
 }
@@ -2469,7 +2889,222 @@ function resetParticleInteractionState(particle) {
   particle.interactionSpeed = 0;
 }
 
-function renderParticles() {
+function renderPolyShade(nowMs) {
+  const cols = max(2, floor(CONFIG.polyGridCols));
+  const rows = max(2, floor(CONFIG.polyGridRows));
+  const cellW = width / cols;
+  const cellH = height / rows;
+
+  // Two extra cells on each axis provide margin for seamless wrap coverage
+  const rcols = cols + 2;
+  const rrows = rows + 2;
+  const stride = rcols + 1;
+  const vertCount = stride * (rrows + 1);
+
+  const windAngle = radians(CONFIG.ambientWindDirectionDeg);
+  const windDirX = cos(windAngle);
+  const windDirY = sin(windAngle);
+  const driftPixels = nowMs * 0.001 * CONFIG.duneDriftSpeed * 240;
+
+  const jitter = max(0, CONFIG.polyJitter);
+  const slopeContrast = max(0.01, CONFIG.polySlopeContrast);
+  const jNoiseScale = max(10, cellW * 3);
+
+  const rawSX   = new Float32Array(vertCount);
+  const rawSY   = new Float32Array(vertCount);
+  const wrapSX  = new Float32Array(vertCount);
+  const wrapSY  = new Float32Array(vertCount);
+  const heights = new Float32Array(vertCount);
+
+  // Pass 1: sample heights at base grid positions (material coords cancel drift internally)
+  for (let vrow = 0; vrow <= rrows; vrow++) {
+    for (let vcol = 0; vcol <= rcols; vcol++) {
+      const mx = (vcol - 1) * cellW;
+      const my = (vrow - 1) * cellH;
+      const sx = mx + windDirX * driftPixels;
+      const sy = my + windDirY * driftPixels;
+      const idx = vrow * stride + vcol;
+      rawSX[idx] = sx;
+      rawSY[idx] = sy;
+      heights[idx] = sampleDuneMultiplierAt(sx, sy, nowMs);
+    }
+  }
+
+  // Pass 2: slope-based jitter and final wrapped screen positions
+  for (let vrow = 0; vrow <= rrows; vrow++) {
+    for (let vcol = 0; vcol <= rcols; vcol++) {
+      const idx = vrow * stride + vcol;
+      let sx = rawSX[idx];
+      let sy = rawSY[idx];
+
+      if (jitter > 0) {
+        const mx = (vcol - 1) * cellW;
+        const my = (vrow - 1) * cellH;
+        // Central-difference slope from already-sampled neighbor heights
+        const hl = vcol > 0      ? heights[vrow * stride + vcol - 1] : heights[idx];
+        const hr = vcol < rcols  ? heights[vrow * stride + vcol + 1] : heights[idx];
+        const hu = vrow > 0      ? heights[(vrow - 1) * stride + vcol] : heights[idx];
+        const hd = vrow < rrows  ? heights[(vrow + 1) * stride + vcol] : heights[idx];
+        const slope = Math.sqrt(
+          Math.pow((hr - hl) / (2 * cellW), 2) +
+          Math.pow((hd - hu) / (2 * cellH), 2)
+        );
+        const jScale = jitter * (1 - constrain(slope * slopeContrast, 0, 1));
+        // Deterministic jitter keyed to material coords
+        sx += (noise(mx / jNoiseScale, my / jNoiseScale + 1000) - 0.5) * cellW * jScale;
+        sy += (noise(mx / jNoiseScale + 500, my / jNoiseScale) - 0.5) * cellH * jScale;
+      }
+
+      wrapSX[idx] = ((sx % width)  + width)  % width;
+      wrapSY[idx] = ((sy % height) + height) % height;
+    }
+  }
+
+  // Lighting
+  const sunAng  = radians(CONFIG.hillshadeSunAngleDeg);
+  const sunElev = radians(CONFIG.hillshadeSunElevationDeg);
+  const sunX = cos(sunElev) * cos(sunAng);
+  const sunY = cos(sunElev) * sin(sunAng);
+  const sunZ = sin(sunElev);
+  const cr = RENDER_COLORS.particles[0];
+  const cg = RENDER_COLORS.particles[1];
+  const cb = RENDER_COLORS.particles[2];
+  const str    = CONFIG.hillshadeNormalStrength;
+  const ambient = constrain(CONFIG.hillshadeAmbient, 0, 1);
+
+  const edgeAlpha = clampColorByte(CONFIG.polyEdgeAlpha);
+  if (edgeAlpha > 0) {
+    stroke(0, 0, 0, edgeAlpha);
+    strokeWeight(0.5);
+  } else {
+    noStroke();
+  }
+
+  const halfW = width  * 0.5;
+  const halfH = height * 0.5;
+
+  for (let vrow = 0; vrow < rrows; vrow++) {
+    for (let vcol = 0; vcol < rcols; vcol++) {
+      const i00 = vrow * stride + vcol;
+      const i10 = i00 + 1;
+      const i01 = i00 + stride;
+      const i11 = i01 + 1;
+
+      const x00 = wrapSX[i00], y00 = wrapSY[i00], h00 = heights[i00];
+      const x10 = wrapSX[i10], y10 = wrapSY[i10], h10 = heights[i10];
+      const x01 = wrapSX[i01], y01 = wrapSY[i01], h01 = heights[i01];
+      const x11 = wrapSX[i11], y11 = wrapSY[i11], h11 = heights[i11];
+
+      if (!isCrossSeam(x00, y00, x10, y10, x11, y11, halfW, halfH)) {
+        drawShadedTri(x00, y00, x10, y10, x11, y11, h00, h10, h11, cr, cg, cb, sunX, sunY, sunZ, str, ambient);
+      }
+      if (!isCrossSeam(x00, y00, x11, y11, x01, y01, halfW, halfH)) {
+        drawShadedTri(x00, y00, x11, y11, x01, y01, h00, h11, h01, cr, cg, cb, sunX, sunY, sunZ, str, ambient);
+      }
+    }
+  }
+
+  noStroke();
+}
+
+function isCrossSeam(x0, y0, x1, y1, x2, y2, halfW, halfH) {
+  return (
+    Math.abs(x0 - x1) > halfW || Math.abs(x1 - x2) > halfW || Math.abs(x0 - x2) > halfW ||
+    Math.abs(y0 - y1) > halfH || Math.abs(y1 - y2) > halfH || Math.abs(y0 - y2) > halfH
+  );
+}
+
+function drawShadedTri(x0, y0, x1, y1, x2, y2, h0, h1, h2, cr, cg, cb, sunX, sunY, sunZ, str, ambient) {
+  const ax = x1 - x0, ay = y1 - y0, az = (h1 - h0) * str;
+  const bx = x2 - x0, by = y2 - y0, bz = (h2 - h0) * str;
+
+  let nx = ay * bz - az * by;
+  let ny = az * bx - ax * bz;
+  let nz = ax * by - ay * bx;
+  if (nz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+
+  const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+  if (nLen < 1e-6) return;
+
+  const diff = Math.max(0, (nx * sunX + ny * sunY + nz * sunZ) / nLen);
+  const brightness = ambient + (1 - ambient) * diff;
+
+  fill(cr * brightness, cg * brightness, cb * brightness);
+  triangle(x0, y0, x1, y1, x2, y2);
+}
+
+function createHillshadeBuffer(canvasW, canvasH) {
+  const div = max(1, floor(CONFIG.hillshadeResolutionDivisor));
+  const bw = max(1, floor(canvasW / div));
+  const bh = max(1, floor(canvasH / div));
+  const pg = createGraphics(bw, bh);
+  pg.pixelDensity(1);
+  return pg;
+}
+
+function renderHillshade(nowMs) {
+  if (!hillshadeBuffer) return;
+
+  const pg = hillshadeBuffer;
+  const bw = pg.width;
+  const bh = pg.height;
+  const scaleX = width / bw;
+  const scaleY = height / bh;
+
+  // Sun vector (pointing from surface toward light source)
+  const sunAng = radians(CONFIG.hillshadeSunAngleDeg);
+  const sunElev = radians(CONFIG.hillshadeSunElevationDeg);
+  const sunX = cos(sunElev) * cos(sunAng);
+  const sunY = cos(sunElev) * sin(sunAng);
+  const sunZ = sin(sunElev);
+  const sunLen = sqrt(sunX * sunX + sunY * sunY + sunZ * sunZ);
+
+  const cr = RENDER_COLORS.particles[0];
+  const cg = RENDER_COLORS.particles[1];
+  const cb = RENDER_COLORS.particles[2];
+  const str = CONFIG.hillshadeNormalStrength;
+  const ambient = constrain(CONFIG.hillshadeAmbient, 0, 1);
+
+  // Build height grid (one sample per buffer pixel)
+  const heights = new Float32Array(bw * bh);
+  for (let py = 0; py < bh; py++) {
+    for (let px = 0; px < bw; px++) {
+      heights[py * bw + px] = sampleDuneMultiplierAt(px * scaleX, py * scaleY, nowMs);
+    }
+  }
+
+  // Compute lighting and write pixels
+  pg.loadPixels();
+  for (let py = 0; py < bh; py++) {
+    for (let px = 0; px < bw; px++) {
+      const hC = heights[py * bw + px];
+      const hR = px < bw - 1 ? heights[py * bw + px + 1] : hC;
+      const hL = px > 0      ? heights[py * bw + px - 1] : hC;
+      const hD = py < bh - 1 ? heights[(py + 1) * bw + px] : hC;
+      const hU = py > 0      ? heights[(py - 1) * bw + px] : hC;
+
+      // Surface normal from finite differences
+      const nx = -(hR - hL) * 0.5 * str;
+      const ny = -(hD - hU) * 0.5 * str;
+      const nz = 1.0;
+      const nLen = sqrt(nx * nx + ny * ny + nz * nz);
+
+      const diff = max(0, (nx * sunX + ny * sunY + nz * sunZ) / (nLen * sunLen));
+      const brightness = ambient + (1 - ambient) * diff;
+
+      const idx = (py * bw + px) * 4;
+      pg.pixels[idx]     = cr * brightness;
+      pg.pixels[idx + 1] = cg * brightness;
+      pg.pixels[idx + 2] = cb * brightness;
+      pg.pixels[idx + 3] = 255;
+    }
+  }
+  pg.updatePixels();
+
+  image(pg, 0, 0, width, height);
+}
+
+function renderParticles(dtFrames = 1) {
   const baseR = RENDER_COLORS.particles[0];
   const baseG = RENDER_COLORS.particles[1];
   const baseB = RENDER_COLORS.particles[2];
@@ -2485,12 +3120,34 @@ function renderParticles() {
   const tailAlphaWeight = renderFraction;
   const tailWidthWeight = max(0.2, sqrt(renderFraction));
   const particleCount = particles.length;
+  // Scale segment clamp with dt so longer frames don't truncate trails.
+  const maxSegLen = MAX_RENDER_SEGMENT_LENGTH_PX * max(1, dtFrames);
+  // Pre-compute boosted lightness-shifted color once (not per boosted particle).
+  const boostedColor = applyLightnessShiftToRgb(baseR, baseG, baseB, fastLightnessShift);
+  const glowEnabled = CONFIG.enableBoxGlow;
+  const glowHaloSize = CONFIG.boxGlowHaloSize;
+  const glowHaloAlpha = CONFIG.boxGlowHaloAlpha;
+  const glowCoreBlend = constrain(CONFIG.boxGlowCoreWhite, 0, 1);
+  const glowCoreDiameter = max(0.5, CONFIG.boxGlowCoreDiameter);
+  const glowCoreR = RENDER_COLORS.boxGlowCore[0];
+  const glowCoreG = RENDER_COLORS.boxGlowCore[1];
+  const glowCoreB = RENDER_COLORS.boxGlowCore[2];
+  const glowCoreA = RENDER_COLORS.boxGlowCore.length > 3 ? RENDER_COLORS.boxGlowCore[3] : 255;
+  // Track previous stroke state to skip redundant canvas state changes.
+  let prevStrokeR = -1;
+  let prevStrokeG = -1;
+  let prevStrokeB = -1;
+  let prevStrokeA = -1;
+  let prevWeight = -1;
   const renderParticleAt = (p, i) => {
     const speed = sqrt(p.vel.x * p.vel.x + p.vel.y * p.vel.y);
-    const interpolatedPos = getInterpolatedParticlePosition(p);
+    // Read interpolated position into locals before the scratch object is reused.
+    getInterpolatedParticlePosition(p);
+    const interpX = _interpolatedPos.x;
+    const interpY = _interpolatedPos.y;
     if (speed < minSpeed) {
-      p.displayX = interpolatedPos.x;
-      p.displayY = interpolatedPos.y;
+      p.displayX = interpX;
+      p.displayY = interpY;
       return;
     }
     const minSpeedAlphaRamp = constrain((speed - minSpeed) / minSpeedRamp, 0, 1);
@@ -2502,32 +3159,69 @@ function renderParticles() {
     const duneAlphaFactor = 1 + duneAlphaBoost * duneSignal;
     const duneSizeFactor = 1 + duneSizeBoost * duneSignal;
     const fastAlphaAdd = p.isBoosted ? max(0, CONFIG.windBoostAlphaMultiplier) : 0;
-    const renderColor = p.isBoosted
-      ? applyLightnessShiftToRgb(baseR, baseG, baseB, fastLightnessShift)
-      : { r: baseR, g: baseG, b: baseB };
-    const alpha = constrain(
+    const colorR = p.isBoosted ? boostedColor.r : baseR;
+    const colorG = p.isBoosted ? boostedColor.g : baseG;
+    const colorB = p.isBoosted ? boostedColor.b : baseB;
+    // Quantize alpha to nearest integer (it's a 0-255 byte).
+    const alpha = Math.round(constrain(
       baseA * renderAlphaWeight * minSpeedAlphaRamp * (1 + alphaBoost * (speedFactor - 1)) * duneAlphaFactor + fastAlphaAdd,
       0,
       255
-    );
-    stroke(renderColor.r, renderColor.g, renderColor.b, alpha);
-    strokeWeight(
-      Math.max(
-        0.5,
+    ));
+    // Quantize weight to nearest 0.25px to reduce unique state transitions.
+    const weight = Math.max(
+      0.5,
+      Math.round(
         CONFIG.particleSize *
         p.sizeMultiplier *
         renderWidthWeight *
         (1 + widthBoost * (speedFactor - 1)) *
-        duneSizeFactor
-      )
+        duneSizeFactor * 4
+      ) * 0.25
     );
     const segment = clampRenderedSegment(
       p.displayX,
       p.displayY,
-      interpolatedPos.x,
-      interpolatedPos.y
+      interpX,
+      interpY,
+      maxSegLen
     );
-    line(segment.fromX, segment.fromY, segment.toX, segment.toY);
+    const glow = glowEnabled ? p.boxGlowIntensity : 0;
+    if (glow > 0) {
+      // Halo pass: wider stroke, base color, low alpha scaled by intensity.
+      const haloA = Math.round(glowHaloAlpha * glow);
+      const haloW = Math.max(0.5, weight * glowHaloSize);
+      stroke(colorR, colorG, colorB, haloA);
+      strokeWeight(haloW);
+      line(segment.fromX, segment.fromY, segment.toX, segment.toY);
+      // Core pass: lerp toward core color based on intensity and blend setting.
+      const blend = glow * glowCoreBlend;
+      const coreR = Math.round(colorR + (glowCoreR - colorR) * blend);
+      const coreG = Math.round(colorG + (glowCoreG - colorG) * blend);
+      const coreB = Math.round(colorB + (glowCoreB - colorB) * blend);
+      const coreA = Math.round(alpha + (glowCoreA - alpha) * blend);
+      const coreW = weight + (glowCoreDiameter - weight) * glow;
+      stroke(coreR, coreG, coreB, coreA);
+      strokeWeight(coreW);
+      line(segment.fromX, segment.fromY, segment.toX, segment.toY);
+      // Invalidate tracking since glow changed state unpredictably.
+      prevStrokeR = coreR; prevStrokeG = coreG; prevStrokeB = coreB; prevStrokeA = coreA;
+      prevWeight = coreW;
+    } else {
+      // Normal non-glow path with redundancy elimination.
+      if (colorR !== prevStrokeR || colorG !== prevStrokeG || colorB !== prevStrokeB || alpha !== prevStrokeA) {
+        stroke(colorR, colorG, colorB, alpha);
+        prevStrokeR = colorR;
+        prevStrokeG = colorG;
+        prevStrokeB = colorB;
+        prevStrokeA = alpha;
+      }
+      if (weight !== prevWeight) {
+        strokeWeight(weight);
+        prevWeight = weight;
+      }
+      line(segment.fromX, segment.fromY, segment.toX, segment.toY);
+    }
     p.displayX = segment.toX;
     p.displayY = segment.toY;
   };
@@ -2538,6 +3232,8 @@ function renderParticles() {
     if (p.isBoosted) continue;
     renderParticleAt(p, i);
   }
+  // Reset tracking before the boosted pass (different base color).
+  prevStrokeR = -1; prevStrokeG = -1; prevStrokeB = -1; prevStrokeA = -1; prevWeight = -1;
   for (let i = 0; i < particleCount; i++) {
     const p = particles[i];
     if (!p.isBoosted) continue;

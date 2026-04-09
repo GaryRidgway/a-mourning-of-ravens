@@ -26,18 +26,18 @@ let flowWordInsetXPx = (() => {
     const raw = flowParams.get('wordInsetX') ?? flowParams.get('wordInset');
     const parsed = raw === null ? 0 : parseFloat(raw);
     if (!Number.isFinite(parsed)) return 0;
-    return Math.max(0, parsed);
+    return parsed;
 })();
 let flowWordInsetYPx = (() => {
     const raw = flowParams.get('wordInsetY') ?? flowParams.get('wordInset');
     const parsed = raw === null ? 0 : parseFloat(raw);
     if (!Number.isFinite(parsed)) return 0;
-    return Math.max(0, parsed);
+    return parsed;
 })();
 let flowWordOffsetXPx = (() => {
     const raw = flowParams.get('wordOffsetX');
-    const parsed = raw === null ? -0.5 : parseFloat(raw);
-    if (!Number.isFinite(parsed)) return -0.5;
+    const parsed = raw === null ? 0 : parseFloat(raw);
+    if (!Number.isFinite(parsed)) return 0;
     return parsed;
 })();
 let flowWordOffsetYPx = (() => {
@@ -60,8 +60,8 @@ window.__mournSetWordInsetPx = function setWordInsetPx(value) {
     if (!Number.isFinite(parsed)) {
         return;
     }
-    flowWordInsetXPx = Math.max(0, parsed);
-    flowWordInsetYPx = Math.max(0, parsed);
+    flowWordInsetXPx = parsed;
+    flowWordInsetYPx = parsed;
     queueFlowFieldBoxSync();
 };
 window.__mournSetWordInsetXPx = function setWordInsetXPx(value) {
@@ -69,7 +69,7 @@ window.__mournSetWordInsetXPx = function setWordInsetXPx(value) {
     if (!Number.isFinite(parsed)) {
         return;
     }
-    flowWordInsetXPx = Math.max(0, parsed);
+    flowWordInsetXPx = parsed;
     queueFlowFieldBoxSync();
 };
 window.__mournSetWordInsetYPx = function setWordInsetYPx(value) {
@@ -77,7 +77,7 @@ window.__mournSetWordInsetYPx = function setWordInsetYPx(value) {
     if (!Number.isFinite(parsed)) {
         return;
     }
-    flowWordInsetYPx = Math.max(0, parsed);
+    flowWordInsetYPx = parsed;
     queueFlowFieldBoxSync();
 };
 window.__mournSetWordOffsetX = function setWordOffsetX(value) {
@@ -593,7 +593,10 @@ function scrollInit() {
     setCurrentScrollStanza(mourn.trackers.startStanza, true);
     setAnchorCenterOffsets();
     queueFlowFieldBoxSync();
-    window.addEventListener('resize', queueRefreshRingMetrics);
+    window.addEventListener('resize', () => {
+        invalidateGlyphRectCache();
+        queueRefreshRingMetrics();
+    });
 }
 
 // Create the scrollable area that the user can interact with.
@@ -978,14 +981,12 @@ function syncFlowFieldBoxesFromPoem() {
                 if (!isNearViewport(bb)) {
                     return;
                 }
-                const insetX = Math.min(
-                    flowWordInsetXPx,
-                    Math.max(0, (bb.width - 1) * 0.5)
-                );
-                const insetY = Math.min(
-                    flowWordInsetYPx,
-                    Math.max(0, (bb.height - 1) * 0.5)
-                );
+                const insetX = flowWordInsetXPx >= 0
+                    ? Math.min(flowWordInsetXPx, Math.max(0, (bb.width - 1) * 0.5))
+                    : flowWordInsetXPx;
+                const insetY = flowWordInsetYPx >= 0
+                    ? Math.min(flowWordInsetYPx, Math.max(0, (bb.height - 1) * 0.5))
+                    : flowWordInsetYPx;
                 const offsetX = flowWordOffsetXPx;
                 const offsetY = flowWordOffsetYPx;
                 const shrunkWidth = Math.max(1, bb.width - insetX * 2);
@@ -1011,12 +1012,42 @@ function syncFlowFieldBoxesFromPoem() {
     window.setFlowBoxes(flowBoxes);
 }
 
+function invalidateGlyphRectCache() {
+    if (!mourn.trackers.anchor) return;
+    const stanzas = mourn.trackers.anchor.querySelectorAll('.stanza');
+    for (let i = 0; i < stanzas.length; i++) {
+        const spans = stanzas[i].querySelectorAll('.line > span:not(.terminator)');
+        for (let j = 0; j < spans.length; j++) {
+            delete spans[j]._glyphCache;
+        }
+    }
+}
+
 function getWordGlyphRect(wordSpan) {
-    const fallback = wordSpan.getBoundingClientRect();
+    const spanBB = wordSpan.getBoundingClientRect();
+
+    // If we have a cached measurement, apply it to the current span position.
+    if (wordSpan._glyphCache) {
+        const c = wordSpan._glyphCache;
+        const left = spanBB.left + c.offsetLeft;
+        const top = spanBB.top + c.offsetTop;
+        return {
+            left: left,
+            top: top,
+            right: left + c.width,
+            bottom: top + c.height,
+            width: c.width,
+            height: c.height,
+            x: left,
+            y: top,
+        };
+    }
+
+    // No cache — do the expensive measurement once and store offsets relative to spanBB.
     const textNode = wordSpan.firstChild;
     const text = textNode?.textContent ?? wordSpan.textContent;
     if (!text || text.trim().length === 0) {
-        return fallback;
+        return spanBB;
     }
 
     if (textNode?.nodeType === Node.TEXT_NODE && glyphMeasureCtx) {
@@ -1062,27 +1093,24 @@ function getWordGlyphRect(wordSpan) {
         }
 
         if (foundGlyph) {
+            const glyphWidth = maxRight - minLeft;
+            const glyphHeight = maxBottom - minTop;
+            // Cache offsets relative to span's bounding box
+            wordSpan._glyphCache = {
+                offsetLeft: minLeft - spanBB.left,
+                offsetTop: minTop - spanBB.top,
+                width: glyphWidth,
+                height: glyphHeight,
+            };
             return {
                 left: minLeft,
                 top: minTop,
                 right: maxRight,
                 bottom: maxBottom,
-                width: maxRight - minLeft,
-                height: maxBottom - minTop,
+                width: glyphWidth,
+                height: glyphHeight,
                 x: minLeft,
                 y: minTop,
-                toJSON() {
-                    return {
-                        left: minLeft,
-                        top: minTop,
-                        right: maxRight,
-                        bottom: maxBottom,
-                        width: maxRight - minLeft,
-                        height: maxBottom - minTop,
-                        x: minLeft,
-                        y: minTop,
-                    };
-                },
             };
         }
     }
@@ -1097,10 +1125,17 @@ function getWordGlyphRect(wordSpan) {
         glyphBB.width > 0 &&
         glyphBB.height > 0
     ) {
+        // Cache the range-based fallback too
+        wordSpan._glyphCache = {
+            offsetLeft: glyphBB.left - spanBB.left,
+            offsetTop: glyphBB.top - spanBB.top,
+            width: glyphBB.width,
+            height: glyphBB.height,
+        };
         return glyphBB;
     }
 
-    return fallback;
+    return spanBB;
 }
 
 function buildCanvasFont(computed) {
