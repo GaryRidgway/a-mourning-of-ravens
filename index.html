@@ -99,76 +99,6 @@
 
       </details>
 
-      <details class="control-group" open>
-        <summary>Hillshade</summary>
-
-        <label class="control-row">
-          <span>Sun Angle</span>
-          <input type="range" min="-180" max="180" step="1" data-key="hillshadeSunAngleDeg" />
-          <output data-value-for="hillshadeSunAngleDeg"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Sun Elevation</span>
-          <input type="range" min="1" max="89" step="1" data-key="hillshadeSunElevationDeg" />
-          <output data-value-for="hillshadeSunElevationDeg"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Ambient</span>
-          <input type="range" min="0" max="1" step="0.01" data-key="hillshadeAmbient" />
-          <output data-value-for="hillshadeAmbient"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Normal Strength</span>
-          <input type="range" min="0.5" max="30" step="0.5" data-key="hillshadeNormalStrength" />
-          <output data-value-for="hillshadeNormalStrength"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Resolution Divisor</span>
-          <input type="range" min="1" max="12" step="1" data-key="hillshadeResolutionDivisor" />
-          <output data-value-for="hillshadeResolutionDivisor"></output>
-        </label>
-
-        <label class="control-row control-toggle">
-          <span>Poly Shade</span>
-          <input type="checkbox" data-key="usePolyShade" />
-        </label>
-
-        <label class="control-row">
-          <span>Grid Columns</span>
-          <input type="range" min="4" max="120" step="1" data-key="polyGridCols" />
-          <output data-value-for="polyGridCols"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Grid Rows</span>
-          <input type="range" min="4" max="80" step="1" data-key="polyGridRows" />
-          <output data-value-for="polyGridRows"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Vertex Jitter</span>
-          <input type="range" min="0" max="1" step="0.01" data-key="polyJitter" />
-          <output data-value-for="polyJitter"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Edge Alpha</span>
-          <input type="range" min="0" max="255" step="1" data-key="polyEdgeAlpha" />
-          <output data-value-for="polyEdgeAlpha"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Slope Contrast</span>
-          <input type="range" min="0.1" max="40" step="0.1" data-key="polySlopeContrast" />
-          <output data-value-for="polySlopeContrast"></output>
-        </label>
-
-      </details>
-
       <details class="control-group">
         <summary>Boosted Particles</summary>
 
@@ -191,9 +121,9 @@
         </label>
 
         <label class="control-row">
-          <span>Boosted Lightness</span>
-          <input type="range" min="-1.0" max="1.0" step="0.01" data-key="windBoostLightnessShift" />
-          <output data-value-for="windBoostLightnessShift"></output>
+          <span>Boosted Color</span>
+          <input type="color" data-color-key="windBoostColor" />
+          <output data-color-value-for="windBoostColor"></output>
         </label>
 
         <label class="control-row">
@@ -522,6 +452,16 @@
           <span>Backside Drag</span>
           <input type="range" min="0" max="1" step="0.01" data-key="backsideDragStrength" />
           <output data-value-for="backsideDragStrength"></output>
+        </label>
+        <label class="control-row">
+          <span>Scroll Freeze Debounce (ms)</span>
+          <input type="range" min="50" max="2000" step="10" data-key="scrollFreezeDebounceMs" />
+          <output data-value-for="scrollFreezeDebounceMs"></output>
+        </label>
+        <label class="control-row">
+          <span>Scroll Freeze Fade In (ms)</span>
+          <input type="range" min="0" max="3000" step="10" data-key="scrollFreezeFadeInMs" />
+          <output data-value-for="scrollFreezeFadeInMs"></output>
         </label>
       </details>
 

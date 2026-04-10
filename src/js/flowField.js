@@ -14,17 +14,6 @@ const CONFIG = {
   particleDuneSizeBoost: 0,
   particleSpeedWidthBoost: 1.3,
   particleRenderFraction: 1,
-  hillshadeSunAngleDeg: 225,
-  hillshadeSunElevationDeg: 45,
-  hillshadeAmbient: 0.25,
-  hillshadeNormalStrength: 8,
-  hillshadeResolutionDivisor: 4,
-  usePolyShade: true,
-  polyGridCols: 30,
-  polyGridRows: 18,
-  polyJitter: 0.6,
-  polyEdgeAlpha: 0,
-  polySlopeContrast: 10,
   enableAmbientMotion: true,
   enableDuneBands: true,
   ambientWindDirectionDeg: 135,
@@ -41,7 +30,6 @@ const CONFIG = {
   windBoostParticleRatio: 0.02,
   windBoostSizeMultiplier: 0.5,
   windBoostAlphaMultiplier: 206,
-  windBoostLightnessShift: 0.57,
   windBoostMinMultiplier: 5,
   windBoostMaxMultiplier: 10,
   windBoostTurbulenceMinMultiplier: 4,
@@ -60,10 +48,10 @@ const CONFIG = {
   boxGlowRadius: 3,
   boxGlowHaloSize: 4.8,
   boxGlowHaloAlpha: 37,
-  boxGlowCoreWhite: 1,
+  boxGlowCoreWhite: 0.75,
   boxGlowCoreDiameter: 1.4,
-  boxGlowFadeDelayMs: 380,
-  boxGlowFadeDurationMs: 2650,
+  boxGlowFadeDelayMs: 1090,
+  boxGlowFadeDurationMs: 2340,
   edgeRespawnWeightBase: 0.05,
   edgeRespawnWeightStrength: 0.45,
   edgeRespawnWeightExponent: 2,
@@ -79,10 +67,8 @@ const CONFIG = {
   enableAdaptiveSeparationCadence: false,
   adaptiveTargetFrameMs: 16.7,
   adaptiveCadenceMax: 8,
-  adaptiveCadenceRecovery: 0.25,
   separationNearBoxRadius: 20,
   separationMinSpeed: 1,
-  staticParticleSpeedThreshold: 0.08,
   staticInfluenceForwardDotMin: 0.22,
   backsideDragStrength: 0.22,
   boxForceMaxRadius: 1.3,
@@ -96,14 +82,11 @@ const CONFIG = {
   maxSpeed: 1.7,
   trailAlpha: 3,
   trailAlphaSecondary: 62,
+  scrollFreezeDebounceMs: 50,
+  scrollFreezeFadeInMs: 1960,
   backgroundFadeOscillationPeriodSec: 0,
   particleAlphaSecondary: 67,
-  insidePushStrength: 0.7,
   collisionEjectPadding: 0.02,
-  collisionOutVelocity: 0.18,
-  minTurbulenceBoxSpeed: 0.08,
-  boxVelocityTransfer: 0.65,
-  boundaryBand: 14,
   turbulenceStrength: 0.5,
   wakeDragStrength: 0.5,
   wakeSwirlLength: 350,
@@ -112,11 +95,9 @@ const CONFIG = {
   wakeSwirlFrequency: 0.06,
   recentInteractionMs: 3000,
   edgePadding: 0,
-  edgeRestitution: 0.35,
   boxVelocityDecay: 0.86,
   boxStationarySpeedThreshold: 0.12,
   showBoxes: true,
-  showDebug: false,
   enableAdaptiveQuality: true,
   lockQualityTier: false,
   qualityTargetFps: 30,
@@ -134,11 +115,12 @@ const MAX_RENDER_SEGMENT_LENGTH_PX = 12;
 
 const RENDER_COLORS = {
   fade: [0, 0, 0],
-  particles: [71, 225, 81, 15],
+  particles: [56, 159, 255, 15],
+  windBoostColor: [255, 221, 0],
   separationZone: [130, 175, 235],
-  boxStrokeIdle: [200, 200, 180, 205],
+  boxStrokeIdle: [200, 200, 180, 0],
   boxStrokeDragged: [250, 230, 190, 0],
-  boxGlowCore: [66, 183, 255, 255],
+  boxGlowCore: [200, 0, 255, 255],
 };
 
 const RENDER_COLORS_DEFAULTS = {};
@@ -160,17 +142,6 @@ const CONTROL_PARAM_DEFS = [
   { key: 'particleDuneSizeBoost', type: 'number', digits: 2 },
   { key: 'particleSpeedWidthBoost', type: 'number', digits: 2 },
   { key: 'particleRenderFraction', type: 'number', digits: 2 },
-  { key: 'hillshadeSunAngleDeg', type: 'number', digits: 0 },
-  { key: 'hillshadeSunElevationDeg', type: 'number', digits: 0 },
-  { key: 'hillshadeAmbient', type: 'number', digits: 2 },
-  { key: 'hillshadeNormalStrength', type: 'number', digits: 1 },
-  { key: 'hillshadeResolutionDivisor', type: 'number', digits: 0 },
-  { key: 'usePolyShade', type: 'bool' },
-  { key: 'polyGridCols', type: 'number', digits: 0 },
-  { key: 'polyGridRows', type: 'number', digits: 0 },
-  { key: 'polyJitter', type: 'number', digits: 2 },
-  { key: 'polyEdgeAlpha', type: 'number', digits: 0 },
-  { key: 'polySlopeContrast', type: 'number', digits: 1 },
   { key: 'enableAdaptiveQuality', type: 'bool' },
   { key: 'lockQualityTier', type: 'bool' },
   { key: 'qualityTargetFps', type: 'number', digits: 0 },
@@ -195,7 +166,6 @@ const CONTROL_PARAM_DEFS = [
   { key: 'windBoostParticleRatio', type: 'number', digits: 3 },
   { key: 'windBoostSizeMultiplier', type: 'number', digits: 2 },
   { key: 'windBoostAlphaMultiplier', type: 'number', digits: 2 },
-  { key: 'windBoostLightnessShift', type: 'number', digits: 2 },
   { key: 'windBoostMinMultiplier', type: 'number', digits: 2 },
   { key: 'windBoostMaxMultiplier', type: 'number', digits: 2 },
   { key: 'windBoostTurbulenceMinMultiplier', type: 'number', digits: 2 },
@@ -234,12 +204,15 @@ const CONTROL_PARAM_DEFS = [
   { key: 'surfaceSlideBand', type: 'number', digits: 2 },
   { key: 'staticInfluenceForwardDotMin', type: 'number', digits: 2 },
   { key: 'backsideDragStrength', type: 'number', digits: 2 },
+  { key: 'scrollFreezeDebounceMs', type: 'number', digits: 0 },
+  { key: 'scrollFreezeFadeInMs', type: 'number', digits: 0 },
   { key: 'backgroundFadeOscillationPeriodSec', type: 'number', digits: 1 },
 ];
 
 const COLOR_PARAM_DEFS = [
   { key: 'fade', param: 'colorFade' },
   { key: 'particles', param: 'colorParticles' },
+  { key: 'windBoostColor', param: 'colorWindBoost' },
   { key: 'separationZone', param: 'colorSeparationZone' },
   { key: 'boxStrokeIdle', param: 'colorBoxStrokeIdle' },
   { key: 'boxStrokeDragged', param: 'colorBoxStrokeDragged' },
@@ -267,17 +240,6 @@ const CONTROL_TOOLTIPS = {
   particleDuneSizeBoost: 'How strongly dune bands boost particle stroke size. Higher values make particles inside dune ridges thicker.',
   particleSpeedWidthBoost: 'How strongly faster particles get thicker strokes.',
   particleRenderFraction: 'Global streak density scaler. Lower values reduce accumulated ink while preserving continuity.',
-  hillshadeSunAngleDeg: 'Direction the light source comes from, in degrees (0 = right, 90 = down, 225 = upper-left).',
-  hillshadeSunElevationDeg: 'Sun elevation above the horizon in degrees. Lower values produce longer, more dramatic shadows.',
-  hillshadeAmbient: 'Minimum brightness in fully shadowed areas. 0 = pure black, 1 = no shading.',
-  hillshadeNormalStrength: 'Exaggerates slope steepness when computing surface normals. Higher values increase contrast.',
-  hillshadeResolutionDivisor: 'Offscreen buffer size = screen size divided by this. Higher = cheaper but softer.',
-  usePolyShade: 'When enabled, renders flat-shaded polygons instead of a smooth pixel hillshade.',
-  polyGridCols: 'Number of polygon columns across the canvas. Lower = larger, more visible facets.',
-  polyGridRows: 'Number of polygon rows down the canvas. Lower = larger, more visible facets.',
-  polyJitter: 'Randomly offsets interior vertices by this fraction of cell size. Higher values look more organic.',
-  polyEdgeAlpha: 'Alpha of the edge stroke drawn on polygon outlines. 0 disables edges.',
-  polySlopeContrast: 'Scales raw slope values before clamping. Higher values make slope-based size variation more aggressive.',
   particleCount: 'Maximum particle budget used by the simulation and adaptive particle count system.',
   boxCollisionParticipantRatio: 'Fraction of particles that participate in poem collider box interactions.',
   enableAutoRenderScale: 'Automatically caps the internal canvas size on very large screens, then CSS stretches it to fill the viewport.',
@@ -305,6 +267,7 @@ const CONTROL_TOOLTIPS = {
   qualityHudEnabled: 'Shows a live on-screen performance HUD with FPS, quality tier, and active budgets.',
   pauseSimulation: 'Pauses the flow simulation loop. The simulation also auto-pauses when the tab is hidden.',
   enableDuneBands: 'Turns dune band modulation on or off while leaving ambient wind and turbulence active.',
+  enableAmbientMotion: 'Enables the ambient wind field and all motion forces. Disabling freezes particle movement.',
   ambientWindDirectionDeg: 'Sets the direction the ambient wind force pushes particles, in degrees.',
   ambientWindStrength: 'Overall strength of the ambient wind field.',
   duneBandRotationDeg: 'Rotates the dune band pattern independently from the wind direction, in degrees.',
@@ -319,7 +282,6 @@ const CONTROL_TOOLTIPS = {
   windBoostParticleRatio: 'Fraction of particles assigned to the boosted subgroup.',
   windBoostSizeMultiplier: 'Size multiplier applied to boosted particles before other width boosts.',
   windBoostAlphaMultiplier: 'Additive alpha applied only to boosted particles.',
-  windBoostLightnessShift: 'Shifts boosted particles toward black or white in HSL lightness space.',
   windBoostMinMultiplier: 'Minimum wind-force multiplier for boosted particles.',
   windBoostMaxMultiplier: 'Maximum wind-force multiplier for boosted particles.',
   windBoostTurbulenceMinMultiplier: 'Minimum turbulence multiplier for boosted particles.',
@@ -346,12 +308,15 @@ const CONTROL_TOOLTIPS = {
   surfaceSlideBand: 'Thickness of the near-surface band where particles are encouraged to slide along collider faces.',
   staticInfluenceForwardDotMin: 'Minimum forward alignment required before a moving box starts affecting nearby particles.',
   backsideDragStrength: 'How strongly particles are slowed on the lee side of a moving collider.',
+  scrollFreezeDebounceMs: 'Delay in milliseconds before particle movement freezes during manual scroll. Higher values make the freeze less hair-trigger.',
+  scrollFreezeFadeInMs: 'Duration in milliseconds for particles to fade back in after scroll interaction ends. 0 makes them reappear instantly.',
   backgroundFadeOscillationPeriodSec: 'How many seconds it takes to complete one full ease-in-out background alpha cycle. Set to 0 to disable.',
 };
 
 const COLOR_CONTROL_TOOLTIPS = {
   fade: 'Background clear or fade color used behind the particles.',
   particles: 'Base particle trail color.',
+  windBoostColor: 'Color used for boosted particles instead of the base particle color.',
   separationZone: 'Debug color used for separation-zone visualization.',
   boxStrokeIdle: 'Outline color for collider boxes when idle.',
   boxStrokeDragged: 'Outline color for collider boxes while dragged.',
@@ -404,13 +369,16 @@ const boidCellXs = [];
 const boidCellYs = [];
 const _boidSteer = { x: 0, y: 0 };
 
-let hillshadeBuffer = null;
 let draggedBoxIndex = -1;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
 let controlsBound = false;
 let dynamicSeparationEveryNFrames = CONFIG.separationEveryNFrames;
 let lastDrawTimeMs = 0;
+let manualScrollActive = false;
+let scrollJustEnded = false;
+let debugFadeParticleIndex = -1;
+let debugFadeLog = [];
 const separationActiveIndices = [];
 const separationCellXs = [];
 const separationCellYs = [];
@@ -551,7 +519,6 @@ function applyRenderScale(nextScale) {
 
   resizeCanvas(nextW, nextH);
   currentRenderScale = safeScale;
-  hillshadeBuffer = createHillshadeBuffer(nextW, nextH);
 
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
@@ -878,7 +845,6 @@ function setup() {
   }
   canvas.style('width', '100%');
   canvas.style('height', '100%');
-  hillshadeBuffer = createHillshadeBuffer(width, height);
   noStroke();
   const showDebugUI = new URLSearchParams(window.location.search).has('debug');
   if (showDebugUI) {
@@ -954,6 +920,102 @@ function setup() {
     const ny = Number.isFinite(y) ? y : height * 0.5 - h * 0.5;
     boxes.push(new FlowBox(nx, ny, w, h));
   };
+
+  // Manual-scroll freeze: snapshot particles near boxes and freeze them in place.
+  window.onManualScrollStart = function onManualScrollStart() {
+    manualScrollActive = true;
+    const band = CONFIG.surfaceSlideBand;
+    debugFadeParticleIndex = -1;
+    debugFadeLog = [];
+    for (let i = 0; i < particles.length; i++) {
+      const particle = particles[i];
+      // Clear collision-disabled state — boxes have moved so previous penetration
+      // state is no longer meaningful.
+      particle.scrollFrozen = false;
+      particle.scrollCollisionDisabled = false;
+      // Do NOT reset scrollUnfrozeAtMs here. Particles mid-fade from a previous
+      // scroll should continue their fade uninterrupted. Resetting to 0 would set
+      // scrollFadeFactor=1 (full alpha) causing a visible pop.
+      if (particle.ignoresBoxCollision) continue;
+      const nearbyBoxes = getNearbyBoxesForPoint(particle.pos.x, particle.pos.y);
+      for (let j = 0; j < nearbyBoxes.length; j++) {
+        if (isNearBox(particle.pos.x, particle.pos.y, nearbyBoxes[j], band)) {
+          // Save fade progress so it can resume after this freeze cycle ends,
+          // rather than restarting the fade from 0 each time the user re-scrolls.
+          if (particle.scrollUnfrozeAtMs > 0) {
+            const fadeInMs = max(1, CONFIG.scrollFreezeFadeInMs);
+            particle.scrollFadeProgress = constrain((millis() - particle.scrollUnfrozeAtMs) / fadeInMs, 0, 1);
+          } else if (particle.scrollUnfrozeAtMs === -1) {
+            particle.scrollFadeProgress = 0;
+          }
+          // else scrollUnfrozeAtMs === 0 → not fading, scrollFadeProgress unchanged (stays 0)
+          particle.scrollFrozen = true;
+          particle.scrollUnfrozeAtMs = 0;
+          if (debugFadeParticleIndex === -1) {
+            debugFadeParticleIndex = i;
+          }
+          break;
+        }
+      }
+    }
+  };
+
+  // Move frozen particles by the screen-space scroll delta.
+  window.applyManualScrollDelta = function applyManualScrollDelta(screenDx, screenDy) {
+    if (!manualScrollActive) return;
+    const simDx = screenDx * currentRenderScale;
+    const simDy = screenDy * currentRenderScale;
+    for (let i = 0; i < particles.length; i++) {
+      const particle = particles[i];
+      if (!particle.scrollFrozen) continue;
+      particle.pos.x += simDx;
+      particle.pos.y += simDy;
+      particle.prevX = particle.pos.x;
+      particle.prevY = particle.pos.y;
+      particle.displayX = particle.pos.x;
+      particle.displayY = particle.pos.y;
+    }
+  };
+
+  // Release all frozen particles when manual scroll ends.
+  window.onManualScrollEnd = function onManualScrollEnd() {
+    manualScrollActive = false;
+    const nowMs = millis();
+    for (let i = 0; i < particles.length; i++) {
+      const particle = particles[i];
+      if (particle.scrollFrozen) {
+        particle.vel.x = 0;
+        particle.vel.y = 0;
+        particle.scrollFrozen = false;
+        // Resume fade from saved progress rather than always restarting from 0.
+        // scrollFadeProgress > 0 means we interrupted a previous fade mid-way.
+        if (particle.scrollFadeProgress > 0) {
+          const fadeInMs = max(1, CONFIG.scrollFreezeFadeInMs);
+          particle.scrollUnfrozeAtMs = millis() - particle.scrollFadeProgress * fadeInMs;
+          particle.scrollFadeProgress = 0;
+        } else {
+          particle.scrollUnfrozeAtMs = -1;
+        }
+        syncParticleDisplayState(particle);
+        continue;
+      }
+      // Particles that drifted inside boxes during scroll: disable their
+      // collision so they pass through naturally instead of being ejected.
+      // Collision is re-enabled when they wrap at the screen edge.
+      if (particle.ignoresBoxCollision || particle.scrollCollisionDisabled) continue;
+      const nearbyBoxes = getNearbyBoxesForPoint(particle.pos.x, particle.pos.y);
+      for (let j = 0; j < nearbyBoxes.length; j++) {
+        if (isParticleInsideBox(particle.pos.x, particle.pos.y, nearbyBoxes[j])) {
+          particle.scrollCollisionDisabled = true;
+          break;
+        }
+      }
+    }
+  };
+
+  window.getScrollFreezeDebounceMs = function getScrollFreezeDebounceMs() {
+    return CONFIG.scrollFreezeDebounceMs;
+  };
 }
 
 function draw() {
@@ -976,6 +1038,35 @@ function draw() {
   updateAdaptiveSeparationCadence(nowMs);
   renderParticles(dtFrames);
   renderBoxes();
+  // Debug: sample canvas pixel at the tracked fade particle's position.
+  if (debugFadeParticleIndex >= 0) {
+    const dp = particles[debugFadeParticleIndex];
+    if (dp.scrollUnfrozeAtMs !== 0) {
+      // Fade is in progress — log pixel RGBA each frame.
+      const renderNowMs = millis();
+      const fadeInMs = max(0, CONFIG.scrollFreezeFadeInMs);
+      const elapsed = dp.scrollUnfrozeAtMs > 0 ? renderNowMs - dp.scrollUnfrozeAtMs : 0;
+      const fadeFactor = fadeInMs > 0 ? constrain(elapsed / fadeInMs, 0, 1) : 1;
+      const px = get(Math.round(dp.displayX), Math.round(dp.displayY));
+      debugFadeLog.push({
+        ms: Math.round(renderNowMs),
+        elapsed_ms: Math.round(elapsed),
+        fade_factor: fadeFactor.toFixed(3),
+        px_R: px[0],
+        px_G: px[1],
+        px_B: px[2],
+        px_A: px[3],
+        displayX: Math.round(dp.displayX),
+        displayY: Math.round(dp.displayY),
+      });
+    } else if (debugFadeLog.length > 0) {
+      // Fade just completed — print the accumulated log.
+      console.log(`[fade debug] particle #${debugFadeParticleIndex} fade complete (${debugFadeLog.length} frames)`);
+      console.table(debugFadeLog);
+      debugFadeLog = [];
+      debugFadeParticleIndex = -1;
+    }
+  }
 }
 
 function windowResized() {
@@ -1097,9 +1188,6 @@ function setupDuneControls() {
         }
         if (def.key === 'boxCollisionParticipantRatio') {
           syncParticleBoxCollisionParticipation();
-        }
-        if (def.key === 'hillshadeResolutionDivisor') {
-          hillshadeBuffer = createHillshadeBuffer(width, height);
         }
       }
       if (
@@ -1537,6 +1625,18 @@ function syncUrlParamsFromConfig() {
   params.delete('windShadowZoneAlpha');
   params.delete('colorWindShadowZone');
   params.delete('colorWindShadowZoneAlpha');
+  params.delete('windBoostLightnessShift');
+  params.delete('hillshadeSunAngleDeg');
+  params.delete('hillshadeSunElevationDeg');
+  params.delete('hillshadeAmbient');
+  params.delete('hillshadeNormalStrength');
+  params.delete('hillshadeResolutionDivisor');
+  params.delete('usePolyShade');
+  params.delete('polyGridCols');
+  params.delete('polyGridRows');
+  params.delete('polyJitter');
+  params.delete('polyEdgeAlpha');
+  params.delete('polySlopeContrast');
   for (let i = 0; i < CONTROL_PARAM_DEFS.length; i++) {
     const def = CONTROL_PARAM_DEFS[i];
     const val = CONFIG[def.key];
@@ -1670,72 +1770,59 @@ function hexToRgb(rawHex) {
   };
 }
 
-function rgbToHsl(r, g, b) {
-  const rn = clampColorByte(r) / 255;
-  const gn = clampColorByte(g) / 255;
-  const bn = clampColorByte(b) / 255;
-  const maxC = Math.max(rn, gn, bn);
-  const minC = Math.min(rn, gn, bn);
-  const delta = maxC - minC;
-  let h = 0;
-  let s = 0;
-  const l = (maxC + minC) * 0.5;
-
-  if (delta > 0) {
-    s = delta / (1 - Math.abs(2 * l - 1));
-    switch (maxC) {
-      case rn:
-        h = ((gn - bn) / delta) % 6;
-        break;
-      case gn:
-        h = (bn - rn) / delta + 2;
-        break;
-      default:
-        h = (rn - gn) / delta + 4;
-        break;
-    }
-    h /= 6;
-    if (h < 0) h += 1;
-  }
-
-  return { h, s, l };
-}
-
-function hslToRgb(h, s, l) {
-  const hue2rgb = (p, q, t) => {
-    let tt = t;
-    if (tt < 0) tt += 1;
-    if (tt > 1) tt -= 1;
-    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
-    if (tt < 1 / 2) return q;
-    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
-    return p;
+// ── Oklab / OkLCh color conversion ───────────────────────────────────────────
+// sRGB (0–255) → Oklab. Returns { L, a, b }.
+function srgbToOklab(r, g, b) {
+  // Remove sRGB gamma (linearise)
+  const toLinear = c => {
+    c /= 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
   };
-
-  if (s <= 0) {
-    const gray = clampColorByte(l * 255);
-    return { r: gray, g: gray, b: gray };
-  }
-
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
+  const lr = toLinear(r);
+  const lg = toLinear(g);
+  const lb = toLinear(b);
+  // Linear RGB → LMS (Oklab M1)
+  const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
+  const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
+  const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+  // LMS → Lab (Oklab M2)
   return {
-    r: clampColorByte(hue2rgb(p, q, h + 1 / 3) * 255),
-    g: clampColorByte(hue2rgb(p, q, h) * 255),
-    b: clampColorByte(hue2rgb(p, q, h - 1 / 3) * 255),
+    L:  0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    a:  1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    b:  0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s,
   };
 }
 
-function applyLightnessShiftToRgb(r, g, b, shift) {
-  const amount = constrain(shift, -1, 1);
-  if (amount === 0) {
-    return { r: clampColorByte(r), g: clampColorByte(g), b: clampColorByte(b) };
-  }
-  const hsl = rgbToHsl(r, g, b);
-  const nextL = amount >= 0
-    ? hsl.l + (1 - hsl.l) * amount
-    : hsl.l * (1 + amount);
-  return hslToRgb(hsl.h, hsl.s, constrain(nextL, 0, 1));
+// Oklab → sRGB (0–255). Returns { r, g, b } as integers.
+function oklabToSrgb(L, a, b) {
+  // Lab → LMS
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+  const l = l_ * l_ * l_;
+  const m = m_ * m_ * m_;
+  const s = s_ * s_ * s_;
+  // LMS → linear RGB
+  const lr =  4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+  const lg = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+  const lb = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+  // Apply sRGB gamma and clamp to 0–255
+  const toSrgb = c => {
+    c = Math.max(0, Math.min(1, c));
+    return Math.round((c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055) * 255);
+  };
+  return { r: toSrgb(lr), g: toSrgb(lg), b: toSrgb(lb) };
+}
+
+// sRGB (0–255) → OkLCh. Returns { L, C, h } where h is in radians.
+function srgbToOklch(r, g, b) {
+  const { L, a, b: bk } = srgbToOklab(r, g, b);
+  return { L, C: Math.sqrt(a * a + bk * bk), h: Math.atan2(bk, a) };
+}
+
+// OkLCh → sRGB (0–255). Returns { r, g, b } as integers.
+function oklchToSrgb(L, C, h) {
+  return oklabToSrgb(L, C * Math.cos(h), C * Math.sin(h));
 }
 
 function applyBoostedConfigToParticle(particle, reseedBoosted = false) {
@@ -1820,6 +1907,10 @@ function createParticle(x, y, ignoresBoxCollision = false) {
     boxGlowIntensity: 0,
     boxGlowPeakIntensity: 0,
     boxGlowPeakMs: 0,
+    scrollFrozen: false,
+    scrollUnfrozeAtMs: 0,
+    scrollFadeProgress: 0,
+    scrollCollisionDisabled: false,
   };
 }
 
@@ -1987,6 +2078,7 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
   }
   for (let i = 0; i < particles.length; i++) {
     const particle = particles[i];
+    if (particle.scrollFrozen) continue;
     particle.prevX = particle.pos.x;
     particle.prevY = particle.pos.y;
     let accX = 0;
@@ -2012,7 +2104,8 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
       accY = accY * wb + particle.boidAccY * (1 - wb);
     }
 
-    if (!particle.ignoresBoxCollision) {
+    const skipBoxCollision = particle.ignoresBoxCollision || particle.scrollCollisionDisabled || manualScrollActive;
+    if (!skipBoxCollision) {
       const nearbyBoxes = getNearbyBoxesForPoint(particle.pos.x, particle.pos.y);
       for (let j = 0; j < nearbyBoxes.length; j++) {
         const boxForce = applyBoxInfluence(particle, nearbyBoxes[j], nowMs);
@@ -2036,31 +2129,27 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
     particle.pos.y += particle.vel.y * safeDtFrames;
 
     // Strict occupancy: particles are not allowed to remain inside boxes.
-    if (!particle.ignoresBoxCollision) {
+    if (!skipBoxCollision) {
       const nearbyBoxes = getNearbyBoxesForPoint(particle.pos.x, particle.pos.y);
       for (let j = 0; j < nearbyBoxes.length; j++) {
         resolveParticleBoxContainment(particle, nearbyBoxes[j]);
         resolveParticleSurfaceSlide(particle, nearbyBoxes[j]);
       }
-      // Compute glow: proximity triggers it, fade timer always governs output.
-      if (CONFIG.enableBoxGlow) {
-        // Measure proximity to nearest box surface.
-        let proximityGlow = 0;
-        if (nearbyBoxes.length > 0) {
-          const glowRad = CONFIG.boxGlowRadius;
-          let minDist = glowRad;
-          for (let j = 0; j < nearbyBoxes.length; j++) {
-            const box = nearbyBoxes[j];
-            const nearX = constrain(particle.pos.x, box.x, box.x + box.w);
-            const nearY = constrain(particle.pos.y, box.y, box.y + box.h);
-            const dx = particle.pos.x - nearX;
-            const dy = particle.pos.y - nearY;
-            const d = sqrt(dx * dx + dy * dy);
-            if (d < minDist) minDist = d;
-          }
-          proximityGlow = max(0, 1 - minDist / glowRad);
+      // Proximity stamping: only when box collision is active so that glow
+      // peaks are earned by actually being near a box surface.
+      if (CONFIG.enableBoxGlow && nearbyBoxes.length > 0) {
+        const glowRad = CONFIG.boxGlowRadius;
+        let minDist = glowRad;
+        for (let j = 0; j < nearbyBoxes.length; j++) {
+          const box = nearbyBoxes[j];
+          const nearX = constrain(particle.pos.x, box.x, box.x + box.w);
+          const nearY = constrain(particle.pos.y, box.y, box.y + box.h);
+          const dx = particle.pos.x - nearX;
+          const dy = particle.pos.y - nearY;
+          const d = sqrt(dx * dx + dy * dy);
+          if (d < minDist) minDist = d;
         }
-        // Re-stamp peak whenever proximity is active and stronger than current fade.
+        const proximityGlow = max(0, 1 - minDist / glowRad);
         if (proximityGlow > 0) {
           const elapsed = nowMs - particle.boxGlowPeakMs;
           const delay = CONFIG.boxGlowFadeDelayMs;
@@ -2078,21 +2167,24 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
             particle.boxGlowPeakMs = nowMs;
           }
         }
-        // Fade timer always governs output.
-        if (particle.boxGlowPeakMs > 0) {
-          const elapsed = nowMs - particle.boxGlowPeakMs;
-          const delay = CONFIG.boxGlowFadeDelayMs;
-          const duration = CONFIG.boxGlowFadeDurationMs;
-          if (elapsed < delay) {
-            particle.boxGlowIntensity = particle.boxGlowPeakIntensity;
-          } else if (duration > 0 && elapsed < delay + duration) {
-            particle.boxGlowIntensity = particle.boxGlowPeakIntensity * (1 - (elapsed - delay) / duration);
-          } else {
-            particle.boxGlowIntensity = 0;
-            particle.boxGlowPeakMs = 0;
-          }
+      }
+    }
+    // Glow fade timer runs regardless of skipBoxCollision so that particles
+    // retain their glow color during manual scroll (when box collision is
+    // suspended). Without this, boxGlowIntensity would be zeroed every frame
+    // during scroll, stripping the core color from particles near the text.
+    if (CONFIG.enableBoxGlow && !particle.ignoresBoxCollision) {
+      if (particle.boxGlowPeakMs > 0) {
+        const elapsed = nowMs - particle.boxGlowPeakMs;
+        const delay = CONFIG.boxGlowFadeDelayMs;
+        const duration = CONFIG.boxGlowFadeDurationMs;
+        if (elapsed < delay) {
+          particle.boxGlowIntensity = particle.boxGlowPeakIntensity;
+        } else if (duration > 0 && elapsed < delay + duration) {
+          particle.boxGlowIntensity = particle.boxGlowPeakIntensity * (1 - (elapsed - delay) / duration);
         } else {
           particle.boxGlowIntensity = 0;
+          particle.boxGlowPeakMs = 0;
         }
       } else {
         particle.boxGlowIntensity = 0;
@@ -2288,6 +2380,7 @@ function resolveParticleSeparation(nowMs, tickIndex = simStepCount) {
 }
 
 function isParticleSeparationActive(particle, nowMs) {
+  if (particle.scrollFrozen) return false;
   if (particle.ignoresBoxCollision) return false;
   if (isParticleRecentlyInteracted(particle, nowMs)) return true;
   const speedSq = particle.vel.x * particle.vel.x + particle.vel.y * particle.vel.y;
@@ -2738,7 +2831,8 @@ function resolveParticleBoxContainment(particle, box) {
 
 function enforceAllParticleBoxContainment() {
   for (let i = 0; i < particles.length; i++) {
-    if (particles[i].ignoresBoxCollision) continue;
+    if (particles[i].scrollFrozen) continue;
+    if (particles[i].ignoresBoxCollision || particles[i].scrollCollisionDisabled) continue;
     const nearbyBoxes = getNearbyBoxesForPoint(particles[i].pos.x, particles[i].pos.y);
     for (let j = 0; j < nearbyBoxes.length; j++) {
       resolveParticleBoxContainment(particles[i], nearbyBoxes[j]);
@@ -2879,6 +2973,7 @@ function resolveParticleBounds(particle, nowMs = millis()) {
 
   if (wrapped) {
     syncParticleDisplayState(particle, p.x, p.y);
+    particle.scrollCollisionDisabled = false;
   }
 }
 
@@ -2889,227 +2984,11 @@ function resetParticleInteractionState(particle) {
   particle.interactionSpeed = 0;
 }
 
-function renderPolyShade(nowMs) {
-  const cols = max(2, floor(CONFIG.polyGridCols));
-  const rows = max(2, floor(CONFIG.polyGridRows));
-  const cellW = width / cols;
-  const cellH = height / rows;
-
-  // Two extra cells on each axis provide margin for seamless wrap coverage
-  const rcols = cols + 2;
-  const rrows = rows + 2;
-  const stride = rcols + 1;
-  const vertCount = stride * (rrows + 1);
-
-  const windAngle = radians(CONFIG.ambientWindDirectionDeg);
-  const windDirX = cos(windAngle);
-  const windDirY = sin(windAngle);
-  const driftPixels = nowMs * 0.001 * CONFIG.duneDriftSpeed * 240;
-
-  const jitter = max(0, CONFIG.polyJitter);
-  const slopeContrast = max(0.01, CONFIG.polySlopeContrast);
-  const jNoiseScale = max(10, cellW * 3);
-
-  const rawSX   = new Float32Array(vertCount);
-  const rawSY   = new Float32Array(vertCount);
-  const wrapSX  = new Float32Array(vertCount);
-  const wrapSY  = new Float32Array(vertCount);
-  const heights = new Float32Array(vertCount);
-
-  // Pass 1: sample heights at base grid positions (material coords cancel drift internally)
-  for (let vrow = 0; vrow <= rrows; vrow++) {
-    for (let vcol = 0; vcol <= rcols; vcol++) {
-      const mx = (vcol - 1) * cellW;
-      const my = (vrow - 1) * cellH;
-      const sx = mx + windDirX * driftPixels;
-      const sy = my + windDirY * driftPixels;
-      const idx = vrow * stride + vcol;
-      rawSX[idx] = sx;
-      rawSY[idx] = sy;
-      heights[idx] = sampleDuneMultiplierAt(sx, sy, nowMs);
-    }
-  }
-
-  // Pass 2: slope-based jitter and final wrapped screen positions
-  for (let vrow = 0; vrow <= rrows; vrow++) {
-    for (let vcol = 0; vcol <= rcols; vcol++) {
-      const idx = vrow * stride + vcol;
-      let sx = rawSX[idx];
-      let sy = rawSY[idx];
-
-      if (jitter > 0) {
-        const mx = (vcol - 1) * cellW;
-        const my = (vrow - 1) * cellH;
-        // Central-difference slope from already-sampled neighbor heights
-        const hl = vcol > 0      ? heights[vrow * stride + vcol - 1] : heights[idx];
-        const hr = vcol < rcols  ? heights[vrow * stride + vcol + 1] : heights[idx];
-        const hu = vrow > 0      ? heights[(vrow - 1) * stride + vcol] : heights[idx];
-        const hd = vrow < rrows  ? heights[(vrow + 1) * stride + vcol] : heights[idx];
-        const slope = Math.sqrt(
-          Math.pow((hr - hl) / (2 * cellW), 2) +
-          Math.pow((hd - hu) / (2 * cellH), 2)
-        );
-        const jScale = jitter * (1 - constrain(slope * slopeContrast, 0, 1));
-        // Deterministic jitter keyed to material coords
-        sx += (noise(mx / jNoiseScale, my / jNoiseScale + 1000) - 0.5) * cellW * jScale;
-        sy += (noise(mx / jNoiseScale + 500, my / jNoiseScale) - 0.5) * cellH * jScale;
-      }
-
-      wrapSX[idx] = ((sx % width)  + width)  % width;
-      wrapSY[idx] = ((sy % height) + height) % height;
-    }
-  }
-
-  // Lighting
-  const sunAng  = radians(CONFIG.hillshadeSunAngleDeg);
-  const sunElev = radians(CONFIG.hillshadeSunElevationDeg);
-  const sunX = cos(sunElev) * cos(sunAng);
-  const sunY = cos(sunElev) * sin(sunAng);
-  const sunZ = sin(sunElev);
-  const cr = RENDER_COLORS.particles[0];
-  const cg = RENDER_COLORS.particles[1];
-  const cb = RENDER_COLORS.particles[2];
-  const str    = CONFIG.hillshadeNormalStrength;
-  const ambient = constrain(CONFIG.hillshadeAmbient, 0, 1);
-
-  const edgeAlpha = clampColorByte(CONFIG.polyEdgeAlpha);
-  if (edgeAlpha > 0) {
-    stroke(0, 0, 0, edgeAlpha);
-    strokeWeight(0.5);
-  } else {
-    noStroke();
-  }
-
-  const halfW = width  * 0.5;
-  const halfH = height * 0.5;
-
-  for (let vrow = 0; vrow < rrows; vrow++) {
-    for (let vcol = 0; vcol < rcols; vcol++) {
-      const i00 = vrow * stride + vcol;
-      const i10 = i00 + 1;
-      const i01 = i00 + stride;
-      const i11 = i01 + 1;
-
-      const x00 = wrapSX[i00], y00 = wrapSY[i00], h00 = heights[i00];
-      const x10 = wrapSX[i10], y10 = wrapSY[i10], h10 = heights[i10];
-      const x01 = wrapSX[i01], y01 = wrapSY[i01], h01 = heights[i01];
-      const x11 = wrapSX[i11], y11 = wrapSY[i11], h11 = heights[i11];
-
-      if (!isCrossSeam(x00, y00, x10, y10, x11, y11, halfW, halfH)) {
-        drawShadedTri(x00, y00, x10, y10, x11, y11, h00, h10, h11, cr, cg, cb, sunX, sunY, sunZ, str, ambient);
-      }
-      if (!isCrossSeam(x00, y00, x11, y11, x01, y01, halfW, halfH)) {
-        drawShadedTri(x00, y00, x11, y11, x01, y01, h00, h11, h01, cr, cg, cb, sunX, sunY, sunZ, str, ambient);
-      }
-    }
-  }
-
-  noStroke();
-}
-
-function isCrossSeam(x0, y0, x1, y1, x2, y2, halfW, halfH) {
-  return (
-    Math.abs(x0 - x1) > halfW || Math.abs(x1 - x2) > halfW || Math.abs(x0 - x2) > halfW ||
-    Math.abs(y0 - y1) > halfH || Math.abs(y1 - y2) > halfH || Math.abs(y0 - y2) > halfH
-  );
-}
-
-function drawShadedTri(x0, y0, x1, y1, x2, y2, h0, h1, h2, cr, cg, cb, sunX, sunY, sunZ, str, ambient) {
-  const ax = x1 - x0, ay = y1 - y0, az = (h1 - h0) * str;
-  const bx = x2 - x0, by = y2 - y0, bz = (h2 - h0) * str;
-
-  let nx = ay * bz - az * by;
-  let ny = az * bx - ax * bz;
-  let nz = ax * by - ay * bx;
-  if (nz < 0) { nx = -nx; ny = -ny; nz = -nz; }
-
-  const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
-  if (nLen < 1e-6) return;
-
-  const diff = Math.max(0, (nx * sunX + ny * sunY + nz * sunZ) / nLen);
-  const brightness = ambient + (1 - ambient) * diff;
-
-  fill(cr * brightness, cg * brightness, cb * brightness);
-  triangle(x0, y0, x1, y1, x2, y2);
-}
-
-function createHillshadeBuffer(canvasW, canvasH) {
-  const div = max(1, floor(CONFIG.hillshadeResolutionDivisor));
-  const bw = max(1, floor(canvasW / div));
-  const bh = max(1, floor(canvasH / div));
-  const pg = createGraphics(bw, bh);
-  pg.pixelDensity(1);
-  return pg;
-}
-
-function renderHillshade(nowMs) {
-  if (!hillshadeBuffer) return;
-
-  const pg = hillshadeBuffer;
-  const bw = pg.width;
-  const bh = pg.height;
-  const scaleX = width / bw;
-  const scaleY = height / bh;
-
-  // Sun vector (pointing from surface toward light source)
-  const sunAng = radians(CONFIG.hillshadeSunAngleDeg);
-  const sunElev = radians(CONFIG.hillshadeSunElevationDeg);
-  const sunX = cos(sunElev) * cos(sunAng);
-  const sunY = cos(sunElev) * sin(sunAng);
-  const sunZ = sin(sunElev);
-  const sunLen = sqrt(sunX * sunX + sunY * sunY + sunZ * sunZ);
-
-  const cr = RENDER_COLORS.particles[0];
-  const cg = RENDER_COLORS.particles[1];
-  const cb = RENDER_COLORS.particles[2];
-  const str = CONFIG.hillshadeNormalStrength;
-  const ambient = constrain(CONFIG.hillshadeAmbient, 0, 1);
-
-  // Build height grid (one sample per buffer pixel)
-  const heights = new Float32Array(bw * bh);
-  for (let py = 0; py < bh; py++) {
-    for (let px = 0; px < bw; px++) {
-      heights[py * bw + px] = sampleDuneMultiplierAt(px * scaleX, py * scaleY, nowMs);
-    }
-  }
-
-  // Compute lighting and write pixels
-  pg.loadPixels();
-  for (let py = 0; py < bh; py++) {
-    for (let px = 0; px < bw; px++) {
-      const hC = heights[py * bw + px];
-      const hR = px < bw - 1 ? heights[py * bw + px + 1] : hC;
-      const hL = px > 0      ? heights[py * bw + px - 1] : hC;
-      const hD = py < bh - 1 ? heights[(py + 1) * bw + px] : hC;
-      const hU = py > 0      ? heights[(py - 1) * bw + px] : hC;
-
-      // Surface normal from finite differences
-      const nx = -(hR - hL) * 0.5 * str;
-      const ny = -(hD - hU) * 0.5 * str;
-      const nz = 1.0;
-      const nLen = sqrt(nx * nx + ny * ny + nz * nz);
-
-      const diff = max(0, (nx * sunX + ny * sunY + nz * sunZ) / (nLen * sunLen));
-      const brightness = ambient + (1 - ambient) * diff;
-
-      const idx = (py * bw + px) * 4;
-      pg.pixels[idx]     = cr * brightness;
-      pg.pixels[idx + 1] = cg * brightness;
-      pg.pixels[idx + 2] = cb * brightness;
-      pg.pixels[idx + 3] = 255;
-    }
-  }
-  pg.updatePixels();
-
-  image(pg, 0, 0, width, height);
-}
-
 function renderParticles(dtFrames = 1) {
   const baseR = RENDER_COLORS.particles[0];
   const baseG = RENDER_COLORS.particles[1];
   const baseB = RENDER_COLORS.particles[2];
   const baseA = getCurrentParticleAlpha();
-  const fastLightnessShift = constrain(CONFIG.windBoostLightnessShift, -1, 1);
   const minSpeed = max(0, getQualityValue('particleRenderMinSpeed'));
   const minSpeedRamp = max(0.02, minSpeed * 0.7);
   const alphaBoost = max(0, CONFIG.particleSpeedAlphaBoost);
@@ -3122,8 +3001,10 @@ function renderParticles(dtFrames = 1) {
   const particleCount = particles.length;
   // Scale segment clamp with dt so longer frames don't truncate trails.
   const maxSegLen = MAX_RENDER_SEGMENT_LENGTH_PX * max(1, dtFrames);
-  // Pre-compute boosted lightness-shifted color once (not per boosted particle).
-  const boostedColor = applyLightnessShiftToRgb(baseR, baseG, baseB, fastLightnessShift);
+  // Pre-compute boosted color once (not per boosted particle).
+  const boostedColor = { r: RENDER_COLORS.windBoostColor[0], g: RENDER_COLORS.windBoostColor[1], b: RENDER_COLORS.windBoostColor[2] };
+  const fadeInMs = max(0, CONFIG.scrollFreezeFadeInMs);
+  const renderNowMs = millis();
   const glowEnabled = CONFIG.enableBoxGlow;
   const glowHaloSize = CONFIG.boxGlowHaloSize;
   const glowHaloAlpha = CONFIG.boxGlowHaloAlpha;
@@ -3133,6 +3014,10 @@ function renderParticles(dtFrames = 1) {
   const glowCoreG = RENDER_COLORS.boxGlowCore[1];
   const glowCoreB = RENDER_COLORS.boxGlowCore[2];
   const glowCoreA = RENDER_COLORS.boxGlowCore.length > 3 ? RENDER_COLORS.boxGlowCore[3] : 255;
+  // Pre-convert particle and glow core colors to OkLCh for perceptually uniform blending.
+  const baseOklch = srgbToOklch(baseR, baseG, baseB);
+  const boostedOklch = srgbToOklch(boostedColor.r, boostedColor.g, boostedColor.b);
+  const glowCoreOklch = srgbToOklch(glowCoreR, glowCoreG, glowCoreB);
   // Track previous stroke state to skip redundant canvas state changes.
   let prevStrokeR = -1;
   let prevStrokeG = -1;
@@ -3145,7 +3030,24 @@ function renderParticles(dtFrames = 1) {
     getInterpolatedParticlePosition(p);
     const interpX = _interpolatedPos.x;
     const interpY = _interpolatedPos.y;
-    if (speed < minSpeed) {
+    // Compute scroll fade-in factor (0..1). Only applies to particles
+    // that were frozen during manual scroll (scrollUnfrozeAtMs !== 0).
+    // -1 means "start timing on this render frame".
+    let scrollFadeFactor = 1;
+    if (fadeInMs > 0 && p.scrollUnfrozeAtMs !== 0) {
+      if (p.scrollUnfrozeAtMs < 0) {
+        p.scrollUnfrozeAtMs = renderNowMs;
+      }
+      const elapsed = renderNowMs - p.scrollUnfrozeAtMs;
+      if (elapsed >= fadeInMs) {
+        p.scrollUnfrozeAtMs = 0;
+      } else {
+        scrollFadeFactor = elapsed / fadeInMs;
+      }
+    }
+    const isFadingIn = scrollFadeFactor < 1;
+    // Skip particles below the speed threshold, unless they are fading in.
+    if (speed < minSpeed && !isFadingIn) {
       p.displayX = interpX;
       p.displayY = interpY;
       return;
@@ -3154,20 +3056,17 @@ function renderParticles(dtFrames = 1) {
     const t = particleCount > 1 ? i / (particleCount - 1) : 0;
     const renderAlphaWeight = lerp(1, tailAlphaWeight, t);
     const renderWidthWeight = lerp(1, tailWidthWeight, t);
+    const colorR = p.isBoosted ? boostedColor.r : baseR;
+    const colorG = p.isBoosted ? boostedColor.g : baseG;
+    const colorB = p.isBoosted ? boostedColor.b : baseB;
     const speedFactor = 1 + speed;
     const duneSignal = constrain(p.duneAlphaSignal || 0, 0, 1);
     const duneAlphaFactor = 1 + duneAlphaBoost * duneSignal;
     const duneSizeFactor = 1 + duneSizeBoost * duneSignal;
     const fastAlphaAdd = p.isBoosted ? max(0, CONFIG.windBoostAlphaMultiplier) : 0;
-    const colorR = p.isBoosted ? boostedColor.r : baseR;
-    const colorG = p.isBoosted ? boostedColor.g : baseG;
-    const colorB = p.isBoosted ? boostedColor.b : baseB;
-    // Quantize alpha to nearest integer (it's a 0-255 byte).
-    const alpha = Math.round(constrain(
-      baseA * renderAlphaWeight * minSpeedAlphaRamp * (1 + alphaBoost * (speedFactor - 1)) * duneAlphaFactor + fastAlphaAdd,
-      0,
-      255
-    ));
+    // Compute the normal alpha, then multiply by scroll fade factor.
+    const normalAlpha = baseA * renderAlphaWeight * minSpeedAlphaRamp * (1 + alphaBoost * (speedFactor - 1)) * duneAlphaFactor + fastAlphaAdd;
+    const alpha = Math.round(constrain(normalAlpha * scrollFadeFactor, 0, 255));
     // Quantize weight to nearest 0.25px to reduce unique state transitions.
     const weight = Math.max(
       0.5,
@@ -3189,17 +3088,28 @@ function renderParticles(dtFrames = 1) {
     const glow = glowEnabled ? p.boxGlowIntensity : 0;
     if (glow > 0) {
       // Halo pass: wider stroke, base color, low alpha scaled by intensity.
-      const haloA = Math.round(glowHaloAlpha * glow);
+      const haloA = Math.round(glowHaloAlpha * glow * scrollFadeFactor);
       const haloW = Math.max(0.5, weight * glowHaloSize);
       stroke(colorR, colorG, colorB, haloA);
       strokeWeight(haloW);
       line(segment.fromX, segment.fromY, segment.toX, segment.toY);
-      // Core pass: lerp toward core color based on intensity and blend setting.
+      // Core pass: lerp toward core color in OkLCh for perceptually uniform blending.
+      // Shortest-arc hue interpolation keeps the transition on the vivid side of the color wheel.
       const blend = glow * glowCoreBlend;
-      const coreR = Math.round(colorR + (glowCoreR - colorR) * blend);
-      const coreG = Math.round(colorG + (glowCoreG - colorG) * blend);
-      const coreB = Math.round(colorB + (glowCoreB - colorB) * blend);
-      const coreA = Math.round(alpha + (glowCoreA - alpha) * blend);
+      const src = p.isBoosted ? boostedOklch : baseOklch;
+      const dst = glowCoreOklch;
+      let dh = dst.h - src.h;
+      if (dh > Math.PI)  dh -= 2 * Math.PI;
+      if (dh < -Math.PI) dh += 2 * Math.PI;
+      const blendedRgb = oklchToSrgb(
+        src.L + (dst.L - src.L) * blend,
+        src.C + (dst.C - src.C) * blend,
+        src.h + dh * blend,
+      );
+      const coreR = blendedRgb.r;
+      const coreG = blendedRgb.g;
+      const coreB = blendedRgb.b;
+      const coreA = Math.round((alpha + (glowCoreA - alpha) * blend) * scrollFadeFactor);
       const coreW = weight + (glowCoreDiameter - weight) * glow;
       stroke(coreR, coreG, coreB, coreA);
       strokeWeight(coreW);
@@ -3229,14 +3139,14 @@ function renderParticles(dtFrames = 1) {
   strokeCap(ROUND);
   for (let i = 0; i < particleCount; i++) {
     const p = particles[i];
-    if (p.isBoosted) continue;
+    if (p.isBoosted || p.scrollFrozen) continue;
     renderParticleAt(p, i);
   }
   // Reset tracking before the boosted pass (different base color).
   prevStrokeR = -1; prevStrokeG = -1; prevStrokeB = -1; prevStrokeA = -1; prevWeight = -1;
   for (let i = 0; i < particleCount; i++) {
     const p = particles[i];
-    if (!p.isBoosted) continue;
+    if (!p.isBoosted || p.scrollFrozen) continue;
     renderParticleAt(p, i);
   }
   noStroke();

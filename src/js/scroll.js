@@ -9,6 +9,10 @@ let reducedMotionMediaQuery = null;
 let scrollTickRafId = null;
 let refreshRingMetricsRafId = null;
 let flowBoxesSyncRafId = null;
+let manualScrollDebounceId = null;
+let isManualScrollActive = false;
+let prevLeftActiveOffset = null;
+const MANUAL_SCROLL_DEBOUNCE_MS_FALLBACK = 300;
 const glyphMeasureCanvas = document.createElement('canvas');
 const glyphMeasureCtx = glyphMeasureCanvas.getContext('2d');
 const flowParams = new URLSearchParams(window.location.search);
@@ -642,7 +646,7 @@ function createScrollZone() {
 // Funtion to fire on every scroll event.
 function scrollTick(timestamp = null) {
     if(scrollDebugV) {
-        dbp('scrollTick()') 
+        dbp('scrollTick()')
     }
 
     perfRecordFrame(timestamp, 'manual');
@@ -661,7 +665,24 @@ function scrollTick(timestamp = null) {
         wrapCurrentStanzaToRingCenter();
     }
 
+    if (!isManualScrollActive) {
+        isManualScrollActive = true;
+        if (typeof window.onManualScrollStart === 'function') {
+            window.onManualScrollStart();
+        }
+    }
+
     setAnchorOffsets(null);
+    clearTimeout(manualScrollDebounceId);
+    const debounceMs = typeof window.getScrollFreezeDebounceMs === 'function'
+        ? window.getScrollFreezeDebounceMs()
+        : MANUAL_SCROLL_DEBOUNCE_MS_FALLBACK;
+    manualScrollDebounceId = setTimeout(() => {
+        isManualScrollActive = false;
+        if (typeof window.onManualScrollEnd === 'function') {
+            window.onManualScrollEnd();
+        }
+    }, debounceMs);
 }
 
 // Set the scroll zone and track any movement in a rolling scroll total.
@@ -731,6 +752,14 @@ function setAnchorOffsets(usedSlope = null) {
     }
 
     // mourn.trackers.anchorStyle.setProperty('--big-b', bigB);
+    // Signal the screen-space scroll delta to frozen particles.
+    if (isManualScrollActive && prevLeftActiveOffset !== null && typeof window.applyManualScrollDelta === 'function') {
+        const prevTop = mourn.scrollStanza.currentTopActiveOffset || 0;
+        const deltaX = snappedLeftOffset - prevLeftActiveOffset;
+        const deltaY = newTopActiveOffset - prevTop;
+        window.applyManualScrollDelta(deltaX, deltaY);
+    }
+    prevLeftActiveOffset = snappedLeftOffset;
     mourn.scrollStanza.currentTopActiveOffset = newTopActiveOffset;
     mourn.trackers.anchorStyle.setProperty('--top-active-offset', mourn.scrollStanza.currentTopActiveOffset);
     queueFlowFieldBoxSync();
