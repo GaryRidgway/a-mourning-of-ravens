@@ -11,6 +11,9 @@
         font-family: "Cinzel";
         src: url("./src/fonts/Cinzel/Cinzel-VariableFont_wght.ttf");
     }
+    #defaultCanvas0 {
+        will-change: contents;
+    }
     </style>
 
   <!-- Add css files fromt the dist folder here -->
@@ -578,6 +581,23 @@
           <output data-value-for="boxGlowCoreWhite"></output>
         </label>
 
+        <label class="control-row control-toggle">
+          <span>OkLCh Blend</span>
+          <input type="checkbox" data-key="glowBlendOklch" />
+        </label>
+
+        <label class="control-row">
+          <span>Blend Chroma Floor</span>
+          <input type="range" min="0" max="0.6" step="0.001" data-key="glowBlendChromaFloor" />
+          <output data-value-for="glowBlendChromaFloor"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Blend Hue Shift</span>
+          <input type="range" min="-180" max="180" step="1" data-key="glowBlendHueShift" />
+          <output data-value-for="glowBlendHueShift"></output>
+        </label>
+
         <label class="control-row">
           <span>Core Color</span>
           <input type="color" data-color-key="boxGlowCore" />
@@ -662,19 +682,18 @@
   <script src="./dist/js/main.min.js"></script> -->
 
   <!-- vvv Add scripts here from dist folder vvv -->
-  <script src="./src/vendor/p5/p5.min.js"></script>
-  <script src="./src/vendor/p5/p5.dom.min.js"></script>
-  <script src="./src/vendor/p5/p5.sound.min.js"></script>
-  <script src="./src/js/flowField.js"></script>
-  <script src="./src/js/poem_json.js"></script>
-  <script src="./src/js/variables.js"></script>
-  <script src="./src/js/debug.js"></script>
-  <script src="./src/js/inputHandler.js"></script>
-  <script src="./src/js/helpers.js"></script>
-  <script src="./src/js/staging.js"></script>
-  <script src="./src/js/presenting.js"></script>
-  <script src="./src/js/scroll.js"></script>
-  <script src="./src/js/main.js"></script>
+  <script src="./src/vendor/p5/p5.min.js" defer></script>
+  <script src="./src/vendor/p5/p5.dom.min.js" defer></script>
+  <script src="./src/js/flowField.js" defer></script>
+  <script src="./src/js/poem_json.js" defer></script>
+  <script src="./src/js/variables.js" defer></script>
+  <script src="./src/js/debug.js" defer></script>
+  <script src="./src/js/inputHandler.js" defer></script>
+  <script src="./src/js/helpers.js" defer></script>
+  <script src="./src/js/staging.js" defer></script>
+  <script src="./src/js/presenting.js" defer></script>
+  <script src="./src/js/scroll.js" defer></script>
+  <script src="./src/js/main.js" defer></script>
 </body>
 
 </html>

@@ -47,11 +47,14 @@ const CONFIG = {
   enableBoxGlow: true,
   boxGlowRadius: 3,
   boxGlowHaloSize: 4.8,
-  boxGlowHaloAlpha: 37,
-  boxGlowCoreWhite: 0.75,
+  boxGlowHaloAlpha: 43,
+  boxGlowCoreWhite: 1,
   boxGlowCoreDiameter: 1.4,
-  boxGlowFadeDelayMs: 1090,
-  boxGlowFadeDurationMs: 2340,
+  boxGlowFadeDelayMs: 1000,
+  boxGlowFadeDurationMs: 1000,
+  glowBlendOklch: true,
+  glowBlendChromaFloor: 0.404,
+  glowBlendHueShift: 0,
   edgeRespawnWeightBase: 0.05,
   edgeRespawnWeightStrength: 0.45,
   edgeRespawnWeightExponent: 2,
@@ -120,7 +123,7 @@ const RENDER_COLORS = {
   separationZone: [130, 175, 235],
   boxStrokeIdle: [200, 200, 180, 0],
   boxStrokeDragged: [250, 230, 190, 0],
-  boxGlowCore: [200, 0, 255, 255],
+  boxGlowCore: [255, 204, 0, 255],
 };
 
 const RENDER_COLORS_DEFAULTS = {};
@@ -188,6 +191,9 @@ const CONTROL_PARAM_DEFS = [
   { key: 'boxGlowCoreDiameter', type: 'number', digits: 1 },
   { key: 'boxGlowFadeDelayMs', type: 'number', digits: 0 },
   { key: 'boxGlowFadeDurationMs', type: 'number', digits: 0 },
+  { key: 'glowBlendOklch', type: 'bool' },
+  { key: 'glowBlendChromaFloor', type: 'number', digits: 3 },
+  { key: 'glowBlendHueShift', type: 'number', digits: 1 },
   { key: 'edgeRespawnWeightBase', type: 'number', digits: 2 },
   { key: 'edgeRespawnWeightStrength', type: 'number', digits: 2 },
   { key: 'edgeRespawnWeightExponent', type: 'number', digits: 2 },
@@ -304,6 +310,9 @@ const CONTROL_TOOLTIPS = {
   boxGlowCoreDiameter: 'Stroke diameter of the glowing core in pixels. Larger values make the core color more visible.',
   boxGlowFadeDelayMs: 'How long a particle holds full glow after leaving the box surface, in milliseconds.',
   boxGlowFadeDurationMs: 'How long the glow takes to fade out after the delay, in milliseconds.',
+  glowBlendOklch: 'Uses OkLCh perceptual colour space for the glow blend instead of a plain RGB lerp. Keeps colours vivid and avoids passing through grey or white at the midpoint.',
+  glowBlendChromaFloor: 'Minimum chroma (colour vividness) held during the OkLCh glow blend. Higher values prevent the transition from desaturating toward grey at the midpoint.',
+  glowBlendHueShift: 'Rotates the glow core hue before blending, in degrees. Shifts which arc of the colour wheel the transition travels along.',
   boxForceMaxRadius: 'Maximum distance from a collider where box influence is allowed to affect particles.',
   surfaceSlideBand: 'Thickness of the near-surface band where particles are encouraged to slide along collider faces.',
   staticInfluenceForwardDotMin: 'Minimum forward alignment required before a moving box starts affecting nearby particles.',
@@ -347,6 +356,8 @@ const nearbyBoxesScratch = [];
 let nearbyBoxesQueryId = 0;
 const SIM_FIXED_STEP_MS = 1000 / 60;
 const SIM_MAX_FRAME_DELTA_MS = 250;
+const RENDER_TARGET_FRAME_MS = 1000 / 60;
+let _lastRenderMs = 0;
 const SIM_MAX_STEPS_PER_FRAME = 8;
 
 // Pre-allocated scratch objects to avoid per-particle-per-frame GC pressure.
@@ -980,7 +991,6 @@ function setup() {
   // Release all frozen particles when manual scroll ends.
   window.onManualScrollEnd = function onManualScrollEnd() {
     manualScrollActive = false;
-    const nowMs = millis();
     for (let i = 0; i < particles.length; i++) {
       const particle = particles[i];
       if (particle.scrollFrozen) {
@@ -1020,6 +1030,8 @@ function setup() {
 
 function draw() {
   const nowMs = millis();
+  if (nowMs - _lastRenderMs < RENDER_TARGET_FRAME_MS) return;
+  _lastRenderMs = nowMs;
   tickAdaptiveQuality(nowMs);
   if (simLastFrameMs === null) {
     simLastFrameMs = nowMs;
@@ -1038,35 +1050,6 @@ function draw() {
   updateAdaptiveSeparationCadence(nowMs);
   renderParticles(dtFrames);
   renderBoxes();
-  // Debug: sample canvas pixel at the tracked fade particle's position.
-  if (debugFadeParticleIndex >= 0) {
-    const dp = particles[debugFadeParticleIndex];
-    if (dp.scrollUnfrozeAtMs !== 0) {
-      // Fade is in progress — log pixel RGBA each frame.
-      const renderNowMs = millis();
-      const fadeInMs = max(0, CONFIG.scrollFreezeFadeInMs);
-      const elapsed = dp.scrollUnfrozeAtMs > 0 ? renderNowMs - dp.scrollUnfrozeAtMs : 0;
-      const fadeFactor = fadeInMs > 0 ? constrain(elapsed / fadeInMs, 0, 1) : 1;
-      const px = get(Math.round(dp.displayX), Math.round(dp.displayY));
-      debugFadeLog.push({
-        ms: Math.round(renderNowMs),
-        elapsed_ms: Math.round(elapsed),
-        fade_factor: fadeFactor.toFixed(3),
-        px_R: px[0],
-        px_G: px[1],
-        px_B: px[2],
-        px_A: px[3],
-        displayX: Math.round(dp.displayX),
-        displayY: Math.round(dp.displayY),
-      });
-    } else if (debugFadeLog.length > 0) {
-      // Fade just completed — print the accumulated log.
-      console.log(`[fade debug] particle #${debugFadeParticleIndex} fade complete (${debugFadeLog.length} frames)`);
-      console.table(debugFadeLog);
-      debugFadeLog = [];
-      debugFadeParticleIndex = -1;
-    }
-  }
 }
 
 function windowResized() {
@@ -1771,6 +1754,22 @@ function hexToRgb(rawHex) {
 }
 
 // ── Oklab / OkLCh color conversion ───────────────────────────────────────────
+// LUT for sRGB gamma encoding: maps quantised linear-light [0,1] → sRGB byte.
+// 4096 steps keeps the rounding error well under 1 output byte.
+const _SRGB_LUT_SIZE = 4096;
+const _SRGB_LUT = new Uint8Array(_SRGB_LUT_SIZE + 1);
+for (let i = 0; i <= _SRGB_LUT_SIZE; i++) {
+  const c = i / _SRGB_LUT_SIZE;
+  _SRGB_LUT[i] = Math.round(
+    (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055) * 255
+  );
+}
+function _linearToSrgbByte(c) {
+  if (c <= 0) return 0;
+  if (c >= 1) return 255;
+  return _SRGB_LUT[(c * _SRGB_LUT_SIZE + 0.5) | 0];
+}
+
 // sRGB (0–255) → Oklab. Returns { L, a, b }.
 function srgbToOklab(r, g, b) {
   // Remove sRGB gamma (linearise)
@@ -1806,12 +1805,8 @@ function oklabToSrgb(L, a, b) {
   const lr =  4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
   const lg = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
   const lb = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
-  // Apply sRGB gamma and clamp to 0–255
-  const toSrgb = c => {
-    c = Math.max(0, Math.min(1, c));
-    return Math.round((c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055) * 255);
-  };
-  return { r: toSrgb(lr), g: toSrgb(lg), b: toSrgb(lb) };
+  // Apply sRGB gamma via LUT — avoids Math.pow per channel per particle.
+  return { r: _linearToSrgbByte(lr), g: _linearToSrgbByte(lg), b: _linearToSrgbByte(lb) };
 }
 
 // sRGB (0–255) → OkLCh. Returns { L, C, h } where h is in radians.
@@ -2224,7 +2219,6 @@ function updateAdaptiveSeparationCadence(nowMs) {
     return;
   }
 
-  const frameMs = nowMs - lastDrawTimeMs;
   lastDrawTimeMs = nowMs;
   const maxCadence = max(baseCadence, floor(CONFIG.adaptiveCadenceMax));
 
@@ -3009,6 +3003,9 @@ function renderParticles(dtFrames = 1) {
   const glowHaloSize = CONFIG.boxGlowHaloSize;
   const glowHaloAlpha = CONFIG.boxGlowHaloAlpha;
   const glowCoreBlend = constrain(CONFIG.boxGlowCoreWhite, 0, 1);
+  const glowUseOklch = CONFIG.glowBlendOklch;
+  const glowChromaFloor = max(0, CONFIG.glowBlendChromaFloor);
+  const glowHueShift = CONFIG.glowBlendHueShift * (Math.PI / 180);
   const glowCoreDiameter = max(0.5, CONFIG.boxGlowCoreDiameter);
   const glowCoreR = RENDER_COLORS.boxGlowCore[0];
   const glowCoreG = RENDER_COLORS.boxGlowCore[1];
@@ -3093,22 +3090,28 @@ function renderParticles(dtFrames = 1) {
       stroke(colorR, colorG, colorB, haloA);
       strokeWeight(haloW);
       line(segment.fromX, segment.fromY, segment.toX, segment.toY);
-      // Core pass: lerp toward core color in OkLCh for perceptually uniform blending.
-      // Shortest-arc hue interpolation keeps the transition on the vivid side of the color wheel.
+      // Core pass: lerp toward core color.
       const blend = glow * glowCoreBlend;
-      const src = p.isBoosted ? boostedOklch : baseOklch;
-      const dst = glowCoreOklch;
-      let dh = dst.h - src.h;
-      if (dh > Math.PI)  dh -= 2 * Math.PI;
-      if (dh < -Math.PI) dh += 2 * Math.PI;
-      const blendedRgb = oklchToSrgb(
-        src.L + (dst.L - src.L) * blend,
-        src.C + (dst.C - src.C) * blend,
-        src.h + dh * blend,
-      );
-      const coreR = blendedRgb.r;
-      const coreG = blendedRgb.g;
-      const coreB = blendedRgb.b;
+      let coreR, coreG, coreB;
+      if (glowUseOklch) {
+        const src = p.isBoosted ? boostedOklch : baseOklch;
+        const dst = glowCoreOklch;
+        let dh = (dst.h + glowHueShift) - src.h;
+        if (dh > Math.PI)  dh -= 2 * Math.PI;
+        if (dh < -Math.PI) dh += 2 * Math.PI;
+        const blendedRgb = oklchToSrgb(
+          src.L + (dst.L - src.L) * blend,
+          Math.max(glowChromaFloor * Math.sin(blend * Math.PI), src.C + (dst.C - src.C) * blend),
+          src.h + dh * blend,
+        );
+        coreR = blendedRgb.r;
+        coreG = blendedRgb.g;
+        coreB = blendedRgb.b;
+      } else {
+        coreR = Math.round(colorR + (glowCoreR - colorR) * blend);
+        coreG = Math.round(colorG + (glowCoreG - colorG) * blend);
+        coreB = Math.round(colorB + (glowCoreB - colorB) * blend);
+      }
       const coreA = Math.round((alpha + (glowCoreA - alpha) * blend) * scrollFadeFactor);
       const coreW = weight + (glowCoreDiameter - weight) * glow;
       stroke(coreR, coreG, coreB, coreA);
