@@ -991,9 +991,11 @@ function setup() {
   // Release all frozen particles when manual scroll ends.
   window.onManualScrollEnd = function onManualScrollEnd() {
     manualScrollActive = false;
+    let frozenCount = 0;
     for (let i = 0; i < particles.length; i++) {
       const particle = particles[i];
       if (particle.scrollFrozen) {
+        frozenCount++;
         particle.vel.x = 0;
         particle.vel.y = 0;
         particle.scrollFrozen = false;
@@ -1021,6 +1023,7 @@ function setup() {
         }
       }
     }
+    console.log(`[scroll-fade] onManualScrollEnd: ${frozenCount} frozen particles released, fadeInMs=${CONFIG.scrollFreezeFadeInMs}`);
   };
 
   window.getScrollFreezeDebounceMs = function getScrollFreezeDebounceMs() {
@@ -3034,12 +3037,21 @@ function renderParticles(dtFrames = 1) {
     if (fadeInMs > 0 && p.scrollUnfrozeAtMs !== 0) {
       if (p.scrollUnfrozeAtMs < 0) {
         p.scrollUnfrozeAtMs = renderNowMs;
+        if (i === debugFadeParticleIndex) {
+          console.log(`[scroll-fade] fade START for particle ${i}, fadeInMs=${fadeInMs}, renderNowMs=${renderNowMs}`);
+        }
       }
       const elapsed = renderNowMs - p.scrollUnfrozeAtMs;
       if (elapsed >= fadeInMs) {
         p.scrollUnfrozeAtMs = 0;
+        if (i === debugFadeParticleIndex) {
+          console.log(`[scroll-fade] fade COMPLETE for particle ${i}`);
+        }
       } else {
         scrollFadeFactor = elapsed / fadeInMs;
+        if (i === debugFadeParticleIndex && Math.floor(elapsed / 500) !== Math.floor((elapsed - 16) / 500)) {
+          console.log(`[scroll-fade] particle ${i}: sff=${scrollFadeFactor.toFixed(3)}, elapsed=${Math.round(elapsed)}ms / ${fadeInMs}ms`);
+        }
       }
     }
     const isFadingIn = scrollFadeFactor < 1;
@@ -3083,9 +3095,9 @@ function renderParticles(dtFrames = 1) {
       maxSegLen
     );
     const glow = glowEnabled ? p.boxGlowIntensity : 0;
-    if (glow > 0) {
+    if (glow > 0 && !isFadingIn) {
       // Halo pass: wider stroke, base color, low alpha scaled by intensity.
-      const haloA = Math.round(glowHaloAlpha * glow * scrollFadeFactor);
+      const haloA = Math.round(glowHaloAlpha * glow);
       const haloW = Math.max(0.5, weight * glowHaloSize);
       stroke(colorR, colorG, colorB, haloA);
       strokeWeight(haloW);
@@ -3112,7 +3124,7 @@ function renderParticles(dtFrames = 1) {
         coreG = Math.round(colorG + (glowCoreG - colorG) * blend);
         coreB = Math.round(colorB + (glowCoreB - colorB) * blend);
       }
-      const coreA = Math.round((alpha + (glowCoreA - alpha) * blend) * scrollFadeFactor);
+      const coreA = Math.round(constrain((normalAlpha + (glowCoreA - normalAlpha) * blend), 0, 255));
       const coreW = weight + (glowCoreDiameter - weight) * glow;
       stroke(coreR, coreG, coreB, coreA);
       strokeWeight(coreW);
