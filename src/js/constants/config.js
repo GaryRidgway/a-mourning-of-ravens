@@ -1,6 +1,6 @@
 const CONFIG = {
   particleCount: 5000,
-  enableAutoRenderScale: false,
+  enableAutoRenderScale: true,
   autoRenderScaleThresholdPx: 1080,
   particleSize: 0.25,
   particleSizeRandomNegative: 0,
@@ -83,6 +83,9 @@ const CONFIG = {
   maxSpeed: 1.7,
   trailAlpha: 3,
   trailAlphaSecondary: 62,
+  autoScrollSpeed: 0.3,
+  wordOffsetX: -2,
+  wordOffsetY: -1,
   scrollFreezeDebounceMs: 50,
   scrollFreezeFadeInMs: 1960,
   backgroundFadeOscillationPeriodSec: 0,

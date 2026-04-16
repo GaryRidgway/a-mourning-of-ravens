@@ -34,6 +34,18 @@
       <button id="collapse-all-btn" type="button">Collapse All</button>
 
       <details class="control-group" open>
+        <summary>Text</summary>
+
+        <label class="control-row">
+          <span>Font Size (px)</span>
+          <input type="range" min="12" max="40" step="1" id="font-size-input" />
+          <output id="font-size-output">16</output>
+        </label>
+        <p id="font-size-notice" class="control-notice"></p>
+
+      </details>
+
+      <details class="control-group" open>
         <summary>Particles</summary>
 
         <label class="control-row">
@@ -687,6 +699,21 @@
   <script src="./dist/js/variables.min.js"></script>
   <script src="./dist/js/functions.min.js"></script>
   <script src="./dist/js/main.min.js"></script> -->
+
+  <!-- Apply stored font size before deferred scripts run so staging measures at the right size.
+       URL param takes priority over localStorage so shared URLs work correctly. -->
+  <script>
+    (function () {
+      try {
+        var urlFs = parseFloat(new URLSearchParams(window.location.search).get('fontSize'));
+        var lsFs  = parseFloat(localStorage.getItem('dune-controls:font-size'));
+        var fs = Number.isFinite(urlFs) ? urlFs : lsFs;
+        if (Number.isFinite(fs) && fs >= 12 && fs <= 40) {
+          document.documentElement.style.setProperty('--base-font-size', fs);
+        }
+      } catch (e) {}
+    })();
+  </script>
 
   <!-- vvv Add scripts here from dist folder vvv -->
   <script src="./src/vendor/p5/p5.min.js" defer></script>

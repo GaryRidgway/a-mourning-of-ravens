@@ -31,7 +31,7 @@ function getAutoScrollSpeedFromURL() {
     const rawSpeed = searchParams.get('auto');
 
     if (rawSpeed === null) {
-        return null;
+        return CONFIG.autoScrollSpeed;
     }
 
     const speed = parseFloat(rawSpeed);

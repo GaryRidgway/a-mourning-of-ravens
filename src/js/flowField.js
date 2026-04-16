@@ -862,6 +862,7 @@ function setupDuneControls() {
   bindWordColliderControls(panel);
   setupDetailsPersistence(panel);
   applyQualityTargetFpsBounds(panel);
+  bindFontSizeControl();
   bindPanelResizeHandle(panel);
   bindCollapseAllButton(panel);
 }
@@ -999,11 +1000,40 @@ function bindWordColliderControls(panel) {
   const offsetXOut = panel.querySelector('#word-offset-x-out');
   const offsetYOut = panel.querySelector('#word-offset-y-out');
 
+  // Initialise controls to reflect URL-parsed state from scroll.js.
+  if (enabledInput && typeof window.__mournGetWordCollidersEnabled === 'function') {
+    enabledInput.checked = window.__mournGetWordCollidersEnabled();
+  }
+  if (wordBoxesInput && typeof window.__mournGetWordBoxes === 'function') {
+    wordBoxesInput.checked = window.__mournGetWordBoxes();
+  }
+  if (insetXInput && typeof window.__mournGetWordInsetXPx === 'function') {
+    const v = String(-window.__mournGetWordInsetXPx());
+    insetXInput.value = v;
+    if (insetXOut) insetXOut.textContent = v;
+  }
+  if (insetYInput && typeof window.__mournGetWordInsetYPx === 'function') {
+    const v = String(-window.__mournGetWordInsetYPx());
+    insetYInput.value = v;
+    if (insetYOut) insetYOut.textContent = v;
+  }
+  if (offsetXInput && typeof window.__mournGetWordOffsetXPx === 'function') {
+    const v = String(window.__mournGetWordOffsetXPx());
+    offsetXInput.value = v;
+    if (offsetXOut) offsetXOut.textContent = v;
+  }
+  if (offsetYInput && typeof window.__mournGetWordOffsetYPx === 'function') {
+    const v = String(window.__mournGetWordOffsetYPx());
+    offsetYInput.value = v;
+    if (offsetYOut) offsetYOut.textContent = v;
+  }
+
   if (enabledInput) {
     enabledInput.addEventListener('change', () => {
       if (typeof window.__mournSetWordCollidersEnabled === 'function') {
         window.__mournSetWordCollidersEnabled(enabledInput.checked);
       }
+      syncUrlParamsFromConfig();
     });
   }
   if (wordBoxesInput) {
@@ -1011,6 +1041,7 @@ function bindWordColliderControls(panel) {
       if (typeof window.__mournSetWordBoxes === 'function') {
         window.__mournSetWordBoxes(wordBoxesInput.checked);
       }
+      syncUrlParamsFromConfig();
     });
   }
   const wordColliderDefaults = { insetX: 0, insetY: 0, offsetX: 0, offsetY: 0 };
@@ -1026,6 +1057,7 @@ function bindWordColliderControls(panel) {
       if (typeof window.__mournSetWordInsetXPx === 'function') {
         window.__mournSetWordInsetXPx(-Number(insetXInput.value));
       }
+      syncUrlParamsFromConfig();
     });
   }
   if (insetYInput) {
@@ -1035,6 +1067,7 @@ function bindWordColliderControls(panel) {
       if (typeof window.__mournSetWordInsetYPx === 'function') {
         window.__mournSetWordInsetYPx(-Number(insetYInput.value));
       }
+      syncUrlParamsFromConfig();
     });
   }
   if (offsetXInput) {
@@ -1044,6 +1077,7 @@ function bindWordColliderControls(panel) {
       if (typeof window.__mournSetWordOffsetX === 'function') {
         window.__mournSetWordOffsetX(offsetXInput.value);
       }
+      syncUrlParamsFromConfig();
     });
   }
   if (offsetYInput) {
@@ -1053,6 +1087,7 @@ function bindWordColliderControls(panel) {
       if (typeof window.__mournSetWordOffsetY === 'function') {
         window.__mournSetWordOffsetY(offsetYInput.value);
       }
+      syncUrlParamsFromConfig();
     });
   }
 }
@@ -1079,6 +1114,47 @@ function bindResetControlsButton() {
       // Ignore storage failures.
     }
     window.location.href = window.location.pathname;
+  });
+}
+
+function bindFontSizeControl() {
+  const input = document.getElementById('font-size-input');
+  const output = document.getElementById('font-size-output');
+  const notice = document.getElementById('font-size-notice');
+  if (!input) return;
+
+  const STORAGE_KEY = 'dune-controls:font-size';
+  const DEFAULT_SIZE = 16;
+  const RELOAD_DELAY_MS = 2000;
+  let reloadTimer = null;
+
+  // Initialise to stored value, falling back to the current CSS var.
+  const stored = parseFloat(localStorage.getItem(STORAGE_KEY));
+  const current = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--base-font-size')
+  ) || DEFAULT_SIZE;
+  const initialValue = Number.isFinite(stored) ? stored : current;
+  input.value = String(initialValue);
+  if (output) output.textContent = String(initialValue);
+
+  input.addEventListener('dblclick', () => {
+    input.value = String(DEFAULT_SIZE);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  input.addEventListener('input', () => {
+    const val = parseFloat(input.value);
+    if (!Number.isFinite(val)) return;
+    if (output) output.textContent = String(val);
+
+    try { localStorage.setItem(STORAGE_KEY, String(val)); } catch (e) {}
+
+    if (reloadTimer) clearTimeout(reloadTimer);
+    if (notice) notice.textContent = 'Reloading in 2s\u2026';
+
+    reloadTimer = setTimeout(() => {
+      window.location.reload();
+    }, RELOAD_DELAY_MS);
   });
 }
 
@@ -1373,6 +1449,27 @@ function syncUrlParamsFromConfig() {
     const def = COLOR_ALPHA_PARAM_DEFS[i];
     params.set(def.param, String(getColorAlpha(def)));
   }
+
+  // Word collider params — read current state via getters exposed by scroll.js.
+  params.set('enableWordColliders',
+    (typeof window.__mournGetWordCollidersEnabled === 'function' ? window.__mournGetWordCollidersEnabled() : true) ? '1' : '0'
+  );
+  params.set('wordBoxes',
+    (typeof window.__mournGetWordBoxes === 'function' ? window.__mournGetWordBoxes() : true) ? '1' : '0'
+  );
+  // Inset is stored internally as the negation of the UI slider value.
+  const _wix = typeof window.__mournGetWordInsetXPx === 'function' ? window.__mournGetWordInsetXPx() : 0;
+  const _wiy = typeof window.__mournGetWordInsetYPx === 'function' ? window.__mournGetWordInsetYPx() : 0;
+  params.set('wordInsetX', String(-_wix));
+  params.set('wordInsetY', String(-_wiy));
+  const _wox = typeof window.__mournGetWordOffsetXPx === 'function' ? window.__mournGetWordOffsetXPx() : 0;
+  const _woy = typeof window.__mournGetWordOffsetYPx === 'function' ? window.__mournGetWordOffsetYPx() : 0;
+  params.set('wordOffsetX', String(_wox));
+  params.set('wordOffsetY', String(_woy));
+
+  // Font size — read the live CSS custom property value.
+  const _fs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--base-font-size'));
+  if (Number.isFinite(_fs)) params.set('fontSize', String(_fs));
 
   const next = `${window.location.pathname}?${params.toString()}`;
   window.history.replaceState({}, '', next);

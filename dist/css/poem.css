@@ -56,7 +56,7 @@ body {
   --terminator-hl: #8cb6e2;
   --stanza-width: ;
   --line-font-size: 24;
-  --base-font-size: 16;
+  --base-font-size: 32;
   --base-line-height: calc(var(--base-font-size) * 1.2px);
   --mod-mult: calc(var(--line-font-size) / var(--base-font-size));
   --dot-color: #298dff;
@@ -366,6 +366,16 @@ body {
 
 #dune-controls .control-toggle > span {
   grid-column: auto;
+}
+
+#dune-controls .control-notice {
+  margin: -4px 0 8px;
+  font-size: 11px;
+  color: #ffe4ac;
+  opacity: 0.8;
+}
+#dune-controls .control-notice:empty {
+  display: none;
 }
 
 @media (max-width: 900px) {

@@ -40,14 +40,14 @@ let flowWordInsetYPx = (() => {
 })();
 let flowWordOffsetXPx = (() => {
     const raw = flowParams.get('wordOffsetX');
-    const parsed = raw === null ? 0 : parseFloat(raw);
-    if (!Number.isFinite(parsed)) return 0;
+    const parsed = raw === null ? CONFIG.wordOffsetX : parseFloat(raw);
+    if (!Number.isFinite(parsed)) return CONFIG.wordOffsetX;
     return parsed;
 })();
 let flowWordOffsetYPx = (() => {
     const raw = flowParams.get('wordOffsetY');
-    const parsed = raw === null ? 0 : parseFloat(raw);
-    if (!Number.isFinite(parsed)) return 0;
+    const parsed = raw === null ? CONFIG.wordOffsetY : parseFloat(raw);
+    if (!Number.isFinite(parsed)) return CONFIG.wordOffsetY;
     return parsed;
 })();
 
@@ -100,6 +100,13 @@ window.__mournSetWordOffsetY = function setWordOffsetY(value) {
     flowWordOffsetYPx = parsed;
     queueFlowFieldBoxSync();
 };
+window.__mournGetWordCollidersEnabled = function() { return flowCollidersEnabled; };
+window.__mournGetWordBoxes = function() { return flowWordBoxesEnabled; };
+window.__mournGetWordInsetXPx = function() { return flowWordInsetXPx; };
+window.__mournGetWordInsetYPx = function() { return flowWordInsetYPx; };
+window.__mournGetWordOffsetXPx = function() { return flowWordOffsetXPx; };
+window.__mournGetWordOffsetYPx = function() { return flowWordOffsetYPx; };
+
 window.__mournSetAutoScrollPaused = function setAutoScrollPaused(paused) {
     autoScrollPaused = !!paused;
 
