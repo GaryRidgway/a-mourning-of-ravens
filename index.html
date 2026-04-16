@@ -28,8 +28,10 @@
   <div id="poem-staging"></div>
   <div id="poem-container"></div>
     <aside id="dune-controls" class="controls">
+      <div id="dune-resize-handle" aria-hidden="true"></div>
       <details class="control-panel" open>
       <summary>Dune Controls</summary>
+      <button id="collapse-all-btn" type="button">Collapse All</button>
 
       <details class="control-group" open>
         <summary>Particles</summary>
@@ -121,12 +123,6 @@
           <span>Boosted Alpha</span>
           <input type="range" min="0" max="255" step="1" data-key="windBoostAlphaMultiplier" />
           <output data-value-for="windBoostAlphaMultiplier"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Boosted Color</span>
-          <input type="color" data-color-key="windBoostColor" />
-          <output data-color-value-for="windBoostColor"></output>
         </label>
 
         <label class="control-row">
@@ -509,36 +505,20 @@
         </label>
 
         <label class="control-row">
-          <span>Separation Zone</span>
-          <input type="color" data-color-key="separationZone" />
-          <output data-color-value-for="separationZone"></output>
-        </label>
-        <label class="control-row">
-          <span>Separation Zone Alpha</span>
-          <input type="range" min="0" max="255" step="1" data-color-alpha-key="separationZone" />
-          <output data-color-alpha-value-for="separationZone"></output>
+          <span>Boosted Color</span>
+          <input type="color" data-color-key="windBoostColor" />
+          <output data-color-value-for="windBoostColor"></output>
         </label>
 
         <label class="control-row">
-          <span>Box Stroke (Idle)</span>
-          <input type="color" data-color-key="boxStrokeIdle" />
-          <output data-color-value-for="boxStrokeIdle"></output>
+          <span>Glow Core Color</span>
+          <input type="color" data-color-key="boxGlowCore" />
+          <output data-color-value-for="boxGlowCore"></output>
         </label>
         <label class="control-row">
-          <span>Box Stroke (Idle) Alpha</span>
-          <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxStrokeIdle" />
-          <output data-color-alpha-value-for="boxStrokeIdle"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Box Stroke (Dragged)</span>
-          <input type="color" data-color-key="boxStrokeDragged" />
-          <output data-color-value-for="boxStrokeDragged"></output>
-        </label>
-        <label class="control-row">
-          <span>Box Stroke (Dragged) Alpha</span>
-          <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxStrokeDragged" />
-          <output data-color-alpha-value-for="boxStrokeDragged"></output>
+          <span>Glow Core Color Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxGlowCore" />
+          <output data-color-alpha-value-for="boxGlowCore"></output>
         </label>
 
       </details>
@@ -599,17 +579,6 @@
         </label>
 
         <label class="control-row">
-          <span>Core Color</span>
-          <input type="color" data-color-key="boxGlowCore" />
-          <output data-color-value-for="boxGlowCore"></output>
-        </label>
-        <label class="control-row">
-          <span>Core Color Alpha</span>
-          <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxGlowCore" />
-          <output data-color-alpha-value-for="boxGlowCore"></output>
-        </label>
-
-        <label class="control-row">
           <span>Fade Delay (ms)</span>
           <input type="range" min="0" max="2000" step="10" data-key="boxGlowFadeDelayMs" />
           <output data-value-for="boxGlowFadeDelayMs"></output>
@@ -661,6 +630,44 @@
       </details>
 
       <details class="control-group">
+        <summary>Debug Colors</summary>
+
+        <label class="control-row">
+          <span>Box Stroke (Idle)</span>
+          <input type="color" data-color-key="boxStrokeIdle" />
+          <output data-color-value-for="boxStrokeIdle"></output>
+        </label>
+        <label class="control-row">
+          <span>Box Stroke (Idle) Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxStrokeIdle" />
+          <output data-color-alpha-value-for="boxStrokeIdle"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Box Stroke (Dragged)</span>
+          <input type="color" data-color-key="boxStrokeDragged" />
+          <output data-color-value-for="boxStrokeDragged"></output>
+        </label>
+        <label class="control-row">
+          <span>Box Stroke (Dragged) Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxStrokeDragged" />
+          <output data-color-alpha-value-for="boxStrokeDragged"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Separation Zone</span>
+          <input type="color" data-color-key="separationZone" />
+          <output data-color-value-for="separationZone"></output>
+        </label>
+        <label class="control-row">
+          <span>Separation Zone Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-color-alpha-key="separationZone" />
+          <output data-color-alpha-value-for="separationZone"></output>
+        </label>
+
+      </details>
+
+      <details class="control-group">
         <summary>Reset</summary>
 
         <div class="control-row">
@@ -684,6 +691,10 @@
   <!-- vvv Add scripts here from dist folder vvv -->
   <script src="./src/vendor/p5/p5.min.js" defer></script>
   <script src="./src/vendor/p5/p5.dom.min.js" defer></script>
+  <script src="./src/js/constants/config.js" defer></script>
+  <script src="./src/js/constants/renderColors.js" defer></script>
+  <script src="./src/js/constants/controlParamDefs.js" defer></script>
+  <script src="./src/js/constants/controlTooltips.js" defer></script>
   <script src="./src/js/flowField.js" defer></script>
   <script src="./src/js/poem_json.js" defer></script>
   <script src="./src/js/variables.js" defer></script>

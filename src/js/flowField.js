@@ -1,347 +1,11 @@
 // https://www.openprocessing.org/sketch/157576
-
-const CONFIG = {
-  particleCount: 5000,
-  enableAutoRenderScale: false,
-  autoRenderScaleThresholdPx: 1080,
-  particleSize: 0.25,
-  particleSizeRandomNegative: 0,
-  particleSizeRandomPositive: 0,
-  boxCollisionParticipantRatio: 1,
-  particleRenderMinSpeed: 0,
-  particleSpeedAlphaBoost: 4.28,
-  particleDuneAlphaBoost: 0,
-  particleDuneSizeBoost: 0,
-  particleSpeedWidthBoost: 1.3,
-  particleRenderFraction: 1,
-  enableAmbientMotion: true,
-  enableDuneBands: true,
-  ambientWindDirectionDeg: 135,
-  ambientWindStrength: 0.281,
-  duneBandRotationDeg: 135,
-  duneBandScale: 100,
-  duneBandOffsetPx: 0,
-  duneAlongWarpScale: 316,
-  duneWarpStrength: 1.5,
-  duneContrast: 1,
-  duneDriftSpeed: 0.1,
-  microNoiseScale: 596,
-  microTurbulenceStrength: 0.014,
-  windBoostParticleRatio: 0.02,
-  windBoostSizeMultiplier: 0.5,
-  windBoostAlphaMultiplier: 206,
-  windBoostMinMultiplier: 5,
-  windBoostMaxMultiplier: 10,
-  windBoostTurbulenceMinMultiplier: 4,
-  windBoostTurbulenceMaxMultiplier: 8,
-  enableBoidFlocking: true,
-  boidNeighborRadius: 25,
-  boidSeparationRadius: 18,
-  boidSeparationStrength: 3.0,
-  boidAlignmentStrength: 1.2,
-  boidCohesionStrength: 0.4,
-  boidMaxSteerForce: 0.4,
-  boidWindBlend: 0.45,
-  boidMaxGroupSize: 4,
-  boidDispersalStrength: 2.5,
-  enableBoxGlow: true,
-  boxGlowRadius: 3,
-  boxGlowHaloSize: 4.8,
-  boxGlowHaloAlpha: 43,
-  boxGlowCoreWhite: 1,
-  boxGlowCoreDiameter: 1.4,
-  boxGlowFadeDelayMs: 1000,
-  boxGlowFadeDurationMs: 1000,
-  glowBlendOklch: true,
-  glowBlendChromaFloor: 0.404,
-  glowBlendHueShift: 0,
-  edgeRespawnWeightBase: 0.05,
-  edgeRespawnWeightStrength: 0.45,
-  edgeRespawnWeightExponent: 2,
-  useWeightedEdgeRespawn: false,
-  edgeRespawnWeightedMixPercent: 22,
-  enableParticleSeparation: true,
-  particleCollisionRadius: 0.65,
-  particleCollisionStrength: 0.64,
-  particleCollisionVelocityDamp: 0.22,
-  separationEveryNFrames: 4,
-  maxSeparationPairsPerTick: 70000,
-  maxSeparationCandidatesPerCell: 24,
-  enableAdaptiveSeparationCadence: false,
-  adaptiveTargetFrameMs: 16.7,
-  adaptiveCadenceMax: 8,
-  separationNearBoxRadius: 20,
-  separationMinSpeed: 1,
-  staticInfluenceForwardDotMin: 0.22,
-  backsideDragStrength: 0.22,
-  boxForceMaxRadius: 1.3,
-  surfaceSlideBand: 2,
-  surfaceInwardDamp: 0.7,
-  surfacePosRelaxation: 0.4,
-  surfaceMaxCorrection: 0.35,
-  showSeparationZone: true,
-  separationZoneAlpha: 0,
-  damping: 0.86,
-  maxSpeed: 1.7,
-  trailAlpha: 3,
-  trailAlphaSecondary: 62,
-  scrollFreezeDebounceMs: 50,
-  scrollFreezeFadeInMs: 1960,
-  backgroundFadeOscillationPeriodSec: 0,
-  particleAlphaSecondary: 67,
-  collisionEjectPadding: 0.02,
-  turbulenceStrength: 0.5,
-  wakeDragStrength: 0.5,
-  wakeSwirlLength: 350,
-  wakeSwirlWidth: 95,
-  wakeSwirlStrength: 10,
-  wakeSwirlFrequency: 0.06,
-  recentInteractionMs: 3000,
-  edgePadding: 0,
-  boxVelocityDecay: 0.86,
-  boxStationarySpeedThreshold: 0.12,
-  showBoxes: true,
-  enableAdaptiveQuality: true,
-  lockQualityTier: false,
-  qualityTargetFps: 30,
-  qualityDecisionWindowMs: 1200,
-  qualityCooldownMs: 900,
-  qualityTransitionMs: 700,
-  qualityHudEnabled: true,
-  pauseSimulation: false,
-};
-
-const CONFIG_DEFAULTS = Object.assign({}, CONFIG);
+// CONFIG, CONFIG_DEFAULTS, RENDER_COLORS, RENDER_COLORS_DEFAULTS, CONTROL_PARAM_DEFS,
+// COLOR_PARAM_DEFS, COLOR_ALPHA_PARAM_DEFS, CONTROL_TOOLTIPS, COLOR_CONTROL_TOOLTIPS,
+// and COLOR_ALPHA_CONTROL_TOOLTIPS are declared in src/js/constants/ and loaded ahead
+// of this file via index.html script tags.
 
 const MAX_EFFECTIVE_DT_FRAMES = 1.75;
 const MAX_RENDER_SEGMENT_LENGTH_PX = 12;
-
-const RENDER_COLORS = {
-  fade: [0, 0, 0],
-  particles: [56, 159, 255, 15],
-  windBoostColor: [255, 221, 0],
-  separationZone: [130, 175, 235],
-  boxStrokeIdle: [200, 200, 180, 0],
-  boxStrokeDragged: [250, 230, 190, 0],
-  boxGlowCore: [255, 204, 0, 255],
-};
-
-const RENDER_COLORS_DEFAULTS = {};
-for (const k in RENDER_COLORS) {
-  RENDER_COLORS_DEFAULTS[k] = RENDER_COLORS[k].slice();
-}
-
-const CONTROL_PARAM_DEFS = [
-  { key: 'particleCount', type: 'number', digits: 0 },
-  { key: 'enableAutoRenderScale', type: 'bool' },
-  { key: 'autoRenderScaleThresholdPx', type: 'number', digits: 0 },
-  { key: 'particleSize', type: 'number', digits: 2 },
-  { key: 'particleSizeRandomNegative', type: 'number', digits: 2 },
-  { key: 'particleSizeRandomPositive', type: 'number', digits: 2 },
-  { key: 'boxCollisionParticipantRatio', type: 'number', digits: 2 },
-  { key: 'particleRenderMinSpeed', type: 'number', digits: 2 },
-  { key: 'particleSpeedAlphaBoost', type: 'number', digits: 2 },
-  { key: 'particleDuneAlphaBoost', type: 'number', digits: 2 },
-  { key: 'particleDuneSizeBoost', type: 'number', digits: 2 },
-  { key: 'particleSpeedWidthBoost', type: 'number', digits: 2 },
-  { key: 'particleRenderFraction', type: 'number', digits: 2 },
-  { key: 'enableAdaptiveQuality', type: 'bool' },
-  { key: 'lockQualityTier', type: 'bool' },
-  { key: 'qualityTargetFps', type: 'number', digits: 0 },
-  { key: 'qualityDecisionWindowMs', type: 'number', digits: 0 },
-  { key: 'qualityCooldownMs', type: 'number', digits: 0 },
-  { key: 'qualityTransitionMs', type: 'number', digits: 0 },
-  { key: 'qualityHudEnabled', type: 'bool' },
-  { key: 'pauseSimulation', type: 'bool' },
-  { key: 'enableAmbientMotion', type: 'bool' },
-  { key: 'enableDuneBands', type: 'bool' },
-  { key: 'ambientWindDirectionDeg', type: 'number', digits: 0 },
-  { key: 'ambientWindStrength', type: 'number', digits: 3 },
-  { key: 'duneBandRotationDeg', type: 'number', digits: 0 },
-  { key: 'duneBandScale', type: 'number', digits: 0 },
-  { key: 'duneBandOffsetPx', type: 'number', digits: 0 },
-  { key: 'duneAlongWarpScale', type: 'number', digits: 0 },
-  { key: 'duneWarpStrength', type: 'number', digits: 2 },
-  { key: 'duneContrast', type: 'number', digits: 2 },
-  { key: 'duneDriftSpeed', type: 'number', digits: 2 },
-  { key: 'microNoiseScale', type: 'number', digits: 0 },
-  { key: 'microTurbulenceStrength', type: 'number', digits: 3 },
-  { key: 'windBoostParticleRatio', type: 'number', digits: 3 },
-  { key: 'windBoostSizeMultiplier', type: 'number', digits: 2 },
-  { key: 'windBoostAlphaMultiplier', type: 'number', digits: 2 },
-  { key: 'windBoostMinMultiplier', type: 'number', digits: 2 },
-  { key: 'windBoostMaxMultiplier', type: 'number', digits: 2 },
-  { key: 'windBoostTurbulenceMinMultiplier', type: 'number', digits: 2 },
-  { key: 'windBoostTurbulenceMaxMultiplier', type: 'number', digits: 2 },
-  { key: 'enableBoidFlocking', type: 'bool' },
-  { key: 'boidNeighborRadius', type: 'number', digits: 0 },
-  { key: 'boidSeparationRadius', type: 'number', digits: 0 },
-  { key: 'boidSeparationStrength', type: 'number', digits: 2 },
-  { key: 'boidAlignmentStrength', type: 'number', digits: 2 },
-  { key: 'boidCohesionStrength', type: 'number', digits: 2 },
-  { key: 'boidMaxSteerForce', type: 'number', digits: 3 },
-  { key: 'boidWindBlend', type: 'number', digits: 2 },
-  { key: 'boidMaxGroupSize', type: 'number', digits: 0 },
-  { key: 'boidDispersalStrength', type: 'number', digits: 2 },
-  { key: 'enableBoxGlow', type: 'bool' },
-  { key: 'boxGlowRadius', type: 'number', digits: 0 },
-  { key: 'boxGlowHaloSize', type: 'number', digits: 1 },
-  { key: 'boxGlowHaloAlpha', type: 'number', digits: 0 },
-  { key: 'boxGlowCoreWhite', type: 'number', digits: 2 },
-  { key: 'boxGlowCoreDiameter', type: 'number', digits: 1 },
-  { key: 'boxGlowFadeDelayMs', type: 'number', digits: 0 },
-  { key: 'boxGlowFadeDurationMs', type: 'number', digits: 0 },
-  { key: 'glowBlendOklch', type: 'bool' },
-  { key: 'glowBlendChromaFloor', type: 'number', digits: 3 },
-  { key: 'glowBlendHueShift', type: 'number', digits: 1 },
-  { key: 'edgeRespawnWeightBase', type: 'number', digits: 2 },
-  { key: 'edgeRespawnWeightStrength', type: 'number', digits: 2 },
-  { key: 'edgeRespawnWeightExponent', type: 'number', digits: 2 },
-  { key: 'useWeightedEdgeRespawn', type: 'bool' },
-  { key: 'edgeRespawnWeightedMixPercent', type: 'number', digits: 0 },
-  { key: 'enableParticleSeparation', type: 'bool' },
-  { key: 'particleCollisionRadius', type: 'number', digits: 2 },
-  { key: 'particleCollisionStrength', type: 'number', digits: 2 },
-  { key: 'particleCollisionVelocityDamp', type: 'number', digits: 2 },
-  { key: 'separationEveryNFrames', type: 'number', digits: 0 },
-  { key: 'separationNearBoxRadius', type: 'number', digits: 0 },
-  { key: 'separationMinSpeed', type: 'number', digits: 2 },
-  { key: 'boxForceMaxRadius', type: 'number', digits: 1 },
-  { key: 'surfaceSlideBand', type: 'number', digits: 2 },
-  { key: 'staticInfluenceForwardDotMin', type: 'number', digits: 2 },
-  { key: 'backsideDragStrength', type: 'number', digits: 2 },
-  { key: 'scrollFreezeDebounceMs', type: 'number', digits: 0 },
-  { key: 'scrollFreezeFadeInMs', type: 'number', digits: 0 },
-  { key: 'backgroundFadeOscillationPeriodSec', type: 'number', digits: 1 },
-];
-
-const COLOR_PARAM_DEFS = [
-  { key: 'fade', param: 'colorFade' },
-  { key: 'particles', param: 'colorParticles' },
-  { key: 'windBoostColor', param: 'colorWindBoost' },
-  { key: 'separationZone', param: 'colorSeparationZone' },
-  { key: 'boxStrokeIdle', param: 'colorBoxStrokeIdle' },
-  { key: 'boxStrokeDragged', param: 'colorBoxStrokeDragged' },
-  { key: 'boxGlowCore', param: 'colorBoxGlowCore' },
-];
-
-const COLOR_ALPHA_PARAM_DEFS = [
-  { key: 'fade', param: 'colorFadeAlpha', source: 'config', configKey: 'trailAlpha', digits: 0 },
-  { key: 'fadeSecondary', param: 'colorFadeAlphaSecondary', source: 'config', configKey: 'trailAlphaSecondary', digits: 0 },
-  { key: 'particles', param: 'colorParticlesAlpha', source: 'render', digits: 0 },
-  { key: 'particlesSecondary', param: 'colorParticlesAlphaSecondary', source: 'config', configKey: 'particleAlphaSecondary', digits: 0 },
-  { key: 'separationZone', param: 'colorSeparationZoneAlpha', source: 'config', configKey: 'separationZoneAlpha', digits: 0 },
-  { key: 'boxStrokeIdle', param: 'colorBoxStrokeIdleAlpha', source: 'render', digits: 0 },
-  { key: 'boxStrokeDragged', param: 'colorBoxStrokeDraggedAlpha', source: 'render', digits: 0 },
-  { key: 'boxGlowCore', param: 'colorBoxGlowCoreAlpha', source: 'render', digits: 0 },
-];
-
-const CONTROL_TOOLTIPS = {
-  particleSize: 'Base thickness of particle strokes before random size variation and speed-based width boosts.',
-  particleSizeRandomNegative: 'Maximum negative random size offset applied when a particle is spawned.',
-  particleSizeRandomPositive: 'Maximum positive random size offset applied when a particle is spawned.',
-  particleRenderMinSpeed: 'Particles below this speed are hidden. Just above this threshold, alpha ramps in smoothly.',
-  particleSpeedAlphaBoost: 'How strongly faster particles become brighter. Higher values emphasize fast streaks.',
-  particleDuneAlphaBoost: 'How strongly dune bands boost particle alpha. Higher values make particles inside dune ridges brighter.',
-  particleDuneSizeBoost: 'How strongly dune bands boost particle stroke size. Higher values make particles inside dune ridges thicker.',
-  particleSpeedWidthBoost: 'How strongly faster particles get thicker strokes.',
-  particleRenderFraction: 'Global streak density scaler. Lower values reduce accumulated ink while preserving continuity.',
-  particleCount: 'Maximum particle budget used by the simulation and adaptive particle count system.',
-  boxCollisionParticipantRatio: 'Fraction of particles that participate in poem collider box interactions.',
-  enableAutoRenderScale: 'Automatically caps the internal canvas size on very large screens, then CSS stretches it to fill the viewport.',
-  autoRenderScaleThresholdPx: 'Maximum internal canvas size before auto render scaling caps it.',
-  edgeRespawnWeightBase: 'Base chance weight for edge respawn bins before dune influence is applied.',
-  edgeRespawnWeightStrength: 'How strongly dune sampling biases random edge respawn locations.',
-  edgeRespawnWeightExponent: 'Contrast of edge respawn weighting. Higher values favor high-weight bins more aggressively.',
-  useWeightedEdgeRespawn: 'When enabled, all wrapped particles respawn using weighted edge distribution.',
-  edgeRespawnWeightedMixPercent: 'Used only when weighted edge respawn is OFF. Percentage of wraps that still use weighted placement.',
-  enableParticleSeparation: 'Enables particle-particle collision solving to prevent heavy overlap and clumping.',
-  particleCollisionRadius: 'Distance at which particles begin separating from each other.',
-  particleCollisionStrength: 'How strongly overlapping particles are pushed apart.',
-  particleCollisionVelocityDamp: 'Velocity damping applied during separation impulses to reduce jitter and rebound.',
-  separationEveryNFrames: 'Base interval for separation solves. Higher values reduce CPU cost but allow more temporary overlap.',
-  separationNearBoxRadius: 'Activates separation for particles near collider boxes.',
-  separationMinSpeed: 'Particles moving slower than this may skip separation unless near a box or recently interacted.',
-  maxSeparationPairsPerTick: 'Hard cap on pair solves per update tick to bound worst-case CPU load.',
-  maxSeparationCandidatesPerCell: 'Limits neighbor candidates checked per cell in dense regions for performance stability.',
-  qualityTargetFps: 'Adaptive-quality target. The system throttles up/down to stay near this framerate.',
-  enableAdaptiveQuality: 'Automatically changes quality tier based on sustained frame time.',
-  lockQualityTier: 'Freezes the current quality tier so adaptive quality can measure performance without changing budgets.',
-  qualityDecisionWindowMs: 'How long performance must stay bad/good before changing quality tier.',
-  qualityCooldownMs: 'Minimum delay between tier changes to avoid oscillation.',
-  qualityTransitionMs: 'How quickly effective quality values blend to a new tier (higher is smoother/slower).',
-  qualityHudEnabled: 'Shows a live on-screen performance HUD with FPS, quality tier, and active budgets.',
-  pauseSimulation: 'Pauses the flow simulation loop. The simulation also auto-pauses when the tab is hidden.',
-  enableDuneBands: 'Turns dune band modulation on or off while leaving ambient wind and turbulence active.',
-  enableAmbientMotion: 'Enables the ambient wind field and all motion forces. Disabling freezes particle movement.',
-  ambientWindDirectionDeg: 'Sets the direction the ambient wind force pushes particles, in degrees.',
-  ambientWindStrength: 'Overall strength of the ambient wind field.',
-  duneBandRotationDeg: 'Rotates the dune band pattern independently from the wind direction, in degrees.',
-  duneBandScale: 'Controls the spacing between large dune bands. Lower values create tighter banding.',
-  duneBandOffsetPx: 'Shifts the dune band pattern across its own axis without changing angle or scale.',
-  duneAlongWarpScale: 'Sets the length scale of the along-wind warp that bends the dune bands.',
-  duneWarpStrength: 'How strongly the dune bands are warped and bent.',
-  duneContrast: 'Increases or softens contrast between high-wind and low-wind dune bands.',
-  duneDriftSpeed: 'How quickly the dune field drifts over time.',
-  microNoiseScale: 'Spatial scale of the fine turbulence noise field. Larger values make broader, smoother noise.',
-  microTurbulenceStrength: 'Strength of the fine-scale turbulent motion layered on top of the main wind.',
-  windBoostParticleRatio: 'Fraction of particles assigned to the boosted subgroup.',
-  windBoostSizeMultiplier: 'Size multiplier applied to boosted particles before other width boosts.',
-  windBoostAlphaMultiplier: 'Additive alpha applied only to boosted particles.',
-  windBoostMinMultiplier: 'Minimum wind-force multiplier for boosted particles.',
-  windBoostMaxMultiplier: 'Maximum wind-force multiplier for boosted particles.',
-  windBoostTurbulenceMinMultiplier: 'Minimum turbulence multiplier for boosted particles.',
-  windBoostTurbulenceMaxMultiplier: 'Maximum turbulence multiplier for boosted particles.',
-  enableBoidFlocking: 'Enables boid flocking (separation, alignment, cohesion) for boosted particles.',
-  boidNeighborRadius: 'Perception radius for alignment and cohesion. Boosted particles within this distance are flock neighbors.',
-  boidSeparationRadius: 'Distance below which boosted particles repel each other to avoid crowding.',
-  boidSeparationStrength: 'How strongly boosted particles push apart when closer than the separation radius.',
-  boidAlignmentStrength: 'How strongly boosted particles steer to match the average heading of nearby flock members.',
-  boidCohesionStrength: 'How strongly boosted particles steer toward the center of mass of nearby flock members.',
-  boidMaxSteerForce: 'Caps the magnitude of each individual boid steering vector before combining them.',
-  boidWindBlend: 'Blends between boid forces (0) and wind/dune forces (1). 0.5 uses both equally.',
-  boidMaxGroupSize: 'Preferred max neighbors. When a boid has more neighbors than this, cohesion flips to dispersal.',
-  boidDispersalStrength: 'How strongly boids steer away from overcrowded groups.',
-  enableBoxGlow: 'Gives particles near collision boxes a glow — halo in base color, white-hot center.',
-  boxGlowRadius: 'How far from a box surface a particle can be and still glow. Intensity fades with distance.',
-  boxGlowHaloSize: 'Multiplier for the halo stroke width relative to the normal particle stroke.',
-  boxGlowHaloAlpha: 'Peak alpha of the halo glow at full intensity.',
-  boxGlowCoreWhite: 'How much the particle core shifts toward the core color at full glow. 0 = no shift, 1 = full core color.',
-  boxGlowCoreDiameter: 'Stroke diameter of the glowing core in pixels. Larger values make the core color more visible.',
-  boxGlowFadeDelayMs: 'How long a particle holds full glow after leaving the box surface, in milliseconds.',
-  boxGlowFadeDurationMs: 'How long the glow takes to fade out after the delay, in milliseconds.',
-  glowBlendOklch: 'Uses OkLCh perceptual colour space for the glow blend instead of a plain RGB lerp. Keeps colours vivid and avoids passing through grey or white at the midpoint.',
-  glowBlendChromaFloor: 'Minimum chroma (colour vividness) held during the OkLCh glow blend. Higher values prevent the transition from desaturating toward grey at the midpoint.',
-  glowBlendHueShift: 'Rotates the glow core hue before blending, in degrees. Shifts which arc of the colour wheel the transition travels along.',
-  boxForceMaxRadius: 'Maximum distance from a collider where box influence is allowed to affect particles.',
-  surfaceSlideBand: 'Thickness of the near-surface band where particles are encouraged to slide along collider faces.',
-  staticInfluenceForwardDotMin: 'Minimum forward alignment required before a moving box starts affecting nearby particles.',
-  backsideDragStrength: 'How strongly particles are slowed on the lee side of a moving collider.',
-  scrollFreezeDebounceMs: 'Delay in milliseconds before particle movement freezes during manual scroll. Higher values make the freeze less hair-trigger.',
-  scrollFreezeFadeInMs: 'Duration in milliseconds for particles to fade back in after scroll interaction ends. 0 makes them reappear instantly.',
-  backgroundFadeOscillationPeriodSec: 'How many seconds it takes to complete one full ease-in-out background alpha cycle. Set to 0 to disable.',
-};
-
-const COLOR_CONTROL_TOOLTIPS = {
-  fade: 'Background clear or fade color used behind the particles.',
-  particles: 'Base particle trail color.',
-  windBoostColor: 'Color used for boosted particles instead of the base particle color.',
-  separationZone: 'Debug color used for separation-zone visualization.',
-  boxStrokeIdle: 'Outline color for collider boxes when idle.',
-  boxStrokeDragged: 'Outline color for collider boxes while dragged.',
-  boxGlowCore: 'Color that particle cores blend toward when glowing near collision boxes.',
-};
-
-const COLOR_ALPHA_CONTROL_TOOLTIPS = {
-  fade: 'Alpha used for the background fade pass. Ignored when transparent trails are enabled.',
-  fadeSecondary: 'Secondary background fade alpha used as the other end of the oscillation range.',
-  particles: 'Base particle alpha before speed and trail fade adjustments.',
-  particlesSecondary: 'Secondary particle alpha used as the other end of the oscillation range.',
-  separationZone: 'Opacity of the separation-zone debug overlay.',
-  boxStrokeIdle: 'Opacity of idle collider box outlines.',
-  boxStrokeDragged: 'Opacity of dragged collider box outlines.',
-  boxGlowCore: 'Opacity of the glow core color applied to particles near collision boxes.',
-};
 
 const particles = [];
 const boxes = [];
@@ -388,8 +52,6 @@ let dynamicSeparationEveryNFrames = CONFIG.separationEveryNFrames;
 let lastDrawTimeMs = 0;
 let manualScrollActive = false;
 let scrollJustEnded = false;
-let debugFadeParticleIndex = -1;
-let debugFadeLog = [];
 const separationActiveIndices = [];
 const separationCellXs = [];
 const separationCellYs = [];
@@ -936,8 +598,6 @@ function setup() {
   window.onManualScrollStart = function onManualScrollStart() {
     manualScrollActive = true;
     const band = CONFIG.surfaceSlideBand;
-    debugFadeParticleIndex = -1;
-    debugFadeLog = [];
     for (let i = 0; i < particles.length; i++) {
       const particle = particles[i];
       // Clear collision-disabled state — boxes have moved so previous penetration
@@ -962,9 +622,6 @@ function setup() {
           // else scrollUnfrozeAtMs === 0 → not fading, scrollFadeProgress unchanged (stays 0)
           particle.scrollFrozen = true;
           particle.scrollUnfrozeAtMs = 0;
-          if (debugFadeParticleIndex === -1) {
-            debugFadeParticleIndex = i;
-          }
           break;
         }
       }
@@ -1023,7 +680,6 @@ function setup() {
         }
       }
     }
-    console.log(`[scroll-fade] onManualScrollEnd: ${frozenCount} frozen particles released, fadeInMs=${CONFIG.scrollFreezeFadeInMs}`);
   };
 
   window.getScrollFreezeDebounceMs = function getScrollFreezeDebounceMs() {
@@ -1206,6 +862,8 @@ function setupDuneControls() {
   bindWordColliderControls(panel);
   setupDetailsPersistence(panel);
   applyQualityTargetFpsBounds(panel);
+  bindPanelResizeHandle(panel);
+  bindCollapseAllButton(panel);
 }
 
 function bindAngleControls(panel) {
@@ -1421,6 +1079,78 @@ function bindResetControlsButton() {
       // Ignore storage failures.
     }
     window.location.href = window.location.pathname;
+  });
+}
+
+function bindPanelResizeHandle(panel) {
+  const handle = document.getElementById('dune-resize-handle');
+  if (!handle) return;
+
+  const MIN_WIDTH = 200;
+  const MAX_WIDTH = 700;
+  const STORAGE_KEY = 'dune-controls:width';
+
+  try {
+    const saved = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+    if (Number.isFinite(saved) && saved >= MIN_WIDTH && saved <= MAX_WIDTH) {
+      panel.style.width = saved + 'px';
+    }
+  } catch (e) { /* ignore storage failures */ }
+
+  let dragging = false;
+
+  handle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    dragging = true;
+    handle.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const rightEdge = window.innerWidth - 12;
+    const newWidth = Math.round(Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, rightEdge - e.clientX)));
+    panel.style.width = newWidth + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.userSelect = '';
+    try {
+      const w = parseInt(panel.style.width, 10);
+      if (Number.isFinite(w)) {
+        localStorage.setItem(STORAGE_KEY, String(w));
+      }
+    } catch (e) { /* ignore storage failures */ }
+  });
+}
+
+function bindCollapseAllButton(panel) {
+  const btn = document.getElementById('collapse-all-btn');
+  if (!btn) return;
+
+  const groups = panel.querySelectorAll('details.control-group');
+
+  const updateLabel = () => {
+    const anyOpen = Array.from(groups).some(d => d.open);
+    btn.textContent = anyOpen ? 'Collapse All' : 'Expand All';
+  };
+
+  updateLabel();
+  groups.forEach(g => g.addEventListener('toggle', updateLabel));
+
+  btn.addEventListener('click', () => {
+    const anyOpen = Array.from(groups).some(d => d.open);
+    groups.forEach(g => {
+      if (anyOpen) {
+        g.removeAttribute('open');
+      } else {
+        g.setAttribute('open', '');
+      }
+    });
+    updateLabel();
   });
 }
 
@@ -3037,21 +2767,12 @@ function renderParticles(dtFrames = 1) {
     if (fadeInMs > 0 && p.scrollUnfrozeAtMs !== 0) {
       if (p.scrollUnfrozeAtMs < 0) {
         p.scrollUnfrozeAtMs = renderNowMs;
-        if (i === debugFadeParticleIndex) {
-          console.log(`[scroll-fade] fade START for particle ${i}, fadeInMs=${fadeInMs}, renderNowMs=${renderNowMs}`);
-        }
       }
       const elapsed = renderNowMs - p.scrollUnfrozeAtMs;
       if (elapsed >= fadeInMs) {
         p.scrollUnfrozeAtMs = 0;
-        if (i === debugFadeParticleIndex) {
-          console.log(`[scroll-fade] fade COMPLETE for particle ${i}`);
-        }
       } else {
         scrollFadeFactor = elapsed / fadeInMs;
-        if (i === debugFadeParticleIndex && Math.floor(elapsed / 500) !== Math.floor((elapsed - 16) / 500)) {
-          console.log(`[scroll-fade] particle ${i}: sff=${scrollFadeFactor.toFixed(3)}, elapsed=${Math.round(elapsed)}ms / ${fadeInMs}ms`);
-        }
       }
     }
     const isFadingIn = scrollFadeFactor < 1;
@@ -3076,6 +2797,7 @@ function renderParticles(dtFrames = 1) {
     // Compute the normal alpha, then multiply by scroll fade factor.
     const normalAlpha = baseA * renderAlphaWeight * minSpeedAlphaRamp * (1 + alphaBoost * (speedFactor - 1)) * duneAlphaFactor + fastAlphaAdd;
     const alpha = Math.round(constrain(normalAlpha * scrollFadeFactor, 0, 255));
+    const alphaPercent = alpha/255;
     // Quantize weight to nearest 0.25px to reduce unique state transitions.
     const weight = Math.max(
       0.5,
@@ -3099,7 +2821,7 @@ function renderParticles(dtFrames = 1) {
       // Halo pass: wider stroke, base color, low alpha scaled by intensity.
       const haloA = Math.round(glowHaloAlpha * glow);
       const haloW = Math.max(0.5, weight * glowHaloSize);
-      stroke(colorR, colorG, colorB, haloA);
+      stroke(colorR, colorG, colorB, haloA * alphaPercent);
       strokeWeight(haloW);
       line(segment.fromX, segment.fromY, segment.toX, segment.toY);
       // Core pass: lerp toward core color.
@@ -3126,7 +2848,7 @@ function renderParticles(dtFrames = 1) {
       }
       const coreA = Math.round(constrain((normalAlpha + (glowCoreA - normalAlpha) * blend), 0, 255));
       const coreW = weight + (glowCoreDiameter - weight) * glow;
-      stroke(coreR, coreG, coreB, coreA);
+      stroke(coreR, coreG, coreB, coreA * alphaPercent);
       strokeWeight(coreW);
       line(segment.fromX, segment.fromY, segment.toX, segment.toY);
       // Invalidate tracking since glow changed state unpredictably.

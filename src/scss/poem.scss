@@ -206,6 +206,54 @@ body {
     font-family: monospace;
     font-size: 12px;
     pointer-events: auto;
+    min-width: 200px;
+    max-width: 700px;
+}
+
+#dune-resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    cursor: ew-resize;
+    border-radius: 8px 0 0 8px;
+    transition: background 120ms ease;
+
+    &:hover {
+        background: rgba(245, 222, 179, 0.15);
+    }
+
+    &.dragging {
+        background: rgba(245, 222, 179, 0.25);
+    }
+}
+
+#collapse-all-btn {
+    display: block;
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 5px 8px;
+    border: 1px solid rgba(245, 222, 179, 0.25);
+    border-radius: 4px;
+    background: rgba(245, 222, 179, 0.07);
+    color: #ffe4ac;
+    font-family: monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-align: center;
+    transition: background 120ms ease, border-color 120ms ease;
+
+    &:hover {
+        background: rgba(245, 222, 179, 0.14);
+        border-color: rgba(245, 222, 179, 0.45);
+    }
+
+    &:active {
+        background: rgba(245, 222, 179, 0.2);
+    }
 }
 
 #dune-controls .control-panel > summary {
