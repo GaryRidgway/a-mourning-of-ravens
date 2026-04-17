@@ -12,6 +12,11 @@ let flowBoxesSyncRafId = null;
 let manualScrollDebounceId = null;
 let isManualScrollActive = false;
 let prevLeftActiveOffset = null;
+// Collider position cache — eliminates getBoundingClientRect from the per-frame sync.
+// Populated once on init and on resize; the per-frame sync uses pure arithmetic.
+let colliderAnchorBaseX = null;
+let colliderAnchorBaseY = null;
+let colliderCacheReady = false;
 const MANUAL_SCROLL_DEBOUNCE_MS_FALLBACK = 300;
 const glyphMeasureCanvas = document.createElement('canvas');
 const glyphMeasureCtx = glyphMeasureCanvas.getContext('2d');
@@ -607,10 +612,16 @@ function scrollInit() {
 
     setCurrentScrollStanza(mourn.trackers.startStanza, true);
     setAnchorCenterOffsets();
+    cacheColliderPositions();
     queueFlowFieldBoxSync();
     window.addEventListener('resize', () => {
         invalidateGlyphRectCache();
+        colliderCacheReady = false;
         queueRefreshRingMetrics();
+        // Re-cache after ring metrics refresh gives layout time to settle.
+        requestAnimationFrame(() => {
+            cacheColliderPositions();
+        });
     });
 }
 
@@ -678,6 +689,10 @@ function scrollTick(timestamp = null) {
 
     if (!isManualScrollActive) {
         isManualScrollActive = true;
+        // Pause auto-scroll so manual and auto deltas don't combine.
+        if (autoScrollSpeedMultiplier !== null) {
+            window.__mournSetAutoScrollPaused(true);
+        }
         if (typeof window.onManualScrollStart === 'function') {
             window.onManualScrollStart();
         }
@@ -692,6 +707,10 @@ function scrollTick(timestamp = null) {
         isManualScrollActive = false;
         if (typeof window.onManualScrollEnd === 'function') {
             window.onManualScrollEnd();
+        }
+        // Resume auto-scroll after manual scroll ends.
+        if (autoScrollSpeedMultiplier !== null) {
+            window.__mournSetAutoScrollPaused(false);
         }
     }, debounceMs);
 }
@@ -969,85 +988,130 @@ function queueFlowFieldBoxSync() {
     });
 }
 
+// Build the collider position cache. Reads the DOM once (forced layout) so that
+// the per-frame syncFlowFieldBoxesFromPoem can compute positions arithmetically.
+// Called once after ring seeding and again on resize.
+function cacheColliderPositions() {
+    colliderCacheReady = false;
+    const ring = mourn.scrollZoneData.ring;
+    if (!ring || !mourn.trackers.anchor) return;
+
+    // One getBoundingClientRect on the anchor to establish the base position.
+    const anchorBB = mourn.trackers.anchor.getBoundingClientRect();
+    const leftActive = parseFloat(
+        mourn.trackers.anchorStyle.getPropertyValue('--left-active-offset')
+    ) || 0;
+    const topActive = parseFloat(
+        mourn.trackers.anchorStyle.getPropertyValue('--top-active-offset')
+    ) || 0;
+    // Base position = screen position minus the current transform offsets.
+    colliderAnchorBaseX = anchorBB.left - leftActive;
+    colliderAnchorBaseY = anchorBB.top - topActive;
+
+    // Cache each stanza's word positions relative to the stanza's top-left corner.
+    for (let i = 0; i < ring.stanzas.length; i++) {
+        const stanza = ring.stanzas[i];
+        const stanzaBB = stanza.getBoundingClientRect();
+        const stanzaW = stanza._ringData ? stanza._ringData.width : stanzaBB.width;
+        const stanzaH = stanza._ringData ? stanza._ringData.height : stanzaBB.height;
+        const words = [];
+
+        const wordSpans = stanza.querySelectorAll('.line > span:not(.terminator)');
+        for (let j = 0; j < wordSpans.length; j++) {
+            const span = wordSpans[j];
+            if (span.textContent.trim().length === 0) continue;
+            const glyphBB = getWordGlyphRect(span);
+            words.push({
+                relX: glyphBB.left - stanzaBB.left,
+                relY: glyphBB.top - stanzaBB.top,
+                w: glyphBB.width,
+                h: glyphBB.height,
+            });
+        }
+
+        stanza._colliderCache = { words, width: stanzaW, height: stanzaH };
+    }
+
+    colliderCacheReady = true;
+}
+
 function syncFlowFieldBoxesFromPoem() {
-    if (typeof window.setFlowBoxes !== 'function') {
-        return;
-    }
-    if (!mourn.trackers.anchor) {
-        return;
-    }
+    if (typeof window.setFlowBoxes !== 'function') return;
+    if (!mourn.trackers.anchor) return;
     if (!flowCollidersEnabled) {
         window.setFlowBoxes([]);
         return;
     }
 
-    const stanzasToSync = getRenderedStanzas();
-    stanzasToSync.sort((a, b) => {
-        const aIdx = typeof a._ringIndex === 'number' ? a._ringIndex : 0;
-        const bIdx = typeof b._ringIndex === 'number' ? b._ringIndex : 0;
-        return aIdx - bIdx;
-    });
+    const ring = mourn.scrollZoneData.ring;
+    if (!ring || !colliderCacheReady) return;
+
+    // Read current active offsets from the values JS already set (no layout).
+    const leftActive = parseFloat(
+        mourn.trackers.anchorStyle.getPropertyValue('--left-active-offset')
+    ) || 0;
+    const topActive = parseFloat(
+        mourn.trackers.anchorStyle.getPropertyValue('--top-active-offset')
+    ) || 0;
+    const anchorX = colliderAnchorBaseX + leftActive;
+    const anchorY = colliderAnchorBaseY + topActive;
 
     const viewportMargin = 240;
-    const minX = 0 - viewportMargin;
-    const minY = 0 - viewportMargin;
+    const minX = -viewportMargin;
+    const minY = -viewportMargin;
     const maxX = window.innerWidth + viewportMargin;
     const maxY = window.innerHeight + viewportMargin;
 
-    const isNearViewport = (bb) => {
-        return !(
-            bb.right < minX ||
-            bb.left > maxX ||
-            bb.bottom < minY ||
-            bb.top > maxY
-        );
-    };
-
     const flowBoxes = [];
-    stanzasToSync.forEach((stanza) => {
-        const stanzaBB = stanza.getBoundingClientRect();
-        if (!isNearViewport(stanzaBB)) {
-            return;
+    for (let i = 0; i < ring.records.length; i++) {
+        const record = ring.records[i];
+        const stanza = ring.stanzas[i];
+        const cache = stanza._colliderCache;
+        if (!cache) continue;
+
+        const stanzaX = anchorX + record.left;
+        const stanzaY = anchorY + record.top;
+
+        // Viewport-cull the whole stanza.
+        if (stanzaX + cache.width < minX || stanzaX > maxX ||
+            stanzaY + cache.height < minY || stanzaY > maxY) {
+            continue;
         }
 
-        if (flowWordBoxesEnabled) {
-            const wordSpans = stanza.querySelectorAll('.line > span:not(.terminator)');
-            wordSpans.forEach((wordSpan) => {
-                const word = wordSpan.textContent.trim();
-                if (word.length === 0) {
-                    return;
+        if (flowWordBoxesEnabled && cache.words.length > 0) {
+            for (let w = 0; w < cache.words.length; w++) {
+                const word = cache.words[w];
+                const wordX = stanzaX + word.relX;
+                const wordY = stanzaY + word.relY;
+
+                if (wordX + word.w < minX || wordX > maxX ||
+                    wordY + word.h < minY || wordY > maxY) {
+                    continue;
                 }
-                const bb = getWordGlyphRect(wordSpan);
-                if (!isNearViewport(bb)) {
-                    return;
-                }
+
                 const insetX = flowWordInsetXPx >= 0
-                    ? Math.min(flowWordInsetXPx, Math.max(0, (bb.width - 1) * 0.5))
+                    ? Math.min(flowWordInsetXPx, Math.max(0, (word.w - 1) * 0.5))
                     : flowWordInsetXPx;
                 const insetY = flowWordInsetYPx >= 0
-                    ? Math.min(flowWordInsetYPx, Math.max(0, (bb.height - 1) * 0.5))
+                    ? Math.min(flowWordInsetYPx, Math.max(0, (word.h - 1) * 0.5))
                     : flowWordInsetYPx;
-                const offsetX = flowWordOffsetXPx;
-                const offsetY = flowWordOffsetYPx;
-                const shrunkWidth = Math.max(1, bb.width - insetX * 2);
-                const shrunkHeight = Math.max(1, bb.height - insetY * 2);
+
                 flowBoxes.push({
-                    x: bb.left + insetX + offsetX,
-                    y: bb.top + insetY + offsetY,
-                    w: shrunkWidth,
-                    h: shrunkHeight,
+                    x: wordX + insetX + flowWordOffsetXPx,
+                    y: wordY + insetY + flowWordOffsetYPx,
+                    w: Math.max(1, word.w - insetX * 2),
+                    h: Math.max(1, word.h - insetY * 2),
                 });
-            });
-        }
-        else {
+            }
+        } else {
             flowBoxes.push({
-                x: stanzaBB.left,
-                y: stanzaBB.top,
-                w: stanzaBB.width,
-                h: stanzaBB.height,
+                x: stanzaX,
+                y: stanzaY,
+                w: cache.width,
+                h: cache.height,
             });
         }
-    });
+    }
 
     window.setFlowBoxes(flowBoxes);
 }
@@ -1056,11 +1120,13 @@ function invalidateGlyphRectCache() {
     if (!mourn.trackers.anchor) return;
     const stanzas = mourn.trackers.anchor.querySelectorAll('.stanza');
     for (let i = 0; i < stanzas.length; i++) {
+        delete stanzas[i]._colliderCache;
         const spans = stanzas[i].querySelectorAll('.line > span:not(.terminator)');
         for (let j = 0; j < spans.length; j++) {
             delete spans[j]._glyphCache;
         }
     }
+    colliderCacheReady = false;
 }
 
 function getWordGlyphRect(wordSpan) {
