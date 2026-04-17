@@ -42,6 +42,81 @@ const boidGrid = new Map();
 const boidActiveIndices = [];
 const boidCellXs = [];
 const boidCellYs = [];
+
+// --- Item 7: Pre-baked noise texture (replaces per-particle p5 noise() calls) ---
+const NOISE_TEX_SIZE = 256;
+const NOISE_TEX_SIZE_MASK = NOISE_TEX_SIZE - 1; // bitmask for wrapping
+const NOISE_TEX_TILE = 4.0; // noise-space units per tile
+const NOISE_TEX_INV_TILE = 1 / NOISE_TEX_TILE;
+let noiseTexture = null; // Float32Array, baked in setup()
+
+function bakeNoiseTexture() {
+  noiseTexture = new Float32Array(NOISE_TEX_SIZE * NOISE_TEX_SIZE);
+  for (let y = 0; y < NOISE_TEX_SIZE; y++) {
+    const ny = (y / NOISE_TEX_SIZE) * NOISE_TEX_TILE;
+    for (let x = 0; x < NOISE_TEX_SIZE; x++) {
+      const nx = (x / NOISE_TEX_SIZE) * NOISE_TEX_TILE;
+      noiseTexture[y * NOISE_TEX_SIZE + x] = noise(nx, ny) * 2 - 1;
+    }
+  }
+}
+
+function sampleNoiseTexture(nx, ny) {
+  // Map noise-space coords to tile-space [0,1), wrapping for seamless tiling.
+  const tx = ((nx * NOISE_TEX_INV_TILE % 1) + 1) % 1;
+  const ty = ((ny * NOISE_TEX_INV_TILE % 1) + 1) % 1;
+  const sx = tx * NOISE_TEX_SIZE;
+  const sy = ty * NOISE_TEX_SIZE;
+  const x0 = floor(sx) & NOISE_TEX_SIZE_MASK;
+  const y0 = floor(sy) & NOISE_TEX_SIZE_MASK;
+  const x1 = (x0 + 1) & NOISE_TEX_SIZE_MASK;
+  const y1 = (y0 + 1) & NOISE_TEX_SIZE_MASK;
+  const fx = sx - floor(sx);
+  const fy = sy - floor(sy);
+  const v00 = noiseTexture[y0 * NOISE_TEX_SIZE + x0];
+  const v10 = noiseTexture[y0 * NOISE_TEX_SIZE + x1];
+  const v01 = noiseTexture[y1 * NOISE_TEX_SIZE + x0];
+  const v11 = noiseTexture[y1 * NOISE_TEX_SIZE + x1];
+  return (v00 * (1 - fx) + v10 * fx) * (1 - fy) +
+         (v01 * (1 - fx) + v11 * fx) * fy;
+}
+
+// --- Item 8: Sin lookup table (replaces per-particle Math.sin in dune warp) ---
+const SIN_LUT_SIZE = 4096;
+const SIN_LUT = new Float32Array(SIN_LUT_SIZE);
+const SIN_LUT_FACTOR = SIN_LUT_SIZE / (2 * Math.PI);
+(function initSinLUT() {
+  for (let i = 0; i < SIN_LUT_SIZE; i++) {
+    SIN_LUT[i] = Math.sin((i / SIN_LUT_SIZE) * 2 * Math.PI);
+  }
+})();
+
+function fastSin(x) {
+  // Map x to LUT index, wrapping for any input range.
+  const i = ((x * SIN_LUT_FACTOR % SIN_LUT_SIZE) + SIN_LUT_SIZE) % SIN_LUT_SIZE;
+  return SIN_LUT[i | 0]; // truncate to integer index
+}
+
+// --- Item 9: Bucket pool (reuses arrays to avoid per-frame GC from grid buckets) ---
+const _bucketPool = [];
+let _bucketPoolPtr = 0;
+
+function acquireBucket() {
+  if (_bucketPoolPtr < _bucketPool.length) {
+    const b = _bucketPool[_bucketPoolPtr++];
+    b.length = 0;
+    return b;
+  }
+  const b = [];
+  _bucketPool.push(b);
+  _bucketPoolPtr++;
+  return b;
+}
+
+function releaseBuckets() {
+  _bucketPoolPtr = 0;
+}
+
 const _boidSteer = { x: 0, y: 0 };
 
 let draggedBoxIndex = -1;
@@ -529,6 +604,7 @@ function setup() {
     if (pauseBtn) pauseBtn.style.display = 'none';
     CONFIG.qualityHudEnabled = false;
   }
+  bakeNoiseTexture();
   initQualityManager();
   ensureQualityHud();
   ensureFlowBoxOverlay();
@@ -2100,12 +2176,13 @@ function resolveParticleSeparation(nowMs, tickIndex = simStepCount) {
   if (separationActiveIndices.length < 2) return;
 
   separationGrid.clear();
+  releaseBuckets();
   for (let a = 0; a < separationActiveIndices.length; a++) {
     const i = separationActiveIndices[a];
     const key = getCellKey(separationCellXs[a], separationCellYs[a]);
     let bucket = separationGrid.get(key);
     if (!bucket) {
-      bucket = [];
+      bucket = acquireBucket();
       separationGrid.set(key, bucket);
     }
     bucket.push(i);
@@ -2233,6 +2310,7 @@ function isNearBox(px, py, box, radius) {
 
 function buildBoidGrid() {
   boidGrid.clear();
+  releaseBuckets();
   boidActiveIndices.length = 0;
   boidCellXs.length = 0;
   boidCellYs.length = 0;
@@ -2248,7 +2326,7 @@ function buildBoidGrid() {
     boidCellYs.push(cy);
     const key = getCellKey(cx, cy);
     let bucket = boidGrid.get(key);
-    if (!bucket) { bucket = []; boidGrid.set(key, bucket); }
+    if (!bucket) { bucket = acquireBucket(); boidGrid.set(key, bucket); }
     bucket.push(i);
   }
 }
@@ -2400,17 +2478,17 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
 
   const warpedAcross =
     across / CONFIG.duneBandScale +
-    sin(along / CONFIG.duneAlongWarpScale) * CONFIG.duneWarpStrength;
-  const ridge01 = (sin(warpedAcross) + 1) * 0.5;
+    fastSin(along / CONFIG.duneAlongWarpScale) * CONFIG.duneWarpStrength;
+  const ridge01 = (fastSin(warpedAcross) + 1) * 0.5;
   const duneMultiplier = CONFIG.enableDuneBands
     ? 0.25 + 0.95 * pow(ridge01, CONFIG.duneContrast)
     : 1;
   const windAmp = CONFIG.ambientWindStrength * duneMultiplier;
 
-  const n = noise(
+  const n = sampleNoiseTexture(
     sampleX / CONFIG.microNoiseScale,
     sampleY / CONFIG.microNoiseScale
-  ) * 2 - 1;
+  );
   const microAmp = n * CONFIG.microTurbulenceStrength * turbulenceMultiplier;
 
   _duneWindResult.x = frameCache.windDirX * windAmp + frameCache.windPerpX * microAmp;

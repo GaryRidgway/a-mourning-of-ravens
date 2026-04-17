@@ -35,6 +35,13 @@ Useful for delegating performance measurement tasks.
 | Layout/Reflow timeline entries | Full reflow timing (`Recalculate Style` / `Layout` blocks) is not exposed to page-level JS | DevTools → Performance panel → record a session, look for purple blocks |
 | Flame chart / call stack detail | Performance timeline call stacks require DevTools recording | DevTools → Performance panel |
 
+## Cannot Do — Filesystem
+
+| Task | Why | Workaround |
+|---|---|---|
+| Read local project files (`.md`, `.js`, etc.) | Browser JS is sandboxed — no access to the local filesystem, even when the page is served locally | Paste relevant file contents or key numbers directly into the prompt |
+| Write reports to disk | Same sandboxing — cannot create or modify files on the host machine | Copy output from browser Claude and save manually, or pass to CLI Claude |
+
 ---
 
 ## Notes

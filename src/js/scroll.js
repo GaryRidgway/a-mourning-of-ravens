@@ -585,6 +585,10 @@ function scrollInit() {
     if (!ringSeeded) {
         console.warn('Falling back to pre-ring start stanza due to seeding failure.');
     }
+    // Phase 2, item 5: remove staging area from layout after ring seeding.
+    // All stanza measurements are captured in data-* attributes and _ringData;
+    // fetchStagedStanza only needs cloneNode(true) which works on hidden elements.
+    mourn.config.poemStaging.style.display = 'none';
     if (scrollDebug) {
         mourn.trackers.anchor.childNodes.forEach((stanza) => {
             const centerDot = document.createElement("div");
