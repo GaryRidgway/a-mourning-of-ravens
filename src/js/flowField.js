@@ -4,7 +4,6 @@
 // and COLOR_ALPHA_CONTROL_TOOLTIPS are declared in src/js/constants/ and loaded ahead
 // of this file via index.html script tags.
 
-const MAX_EFFECTIVE_DT_FRAMES = 1.75;
 const MAX_RENDER_SEGMENT_LENGTH_PX = 12;
 
 const particles = [];
@@ -20,9 +19,7 @@ const nearbyBoxesScratch = [];
 let nearbyBoxesQueryId = 0;
 const SIM_FIXED_STEP_MS = 1000 / 60;
 const SIM_MAX_FRAME_DELTA_MS = 250;
-const RENDER_TARGET_FRAME_MS = 1000 / 60;
-let _lastRenderMs = 0;
-const SIM_MAX_STEPS_PER_FRAME = 8;
+const SIM_MAX_STEPS_PER_FRAME = 4;
 
 // Pre-allocated scratch objects to avoid per-particle-per-frame GC pressure.
 const _duneWindResult = { x: 0, y: 0, duneSignal: 0 };
@@ -765,8 +762,6 @@ function setup() {
 
 function draw() {
   const nowMs = millis();
-  if (nowMs - _lastRenderMs < RENDER_TARGET_FRAME_MS) return;
-  _lastRenderMs = nowMs;
   tickAdaptiveQuality(nowMs);
   if (simLastFrameMs === null) {
     simLastFrameMs = nowMs;
@@ -774,13 +769,12 @@ function draw() {
   let frameDeltaMs = nowMs - simLastFrameMs;
   simLastFrameMs = nowMs;
   frameDeltaMs = constrain(frameDeltaMs, 0, SIM_MAX_FRAME_DELTA_MS);
-  const dtFrames = constrain(frameDeltaMs / SIM_FIXED_STEP_MS, 0, MAX_EFFECTIVE_DT_FRAMES);
+  const dtFrames = constrain(frameDeltaMs / SIM_FIXED_STEP_MS, 0, 3);
   simTimeMs = nowMs;
   simStepCount += 1;
   fadeCanvas();
   updateBoxes(dtFrames);
   updateActiveBoxes();
-  simRenderAlpha = 1;
   updateParticles(nowMs, simStepCount, true, dtFrames);
   updateAdaptiveSeparationCadence(nowMs);
   renderParticles(dtFrames);
