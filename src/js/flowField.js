@@ -34,6 +34,20 @@ const _frameCacheScratch = {
 };
 const _interpolatedBoxPos = { x: 0, y: 0 };
 
+// Cached OkLCh conversions — only recomputed when colors change via debug controls.
+const _oklchCache = {
+  dirty: true,
+  baseR: -1, baseG: -1, baseB: -1,
+  base: { L: 0, C: 0, h: 0 },
+  boostedR: -1, boostedG: -1, boostedB: -1,
+  boosted: { L: 0, C: 0, h: 0 },
+  glowCoreR: -1, glowCoreG: -1, glowCoreB: -1,
+  glowCore: { L: 0, C: 0, h: 0 },
+};
+
+// Per-frame oscillation state — computed once in draw(), read by fade + render.
+const _frameOscillation = { enabled: false, phase: 0, eased: 0 };
+
 // Boid flocking spatial grid and scratch data for boosted particles.
 const boidGrid = new Map();
 const boidActiveIndices = [];
@@ -440,7 +454,7 @@ function paintQualityHud(nowMs) {
   const internalW = max(1, width || 0);
   const internalH = max(1, height || 0);
   const autoScaleActive = CONFIG.enableAutoRenderScale && currentRenderScale < 0.999;
-  const oscillation = getOscillationState();
+  const oscillation = _frameOscillation;
   const currentFadeAlpha = getCurrentBackgroundFadeAlpha();
   const currentParticleAlpha = getCurrentParticleAlpha();
   const oscSlots = 9;
@@ -762,6 +776,15 @@ function setup() {
 
 function draw() {
   const nowMs = millis();
+  // Drive auto-scroll from the same frame as the particle sim.
+  if (typeof window.__mournTickAutoScroll === 'function') {
+    window.__mournTickAutoScroll(nowMs);
+  }
+  // Compute oscillation state once per frame (used by fade + render + HUD).
+  const oscState = getOscillationState();
+  _frameOscillation.enabled = oscState.enabled;
+  _frameOscillation.phase = oscState.phase;
+  _frameOscillation.eased = oscState.eased;
   tickAdaptiveQuality(nowMs);
   if (simLastFrameMs === null) {
     simLastFrameMs = nowMs;
@@ -813,7 +836,7 @@ function getOscillationState() {
 }
 
 function getOscillatingAlpha(alphaA, alphaB) {
-  const state = getOscillationState();
+  const state = _frameOscillation;
   if (!state.enabled || alphaA === alphaB) {
     return alphaA;
   }
@@ -1554,6 +1577,7 @@ function applyHexToColorKey(colorKey, rawHex) {
   target[0] = rgb.r;
   target[1] = rgb.g;
   target[2] = rgb.b;
+  _oklchCache.dirty = true;
 }
 
 function updateColorControlOutput(colorKey) {
@@ -2913,10 +2937,25 @@ function renderParticles(dtFrames = 1) {
   const glowCoreG = RENDER_COLORS.boxGlowCore[1];
   const glowCoreB = RENDER_COLORS.boxGlowCore[2];
   const glowCoreA = RENDER_COLORS.boxGlowCore.length > 3 ? RENDER_COLORS.boxGlowCore[3] : 255;
-  // Pre-convert particle and glow core colors to OkLCh for perceptually uniform blending.
-  const baseOklch = srgbToOklch(baseR, baseG, baseB);
-  const boostedOklch = srgbToOklch(boostedColor.r, boostedColor.g, boostedColor.b);
-  const glowCoreOklch = srgbToOklch(glowCoreR, glowCoreG, glowCoreB);
+  // OkLCh conversions — only recomputed when colors actually change.
+  if (_oklchCache.dirty ||
+      baseR !== _oklchCache.baseR || baseG !== _oklchCache.baseG || baseB !== _oklchCache.baseB ||
+      boostedColor.r !== _oklchCache.boostedR || boostedColor.g !== _oklchCache.boostedG || boostedColor.b !== _oklchCache.boostedB ||
+      glowCoreR !== _oklchCache.glowCoreR || glowCoreG !== _oklchCache.glowCoreG || glowCoreB !== _oklchCache.glowCoreB) {
+    const b = srgbToOklch(baseR, baseG, baseB);
+    _oklchCache.base.L = b.L; _oklchCache.base.C = b.C; _oklchCache.base.h = b.h;
+    _oklchCache.baseR = baseR; _oklchCache.baseG = baseG; _oklchCache.baseB = baseB;
+    const bo = srgbToOklch(boostedColor.r, boostedColor.g, boostedColor.b);
+    _oklchCache.boosted.L = bo.L; _oklchCache.boosted.C = bo.C; _oklchCache.boosted.h = bo.h;
+    _oklchCache.boostedR = boostedColor.r; _oklchCache.boostedG = boostedColor.g; _oklchCache.boostedB = boostedColor.b;
+    const gc = srgbToOklch(glowCoreR, glowCoreG, glowCoreB);
+    _oklchCache.glowCore.L = gc.L; _oklchCache.glowCore.C = gc.C; _oklchCache.glowCore.h = gc.h;
+    _oklchCache.glowCoreR = glowCoreR; _oklchCache.glowCoreG = glowCoreG; _oklchCache.glowCoreB = glowCoreB;
+    _oklchCache.dirty = false;
+  }
+  const baseOklch = _oklchCache.base;
+  const boostedOklch = _oklchCache.boosted;
+  const glowCoreOklch = _oklchCache.glowCore;
   // Track previous stroke state to skip redundant canvas state changes.
   let prevStrokeR = -1;
   let prevStrokeG = -1;

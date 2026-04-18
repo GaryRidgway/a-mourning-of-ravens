@@ -1,6 +1,5 @@
 const scrollDebug = mourn.debug.on && mourn.debug.includeScroll;
 const scrollDebugV = mourn.debug.verbose && mourn.debug.includeScroll;
-let autoScrollRafId = null;
 let autoScrollPrevFrameTs = null;
 let autoScrollSpeedMultiplier = null;
 let autoScrollPaused = false;
@@ -116,16 +115,13 @@ window.__mournSetAutoScrollPaused = function setAutoScrollPaused(paused) {
     autoScrollPaused = !!paused;
 
     if (autoScrollPaused) {
-        if (autoScrollRafId !== null) {
-            window.cancelAnimationFrame(autoScrollRafId);
-            autoScrollRafId = null;
-        }
         autoScrollPrevFrameTs = null;
         return;
     }
 
-    if (autoScrollSpeedMultiplier !== null && autoScrollRafId === null) {
-        startAutoScroll(autoScrollSpeedMultiplier);
+    // Restore speed so the next draw() tick picks it up.
+    if (autoScrollSpeedMultiplier !== null && autoScrollPixelsPerSecond === 0) {
+        autoScrollPixelsPerSecond = 120 * autoScrollSpeedMultiplier;
     }
 };
 const perfProbe = {
@@ -500,11 +496,8 @@ function wrapCurrentStanzaToRingCenter() {
 }
 
 function stopAutoScroll() {
-    if (autoScrollRafId !== null) {
-        window.cancelAnimationFrame(autoScrollRafId);
-    }
-    autoScrollRafId = null;
     autoScrollPrevFrameTs = null;
+    autoScrollPixelsPerSecond = 0;
 
     if (reducedMotionMediaQuery && reducedMotionListener) {
         reducedMotionMediaQuery.removeEventListener('change', reducedMotionListener);
@@ -525,6 +518,8 @@ function stopAutoScroll() {
     autoScrollSpeedMultiplier = null;
 }
 
+let autoScrollPixelsPerSecond = 0;
+
 function startAutoScroll(speedMultiplier = 1) {
     if (prefersReducedMotion()) {
         console.info('Auto-scroll skipped due to prefers-reduced-motion setting.');
@@ -543,7 +538,8 @@ function startAutoScroll(speedMultiplier = 1) {
     }
 
     const basePixelsPerSecond = 120;
-    const pixelsPerSecond = basePixelsPerSecond * speedMultiplier;
+    autoScrollPixelsPerSecond = basePixelsPerSecond * speedMultiplier;
+
     reducedMotionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     reducedMotionListener = function(event) {
         if (event.matches) {
@@ -551,32 +547,35 @@ function startAutoScroll(speedMultiplier = 1) {
         }
     };
     reducedMotionMediaQuery.addEventListener('change', reducedMotionListener);
-
-    const tick = (timestamp) => {
-        if (autoScrollPrevFrameTs === null) {
-            autoScrollPrevFrameTs = timestamp;
-        }
-
-        perfRecordFrame(timestamp, 'auto');
-
-        const deltaMs = Math.min(timestamp - autoScrollPrevFrameTs, 50);
-        autoScrollPrevFrameTs = timestamp;
-        const deltaPx = pixelsPerSecond * (deltaMs / 1000);
-
-        if (mourn.scrollZoneData.el && mourn.scrollStanza.currentScrollStanzaData) {
-            applyScrollDelta(deltaPx);
-            const stanzaChanged = checkStanzaScroll();
-            if (stanzaChanged || isRingWrapCandidate()) {
-                wrapCurrentStanzaToRingCenter();
-            }
-            setAnchorOffsets(null);
-        }
-
-        autoScrollRafId = window.requestAnimationFrame(tick);
-    };
-
-    autoScrollRafId = window.requestAnimationFrame(tick);
+    // No rAF loop — auto-scroll is driven by p5's draw() via tickAutoScroll().
 }
+
+// Called once per frame from p5's draw(). Runs the auto-scroll delta in the
+// same rAF callback as the particle sim, eliminating scheduling jitter.
+window.__mournTickAutoScroll = function tickAutoScroll(nowMs) {
+    if (autoScrollPaused || autoScrollSpeedMultiplier === null || autoScrollPixelsPerSecond === 0) {
+        return;
+    }
+
+    if (autoScrollPrevFrameTs === null) {
+        autoScrollPrevFrameTs = nowMs;
+    }
+
+    perfRecordFrame(nowMs, 'auto');
+
+    const deltaMs = Math.min(nowMs - autoScrollPrevFrameTs, 50);
+    autoScrollPrevFrameTs = nowMs;
+    const deltaPx = autoScrollPixelsPerSecond * (deltaMs / 1000);
+
+    if (mourn.scrollZoneData.el && mourn.scrollStanza.currentScrollStanzaData) {
+        applyScrollDelta(deltaPx);
+        const stanzaChanged = checkStanzaScroll();
+        if (stanzaChanged || isRingWrapCandidate()) {
+            wrapCurrentStanzaToRingCenter();
+        }
+        setAnchorOffsets(null);
+    }
+};
 
 // Initialize the scroll zone and the current scroll stanza.
 function scrollInit() {
