@@ -956,6 +956,9 @@ function setupDuneControls() {
   setupDetailsPersistence(panel);
   applyQualityTargetFpsBounds(panel);
   bindFontSizeControl();
+  bindTextColorControl();
+  bindTextTextureToggle();
+  bindTextTextureSizeControl();
   bindPanelResizeHandle(panel);
   bindCollapseAllButton(panel);
 }
@@ -1248,6 +1251,90 @@ function bindFontSizeControl() {
     reloadTimer = setTimeout(() => {
       window.location.reload();
     }, RELOAD_DELAY_MS);
+  });
+}
+
+function bindTextColorControl() {
+  const input = document.getElementById('text-color-input');
+  const output = document.getElementById('text-color-output');
+  if (!input) return;
+
+  const STORAGE_KEY = 'dune-controls:text-color';
+  const DEFAULT_COLOR = '#fafafa';
+
+  const applyValue = (val) => {
+    document.documentElement.style.setProperty('--text-color', val);
+    if (output) output.textContent = val;
+  };
+
+  const stored = localStorage.getItem(STORAGE_KEY);
+  const initialValue = /^#[0-9a-f]{6}$/i.test(stored || '') ? stored : DEFAULT_COLOR;
+  input.value = initialValue;
+  applyValue(initialValue);
+
+  input.addEventListener('dblclick', () => {
+    input.value = DEFAULT_COLOR;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  input.addEventListener('input', () => {
+    applyValue(input.value);
+    try { localStorage.setItem(STORAGE_KEY, input.value); } catch (e) {}
+  });
+}
+
+function bindTextTextureToggle() {
+  const input = document.getElementById('text-texture-enabled');
+  if (!input) return;
+
+  const STORAGE_KEY = 'dune-controls:text-texture-enabled';
+  const sizeInput = document.getElementById('text-texture-size-input');
+
+  const applyState = (enabled) => {
+    const container = document.getElementById('poem-container');
+    if (container) container.classList.toggle('text-texture-off', !enabled);
+    if (sizeInput) sizeInput.disabled = !enabled;
+  };
+
+  const stored = localStorage.getItem(STORAGE_KEY);
+  const initial = stored === null ? true : stored === 'true';
+  input.checked = initial;
+  applyState(initial);
+
+  input.addEventListener('change', () => {
+    applyState(input.checked);
+    try { localStorage.setItem(STORAGE_KEY, String(input.checked)); } catch (e) {}
+  });
+}
+
+function bindTextTextureSizeControl() {
+  const input = document.getElementById('text-texture-size-input');
+  const output = document.getElementById('text-texture-size-output');
+  if (!input) return;
+
+  const STORAGE_KEY = 'dune-controls:text-texture-size';
+  const DEFAULT_SIZE = 200;
+
+  const applyValue = (val) => {
+    document.documentElement.style.setProperty('--text-texture-size', val + 'px');
+    if (output) output.textContent = String(val);
+  };
+
+  const stored = parseFloat(localStorage.getItem(STORAGE_KEY));
+  const initialValue = Number.isFinite(stored) ? stored : DEFAULT_SIZE;
+  input.value = String(initialValue);
+  applyValue(initialValue);
+
+  input.addEventListener('dblclick', () => {
+    input.value = String(DEFAULT_SIZE);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  input.addEventListener('input', () => {
+    const val = parseFloat(input.value);
+    if (!Number.isFinite(val)) return;
+    applyValue(val);
+    try { localStorage.setItem(STORAGE_KEY, String(val)); } catch (e) {}
   });
 }
 
