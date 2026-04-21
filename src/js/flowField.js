@@ -3185,8 +3185,8 @@ function renderParticles(dtFrames = 1) {
       interpY,
       maxSegLen
     );
-    const glow = glowEnabled ? p.boxGlowIntensity : 0;
-    if (glow > 0 && !isFadingIn) {
+    const glow = glowEnabled ? p.boxGlowIntensity * scrollFadeFactor : 0;
+    if (glow > 0) {
       // Halo pass: wider stroke, base color, low alpha scaled by intensity.
       const haloA = Math.round(glowHaloAlpha * glow);
       const haloW = Math.max(0.5, weight * glowHaloSize);
@@ -3226,7 +3226,7 @@ function renderParticles(dtFrames = 1) {
     } else {
       // Normal non-glow path with redundancy elimination.
       if (colorR !== prevStrokeR || colorG !== prevStrokeG || colorB !== prevStrokeB || alpha !== prevStrokeA) {
-        stroke(colorR, colorG, colorB, alpha);
+        stroke(colorR, colorG, colorB, alpha * alphaPercent);
         prevStrokeR = colorR;
         prevStrokeG = colorG;
         prevStrokeB = colorB;
