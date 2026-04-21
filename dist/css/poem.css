@@ -41,6 +41,18 @@ body {
   overflow: hidden;
 }
 
+#vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent var(--vignette-inner-stop), var(--vignette-shadow-color) 100%);
+}
+
+#vignette.vignette-off {
+  display: none;
+}
+
 .flow-box-overlay__box {
   position: absolute;
   left: 0;
@@ -64,6 +76,8 @@ body {
   --dot-border-size: 4px;
   --text-texture-size: 200px;
   --text-color: #fafafa;
+  --vignette-inner-stop: 40%;
+  --vignette-shadow-color: rgba(0, 0, 0, 0.7);
 }
 
 #poem-container,
@@ -129,8 +143,8 @@ body {
 }
 
 #poem-container.text-texture-off .stanza span:not(.terminator) {
-  -webkit-mask-image: none;
-  mask-image: none;
+  background-image: none;
+  -webkit-text-fill-color: inherit;
 }
 
 #poem-container {
@@ -145,14 +159,12 @@ body {
   top: calc(var(--top-offset, 0px) * 1px);
 }
 #poem-container .stanza span:not(.terminator) {
-  -webkit-mask-image: url("../../src/assets/grunge.png");
-  mask-image: url("../../src/assets/grunge.png");
-  -webkit-mask-repeat: repeat;
-  mask-repeat: repeat;
-  -webkit-mask-size: var(--text-texture-size) var(--text-texture-size);
-  mask-size: var(--text-texture-size) var(--text-texture-size);
-  -webkit-mask-mode: luminance;
-  mask-mode: luminance;
+  background-image: url("../../src/assets/grunge-multi.png");
+  background-repeat: repeat;
+  background-size: var(--text-texture-size) var(--text-texture-size);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 #poem-container .stanza span.terminator {
   user-select: none;

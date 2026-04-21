@@ -956,9 +956,9 @@ function setupDuneControls() {
   setupDetailsPersistence(panel);
   applyQualityTargetFpsBounds(panel);
   bindFontSizeControl();
-  bindTextColorControl();
   bindTextTextureToggle();
   bindTextTextureSizeControl();
+  bindVignetteControls();
   bindPanelResizeHandle(panel);
   bindCollapseAllButton(panel);
 }
@@ -1254,32 +1254,106 @@ function bindFontSizeControl() {
   });
 }
 
-function bindTextColorControl() {
-  const input = document.getElementById('text-color-input');
-  const output = document.getElementById('text-color-output');
-  if (!input) return;
+function bindVignetteControls() {
+  const enableInput = document.getElementById('vignette-enabled');
+  const colorInput = document.getElementById('vignette-color-input');
+  const colorOutput = document.getElementById('vignette-color-output');
+  const strengthInput = document.getElementById('vignette-strength-input');
+  const strengthOutput = document.getElementById('vignette-strength-output');
+  const innerInput = document.getElementById('vignette-inner-stop-input');
+  const innerOutput = document.getElementById('vignette-inner-stop-output');
+  if (!enableInput) return;
 
-  const STORAGE_KEY = 'dune-controls:text-color';
-  const DEFAULT_COLOR = '#fafafa';
+  const KEYS = {
+    enabled: 'dune-controls:vignette-enabled',
+    color: 'dune-controls:vignette-color',
+    strength: 'dune-controls:vignette-strength',
+    inner: 'dune-controls:vignette-inner-stop',
+  };
+  const DEFAULTS = { enabled: true, color: '#000000', strength: 0.7, inner: 40 };
 
-  const applyValue = (val) => {
-    document.documentElement.style.setProperty('--text-color', val);
-    if (output) output.textContent = val;
+  const hexToRgb = (hex) => {
+    const h = hex.replace('#', '');
+    return {
+      r: parseInt(h.slice(0, 2), 16),
+      g: parseInt(h.slice(2, 4), 16),
+      b: parseInt(h.slice(4, 6), 16),
+    };
   };
 
-  const stored = localStorage.getItem(STORAGE_KEY);
-  const initialValue = /^#[0-9a-f]{6}$/i.test(stored || '') ? stored : DEFAULT_COLOR;
-  input.value = initialValue;
-  applyValue(initialValue);
+  const applyShadowColor = () => {
+    const { r, g, b } = hexToRgb(colorInput.value || DEFAULTS.color);
+    const a = parseFloat(strengthInput.value);
+    document.documentElement.style.setProperty(
+      '--vignette-shadow-color',
+      `rgba(${r}, ${g}, ${b}, ${Number.isFinite(a) ? a : DEFAULTS.strength})`
+    );
+  };
 
-  input.addEventListener('dblclick', () => {
-    input.value = DEFAULT_COLOR;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+  const applyInnerStop = (val) => {
+    document.documentElement.style.setProperty('--vignette-inner-stop', val + '%');
+    if (innerOutput) innerOutput.textContent = String(val);
+  };
+
+  const applyEnabled = (enabled) => {
+    const el = document.getElementById('vignette');
+    if (el) el.classList.toggle('vignette-off', !enabled);
+    [colorInput, strengthInput, innerInput].forEach((i) => { if (i) i.disabled = !enabled; });
+  };
+
+  // Initialise from localStorage, falling back to defaults.
+  const storedEnabled = localStorage.getItem(KEYS.enabled);
+  const storedColor = localStorage.getItem(KEYS.color);
+  const storedStrength = parseFloat(localStorage.getItem(KEYS.strength));
+  const storedInner = parseFloat(localStorage.getItem(KEYS.inner));
+
+  enableInput.checked = storedEnabled === null ? DEFAULTS.enabled : storedEnabled === 'true';
+  colorInput.value = /^#[0-9a-f]{6}$/i.test(storedColor || '') ? storedColor : DEFAULTS.color;
+  strengthInput.value = String(Number.isFinite(storedStrength) ? storedStrength : DEFAULTS.strength);
+  innerInput.value = String(Number.isFinite(storedInner) ? storedInner : DEFAULTS.inner);
+
+  if (colorOutput) colorOutput.textContent = colorInput.value;
+  if (strengthOutput) strengthOutput.textContent = parseFloat(strengthInput.value).toFixed(2);
+  applyShadowColor();
+  applyInnerStop(innerInput.value);
+  applyEnabled(enableInput.checked);
+
+  enableInput.addEventListener('change', () => {
+    applyEnabled(enableInput.checked);
+    try { localStorage.setItem(KEYS.enabled, String(enableInput.checked)); } catch (e) {}
   });
 
-  input.addEventListener('input', () => {
-    applyValue(input.value);
-    try { localStorage.setItem(STORAGE_KEY, input.value); } catch (e) {}
+  colorInput.addEventListener('dblclick', () => {
+    colorInput.value = DEFAULTS.color;
+    colorInput.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  colorInput.addEventListener('input', () => {
+    if (colorOutput) colorOutput.textContent = colorInput.value;
+    applyShadowColor();
+    try { localStorage.setItem(KEYS.color, colorInput.value); } catch (e) {}
+  });
+
+  strengthInput.addEventListener('dblclick', () => {
+    strengthInput.value = String(DEFAULTS.strength);
+    strengthInput.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  strengthInput.addEventListener('input', () => {
+    const v = parseFloat(strengthInput.value);
+    if (!Number.isFinite(v)) return;
+    if (strengthOutput) strengthOutput.textContent = v.toFixed(2);
+    applyShadowColor();
+    try { localStorage.setItem(KEYS.strength, String(v)); } catch (e) {}
+  });
+
+  innerInput.addEventListener('dblclick', () => {
+    innerInput.value = String(DEFAULTS.inner);
+    innerInput.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  innerInput.addEventListener('input', () => {
+    const v = parseFloat(innerInput.value);
+    if (!Number.isFinite(v)) return;
+    applyInnerStop(v);
+    try { localStorage.setItem(KEYS.inner, String(v)); } catch (e) {}
   });
 }
 
