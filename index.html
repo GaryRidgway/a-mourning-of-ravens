@@ -25,6 +25,16 @@
 
 <body>
   <div id="poem-bg"></div>
+  <div id="smoke-container-1" class="smoke-container" aria-hidden="true">
+    <div class="smoke-bg smoke-1"></div>
+    <div class="smoke-bg smoke-2"></div>
+    <div class="smoke-bg smoke-3"></div>
+  </div>
+  <div id="smoke-container-2" class="smoke-container" aria-hidden="true">
+    <div class="smoke-bg smoke-1"></div>
+    <div class="smoke-bg smoke-2"></div>
+    <div class="smoke-bg smoke-3"></div>
+  </div>
   <div id="flow-box-overlay" aria-hidden="true"></div>
   <div id="poem-staging"></div>
   <div id="poem-container"></div>
@@ -721,6 +731,242 @@
       </details>
 
       <details class="control-group">
+        <summary>Smoke A</summary>
+
+        <label class="control-row control-toggle">
+          <span>Enable Smoke A</span>
+          <input type="checkbox" checked data-smoke-enable-target="#smoke-container-1" />
+        </label>
+
+        <h4>Transform</h4>
+        <label class="control-row">
+          <span>Scale</span>
+          <input type="range" min="0.1" max="3" step="0.01" value="1" data-smoke-target="#smoke-container-1" data-smoke-var="--scale" />
+          <output data-smoke-out>1</output>
+        </label>
+        <label class="control-row">
+          <span>Offset X (px)</span>
+          <input type="range" min="-2000" max="2000" step="1" value="0" data-smoke-target="#smoke-container-1" data-smoke-var="--offset-x" data-smoke-unit="px" />
+          <output data-smoke-out>0px</output>
+        </label>
+        <label class="control-row">
+          <span>Offset Y (px)</span>
+          <input type="range" min="-2000" max="2000" step="1" value="0" data-smoke-target="#smoke-container-1" data-smoke-var="--offset-y" data-smoke-unit="px" />
+          <output data-smoke-out>0px</output>
+        </label>
+        <label class="control-row">
+          <span>Rotation</span>
+          <input type="range" min="-180" max="180" step="1" value="45" data-smoke-target="#smoke-container-1" data-smoke-var="--rotation" data-smoke-unit="deg" />
+          <output data-smoke-out>45deg</output>
+        </label>
+
+        <h4>Color</h4>
+        <label class="control-row">
+          <span>Opacity</span>
+          <input type="range" min="0" max="1" step="0.01" value="1" data-smoke-target="#smoke-container-1" data-smoke-var="--smoke-opacity" />
+          <output data-smoke-out>1</output>
+        </label>
+        <label class="control-row">
+          <span>Brightness</span>
+          <input type="range" min="0" max="3" step="0.01" value="1" data-smoke-target="#smoke-container-1" data-smoke-var="--brightness" />
+          <output data-smoke-out>1</output>
+        </label>
+        <label class="control-row">
+          <span>Saturation</span>
+          <input type="range" min="0" max="5" step="0.01" value="2" data-smoke-target="#smoke-container-1" data-smoke-var="--saturation" />
+          <output data-smoke-out>2</output>
+        </label>
+        <label class="control-row">
+          <span>Hue</span>
+          <input type="range" min="0" max="360" step="1" value="221" data-smoke-target="#smoke-container-1" data-smoke-var="--hue" data-smoke-unit="deg" />
+          <output data-smoke-out>221deg</output>
+        </label>
+
+        <h4>Motion</h4>
+        <label class="control-row control-toggle">
+          <span>Reverse Direction</span>
+          <input type="checkbox" data-smoke-direction-target="#smoke-container-1" />
+        </label>
+        <label class="control-row">
+          <span>Blend Mode</span>
+          <select data-smoke-target="#smoke-container-1" data-smoke-var="--smoke-blend">
+            <option value="normal">normal</option>
+            <option value="screen" selected>screen</option>
+            <option value="lighten">lighten</option>
+            <option value="plus-lighter">plus-lighter</option>
+            <option value="color-dodge">color-dodge</option>
+            <option value="multiply">multiply</option>
+            <option value="overlay">overlay</option>
+            <option value="hard-light">hard-light</option>
+            <option value="soft-light">soft-light</option>
+            <option value="difference">difference</option>
+            <option value="exclusion">exclusion</option>
+            <option value="color-burn">color-burn</option>
+            <option value="darken">darken</option>
+          </select>
+        </label>
+
+        <h4>Layer 1</h4>
+        <label class="control-row">
+          <span>Speed</span>
+          <input type="range" min="0.5" max="180" step="0.1" value="5" data-smoke-target="#smoke-container-1 .smoke-1" data-smoke-var="--speed" data-smoke-unit="s" />
+          <output data-smoke-out>5s</output>
+        </label>
+        <label class="control-row">
+          <span>Start</span>
+          <input type="range" min="-60" max="0" step="0.1" value="0" data-smoke-target="#smoke-container-1 .smoke-1" data-smoke-var="--start" data-smoke-unit="s" />
+          <output data-smoke-out>0s</output>
+        </label>
+
+        <h4>Layer 2</h4>
+        <label class="control-row">
+          <span>Speed</span>
+          <input type="range" min="0.5" max="180" step="0.1" value="5" data-smoke-target="#smoke-container-1 .smoke-2" data-smoke-var="--speed" data-smoke-unit="s" />
+          <output data-smoke-out>5s</output>
+        </label>
+        <label class="control-row">
+          <span>Start</span>
+          <input type="range" min="-60" max="0" step="0.1" value="0" data-smoke-target="#smoke-container-1 .smoke-2" data-smoke-var="--start" data-smoke-unit="s" />
+          <output data-smoke-out>0s</output>
+        </label>
+
+        <h4>Layer 3</h4>
+        <label class="control-row">
+          <span>Speed</span>
+          <input type="range" min="0.5" max="180" step="0.1" value="5" data-smoke-target="#smoke-container-1 .smoke-3" data-smoke-var="--speed" data-smoke-unit="s" />
+          <output data-smoke-out>5s</output>
+        </label>
+        <label class="control-row">
+          <span>Start</span>
+          <input type="range" min="-60" max="0" step="0.1" value="0" data-smoke-target="#smoke-container-1 .smoke-3" data-smoke-var="--start" data-smoke-unit="s" />
+          <output data-smoke-out>0s</output>
+        </label>
+
+        <div class="control-row">
+          <span>Reset Smoke A controls to defaults.</span>
+          <button type="button" data-smoke-reset>Reset Smoke A</button>
+        </div>
+      </details>
+
+      <details class="control-group">
+        <summary>Smoke B</summary>
+
+        <label class="control-row control-toggle">
+          <span>Enable Smoke B</span>
+          <input type="checkbox" checked data-smoke-enable-target="#smoke-container-2" />
+        </label>
+
+        <h4>Transform</h4>
+        <label class="control-row">
+          <span>Scale</span>
+          <input type="range" min="0.1" max="3" step="0.01" value="1" data-smoke-target="#smoke-container-2" data-smoke-var="--scale" />
+          <output data-smoke-out>1</output>
+        </label>
+        <label class="control-row">
+          <span>Offset X (px)</span>
+          <input type="range" min="-2000" max="2000" step="1" value="0" data-smoke-target="#smoke-container-2" data-smoke-var="--offset-x" data-smoke-unit="px" />
+          <output data-smoke-out>0px</output>
+        </label>
+        <label class="control-row">
+          <span>Offset Y (px)</span>
+          <input type="range" min="-2000" max="2000" step="1" value="0" data-smoke-target="#smoke-container-2" data-smoke-var="--offset-y" data-smoke-unit="px" />
+          <output data-smoke-out>0px</output>
+        </label>
+        <label class="control-row">
+          <span>Rotation</span>
+          <input type="range" min="-180" max="180" step="1" value="45" data-smoke-target="#smoke-container-2" data-smoke-var="--rotation" data-smoke-unit="deg" />
+          <output data-smoke-out>45deg</output>
+        </label>
+
+        <h4>Color</h4>
+        <label class="control-row">
+          <span>Opacity</span>
+          <input type="range" min="0" max="1" step="0.01" value="1" data-smoke-target="#smoke-container-2" data-smoke-var="--smoke-opacity" />
+          <output data-smoke-out>1</output>
+        </label>
+        <label class="control-row">
+          <span>Brightness</span>
+          <input type="range" min="0" max="3" step="0.01" value="1" data-smoke-target="#smoke-container-2" data-smoke-var="--brightness" />
+          <output data-smoke-out>1</output>
+        </label>
+        <label class="control-row">
+          <span>Saturation</span>
+          <input type="range" min="0" max="5" step="0.01" value="2" data-smoke-target="#smoke-container-2" data-smoke-var="--saturation" />
+          <output data-smoke-out>2</output>
+        </label>
+        <label class="control-row">
+          <span>Hue</span>
+          <input type="range" min="0" max="360" step="1" value="221" data-smoke-target="#smoke-container-2" data-smoke-var="--hue" data-smoke-unit="deg" />
+          <output data-smoke-out>221deg</output>
+        </label>
+
+        <h4>Motion</h4>
+        <label class="control-row control-toggle">
+          <span>Reverse Direction</span>
+          <input type="checkbox" data-smoke-direction-target="#smoke-container-2" />
+        </label>
+        <label class="control-row">
+          <span>Blend Mode</span>
+          <select data-smoke-target="#smoke-container-2" data-smoke-var="--smoke-blend">
+            <option value="normal">normal</option>
+            <option value="screen" selected>screen</option>
+            <option value="lighten">lighten</option>
+            <option value="plus-lighter">plus-lighter</option>
+            <option value="color-dodge">color-dodge</option>
+            <option value="multiply">multiply</option>
+            <option value="overlay">overlay</option>
+            <option value="hard-light">hard-light</option>
+            <option value="soft-light">soft-light</option>
+            <option value="difference">difference</option>
+            <option value="exclusion">exclusion</option>
+            <option value="color-burn">color-burn</option>
+            <option value="darken">darken</option>
+          </select>
+        </label>
+
+        <h4>Layer 1</h4>
+        <label class="control-row">
+          <span>Speed</span>
+          <input type="range" min="0.5" max="180" step="0.1" value="5" data-smoke-target="#smoke-container-2 .smoke-1" data-smoke-var="--speed" data-smoke-unit="s" />
+          <output data-smoke-out>5s</output>
+        </label>
+        <label class="control-row">
+          <span>Start</span>
+          <input type="range" min="-60" max="0" step="0.1" value="0" data-smoke-target="#smoke-container-2 .smoke-1" data-smoke-var="--start" data-smoke-unit="s" />
+          <output data-smoke-out>0s</output>
+        </label>
+
+        <h4>Layer 2</h4>
+        <label class="control-row">
+          <span>Speed</span>
+          <input type="range" min="0.5" max="180" step="0.1" value="5" data-smoke-target="#smoke-container-2 .smoke-2" data-smoke-var="--speed" data-smoke-unit="s" />
+          <output data-smoke-out>5s</output>
+        </label>
+        <label class="control-row">
+          <span>Start</span>
+          <input type="range" min="-60" max="0" step="0.1" value="0" data-smoke-target="#smoke-container-2 .smoke-2" data-smoke-var="--start" data-smoke-unit="s" />
+          <output data-smoke-out>0s</output>
+        </label>
+
+        <h4>Layer 3</h4>
+        <label class="control-row">
+          <span>Speed</span>
+          <input type="range" min="0.5" max="180" step="0.1" value="5" data-smoke-target="#smoke-container-2 .smoke-3" data-smoke-var="--speed" data-smoke-unit="s" />
+          <output data-smoke-out>5s</output>
+        </label>
+        <label class="control-row">
+          <span>Start</span>
+          <input type="range" min="-60" max="0" step="0.1" value="0" data-smoke-target="#smoke-container-2 .smoke-3" data-smoke-var="--start" data-smoke-unit="s" />
+          <output data-smoke-out>0s</output>
+        </label>
+
+        <div class="control-row">
+          <span>Reset Smoke B controls to defaults.</span>
+          <button type="button" data-smoke-reset>Reset Smoke B</button>
+        </div>
+      </details>
+
+      <details class="control-group">
         <summary>Reset</summary>
 
         <div class="control-row">
@@ -756,6 +1002,140 @@
     })();
   </script>
 
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      const valueInputs = document.querySelectorAll('[data-smoke-target]');
+      const directionInputs = document.querySelectorAll('input[data-smoke-direction-target]');
+      const enableInputs = document.querySelectorAll('input[data-smoke-enable-target]');
+      const defaults = new Map();
+
+      const deriveKey = (el) => {
+        if (el.dataset.smokeKey) return el.dataset.smokeKey;
+        if (el.dataset.smokeDirectionTarget) {
+          const m = el.dataset.smokeDirectionTarget.match(/smoke-container-(\d+)/);
+          return `s${m ? m[1] : 'X'}Reverse`;
+        }
+        if (el.dataset.smokeEnableTarget) {
+          const m = el.dataset.smokeEnableTarget.match(/smoke-container-(\d+)/);
+          return `s${m ? m[1] : 'X'}Enabled`;
+        }
+        const target = el.dataset.smokeTarget || '';
+        const inst = (target.match(/smoke-container-(\d+)/) || [])[1] || 'X';
+        const layer = (target.match(/\.smoke-(\d+)/) || [])[1];
+        let v = (el.dataset.smokeVar || '').replace(/^--smoke-/, '').replace(/^--/, '');
+        v = v.replace(/-(.)/g, (_, c) => c.toUpperCase());
+        v = v.charAt(0).toUpperCase() + v.slice(1);
+        return `s${inst}${layer ? `L${layer}` : ''}${v}`;
+      };
+
+      const writeUrlParam = (key, value) => {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          params.set(key, String(value));
+          window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+        } catch (e) {}
+      };
+
+      const deleteUrlParam = (key) => {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          params.delete(key);
+          const qs = params.toString();
+          window.history.replaceState({}, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
+        } catch (e) {}
+      };
+
+      const readUrlParam = (key) => {
+        try { return new URLSearchParams(window.location.search).get(key); } catch (e) { return null; }
+      };
+
+      const applyValue = (el) => {
+        const unit = el.dataset.smokeUnit || '';
+        const value = el.value + unit;
+        const target = document.querySelector(el.dataset.smokeTarget);
+        if (target) target.style.setProperty(el.dataset.smokeVar, value);
+        const out = el.parentElement.querySelector('[data-smoke-out]');
+        if (out) out.textContent = value;
+      };
+
+      const applyDirection = (input) => {
+        const target = document.querySelector(input.dataset.smokeDirectionTarget);
+        if (target) target.classList.toggle('is-reversed', input.checked);
+      };
+
+      const applyEnabled = (input) => {
+        const target = document.querySelector(input.dataset.smokeEnableTarget);
+        if (target) target.hidden = !input.checked;
+      };
+
+      const constDefaults = (typeof SMOKE_DEFAULTS !== 'undefined') ? SMOKE_DEFAULTS : {};
+
+      valueInputs.forEach((el) => {
+        const key = deriveKey(el);
+        if (constDefaults[key] !== undefined) el.value = constDefaults[key];
+        defaults.set(el, el.value);
+        const fromUrl = readUrlParam(key);
+        if (fromUrl !== null) el.value = fromUrl;
+        el.addEventListener('input', () => {
+          applyValue(el);
+          writeUrlParam(key, el.value);
+        });
+        el.addEventListener('change', () => {
+          applyValue(el);
+          writeUrlParam(key, el.value);
+        });
+        applyValue(el);
+      });
+
+      directionInputs.forEach((input) => {
+        const key = deriveKey(input);
+        if (typeof constDefaults[key] === 'boolean') input.checked = constDefaults[key];
+        defaults.set(input, input.checked);
+        const fromUrl = readUrlParam(key);
+        if (fromUrl !== null) input.checked = fromUrl === '1' || fromUrl === 'true';
+        input.addEventListener('change', () => {
+          applyDirection(input);
+          writeUrlParam(key, input.checked ? '1' : '0');
+        });
+        applyDirection(input);
+      });
+
+      enableInputs.forEach((input) => {
+        const key = deriveKey(input);
+        if (typeof constDefaults[key] === 'boolean') input.checked = constDefaults[key];
+        defaults.set(input, input.checked);
+        const fromUrl = readUrlParam(key);
+        if (fromUrl !== null) input.checked = fromUrl === '1' || fromUrl === 'true';
+        input.addEventListener('change', () => {
+          applyEnabled(input);
+          writeUrlParam(key, input.checked ? '1' : '0');
+        });
+        applyEnabled(input);
+      });
+
+      document.querySelectorAll('[data-smoke-reset]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const group = btn.closest('details') || document;
+          group.querySelectorAll('[data-smoke-target]').forEach((el) => {
+            el.value = defaults.get(el);
+            applyValue(el);
+            deleteUrlParam(deriveKey(el));
+          });
+          group.querySelectorAll('input[data-smoke-direction-target]').forEach((input) => {
+            input.checked = defaults.get(input);
+            applyDirection(input);
+            deleteUrlParam(deriveKey(input));
+          });
+          group.querySelectorAll('input[data-smoke-enable-target]').forEach((input) => {
+            input.checked = defaults.get(input);
+            applyEnabled(input);
+            deleteUrlParam(deriveKey(input));
+          });
+        });
+      });
+    });
+  </script>
+
   <!-- vvv Add scripts here from dist folder vvv -->
   <script src="./src/vendor/p5/p5.min.js" defer></script>
   <script src="./src/vendor/p5/p5.dom.min.js" defer></script>
@@ -763,6 +1143,7 @@
   <script src="./src/js/constants/renderColors.js" defer></script>
   <script src="./src/js/constants/controlParamDefs.js" defer></script>
   <script src="./src/js/constants/controlTooltips.js" defer></script>
+  <script src="./src/js/constants/smokeDefaults.js" defer></script>
   <script src="./src/js/flowField.js" defer></script>
   <script src="./src/js/poem_json.js" defer></script>
   <script src="./src/js/variables.js" defer></script>
