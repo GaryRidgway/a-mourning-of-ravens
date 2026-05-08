@@ -49,11 +49,35 @@ body {
     inset: 0;
     z-index: 3;
     pointer-events: none;
-    background: radial-gradient(
-        ellipse at center,
-        transparent var(--vignette-inner-stop),
-        var(--vignette-shadow-color) 100%
-    );
+    // Edge vignette: two crossed linear gradients darken every edge of the
+    // viewport. Where both axes overlap (the corners) the alpha compounds, so
+    // corners read darker than edges — like a frame closing in.
+    // --vignette-inner-stop: distance from each edge where the dark fade ends.
+    // --vignette-saturate-multiplier (0..1): how much of that fade is flat-dark
+    // instead of a fade. Driven by Strength: 0 at strength<=1, approaches 1 as
+    // strength grows, pulling the hard dark zone inward.
+    // --vignette-saturate-near / --vignette-saturate-far: pre-resolved % values
+    // set from JS (see applySaturateStops). Avoids nested-calc() corner cases
+    // that SASS unwraps and that some browsers parse left-to-right.
+    background:
+        linear-gradient(
+            to right,
+            var(--vignette-shadow-color) 0%,
+            var(--vignette-shadow-color) var(--vignette-saturate-near, 0%),
+            transparent var(--vignette-inner-stop),
+            transparent calc(100% - var(--vignette-inner-stop)),
+            var(--vignette-shadow-color) var(--vignette-saturate-far, 100%),
+            var(--vignette-shadow-color) 100%
+        ),
+        linear-gradient(
+            to bottom,
+            var(--vignette-shadow-color) 0%,
+            var(--vignette-shadow-color) var(--vignette-saturate-near, 0%),
+            transparent var(--vignette-inner-stop),
+            transparent calc(100% - var(--vignette-inner-stop)),
+            var(--vignette-shadow-color) var(--vignette-saturate-far, 100%),
+            var(--vignette-shadow-color) 100%
+        );
 }
 
 #vignette.vignette-off {

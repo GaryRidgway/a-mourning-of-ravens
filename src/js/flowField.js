@@ -1281,18 +1281,43 @@ function bindVignetteControls() {
     };
   };
 
+  // Compute the two saturate-stop positions (the boundary between flat-dark and
+  // the dark→transparent fade) directly in JS. Nested calc() inside SCSS gets
+  // unwrapped during compile, which broke right/bottom edges due to ambiguous
+  // operator precedence around the `-`. Setting fully resolved % values dodges
+  // the issue entirely.
+  const applySaturateStops = () => {
+    const innerRaw = parseFloat(innerInput.value);
+    const inner = Number.isFinite(innerRaw) ? innerRaw : DEFAULTS.inner;
+    const sRaw = parseFloat(strengthInput.value);
+    const s = Number.isFinite(sRaw) ? sRaw : DEFAULTS.strength;
+    const multiplier = 1 - 1 / Math.max(1, s);
+    const nearStopPct = inner * multiplier;
+    const farStopPct = 100 - inner * multiplier;
+    const root = document.documentElement.style;
+    root.setProperty('--vignette-saturate-near', nearStopPct + '%');
+    root.setProperty('--vignette-saturate-far', farStopPct + '%');
+  };
+
   const applyShadowColor = () => {
     const { r, g, b } = hexToRgb(colorInput.value || DEFAULTS.color);
-    const a = parseFloat(strengthInput.value);
+    const raw = parseFloat(strengthInput.value);
+    const s = Number.isFinite(raw) ? raw : DEFAULTS.strength;
+    // Strength 0–1: alpha = s, no flat-dark zone.
+    // Strength > 1: alpha pinned at 1; the saturate stops pull inward via
+    // applySaturateStops, so a larger band along each edge is solid.
+    const alpha = Math.max(0, Math.min(1, s));
     document.documentElement.style.setProperty(
       '--vignette-shadow-color',
-      `rgba(${r}, ${g}, ${b}, ${Number.isFinite(a) ? a : DEFAULTS.strength})`
+      `rgba(${r}, ${g}, ${b}, ${alpha})`
     );
+    applySaturateStops();
   };
 
   const applyInnerStop = (val) => {
     document.documentElement.style.setProperty('--vignette-inner-stop', val + '%');
     if (innerOutput) innerOutput.textContent = String(val);
+    applySaturateStops();
   };
 
   const applyEnabled = (enabled) => {
