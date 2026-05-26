@@ -2,8 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(mkdir -p /Users/gridgway/git-repos/a-mourning-of-ravens/src/assets/scrollsmoke)",
-      "Bash(mv /Users/gridgway/git-repos/a-mourning-of-ravens/Scrollsmoke/Assets/Smoke1.png /Users/gridgway/git-repos/a-mourning-of-ravens/Scrollsmoke/Assets/Smoke2.png /Users/gridgway/git-repos/a-mourning-of-ravens/Scrollsmoke/Assets/Smoke3.png /Users/gridgway/git-repos/a-mourning-of-ravens/src/assets/scrollsmoke/)",
-      "mcp__repowise__get_overview"
+      "Bash(mv /Users/gridgway/git-repos/a-mourning-of-ravens/Scrollsmoke/Assets/Smoke1.png /Users/gridgway/git-repos/a-mourning-of-ravens/Scrollsmoke/Assets/Smoke2.png /Users/gridgway/git-repos/a-mourning-of-ravens/Scrollsmoke/Assets/Smoke3.png /Users/gridgway/git-repos/a-mourning-of-ravens/src/assets/scrollsmoke/)"
     ]
   }
 }
