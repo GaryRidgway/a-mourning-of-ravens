@@ -1,11 +1,11 @@
 const RENDER_COLORS = {
   fade: [0, 0, 0],
-  particles: [117, 0, 0, 208],
+  particles: [117, 0, 0, 44],
   windBoostColor: [255, 174, 0],
   separationZone: [130, 175, 235],
   boxStrokeIdle: [200, 200, 180, 0],
   boxStrokeDragged: [250, 230, 190, 0],
-  boxGlowCore: [209, 0, 0, 255],
+  boxGlowCore: [209, 0, 0, 70],
 };
 
 const RENDER_COLORS_DEFAULTS = {};

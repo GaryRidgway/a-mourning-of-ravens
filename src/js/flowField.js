@@ -8,6 +8,19 @@ const MAX_RENDER_SEGMENT_LENGTH_PX = 12;
 
 const particles = [];
 const boxes = [];
+// Foreground overlay canvas: word-colliding particles render here with a
+// fast transparent fade, while ignorers lay persistent ink on the main canvas.
+let fgGraphics = null;
+// Second transparent ink canvas: background deposits alternate between the
+// main canvas and this one, with wipes phase-offset so ink always survives
+// somewhere on screen.
+let inkBGraphics = null;
+let mainCanvasElt = null;
+const _mainRenderTarget = {
+  stroke: (r, g, b, a) => stroke(r, g, b, a),
+  strokeWeight: (w) => strokeWeight(w),
+  line: (x1, y1, x2, y2) => line(x1, y1, x2, y2),
+};
 let activeBoxes = [];
 let sourceFlowBoxes = [];
 let flowBoxOverlayEl = null;
@@ -45,8 +58,6 @@ const _oklchCache = {
   glowCore: { L: 0, C: 0, h: 0 },
 };
 
-// Per-frame oscillation state — computed once in draw(), read by fade + render.
-const _frameOscillation = { enabled: false, phase: 0, eased: 0 };
 
 // Boid flocking spatial grid and scratch data for boosted particles.
 const boidGrid = new Map();
@@ -62,12 +73,23 @@ const NOISE_TEX_INV_TILE = 1 / NOISE_TEX_TILE;
 let noiseTexture = null; // Float32Array, baked in setup()
 
 function bakeNoiseTexture() {
+  // Perlin noise is not periodic, so a raw bake has hard value seams wherever
+  // the texture wraps. Blend four shifted copies weighted by position so
+  // texel 255 flows smoothly into texel 0 on both axes (seamless tile).
   noiseTexture = new Float32Array(NOISE_TEX_SIZE * NOISE_TEX_SIZE);
+  const T = NOISE_TEX_TILE;
   for (let y = 0; y < NOISE_TEX_SIZE; y++) {
-    const ny = (y / NOISE_TEX_SIZE) * NOISE_TEX_TILE;
+    const ny = (y / NOISE_TEX_SIZE) * T;
+    const wy = y / NOISE_TEX_SIZE;
     for (let x = 0; x < NOISE_TEX_SIZE; x++) {
-      const nx = (x / NOISE_TEX_SIZE) * NOISE_TEX_TILE;
-      noiseTexture[y * NOISE_TEX_SIZE + x] = noise(nx, ny) * 2 - 1;
+      const nx = (x / NOISE_TEX_SIZE) * T;
+      const wx = x / NOISE_TEX_SIZE;
+      const v =
+        noise(nx, ny) * (1 - wx) * (1 - wy) +
+        noise(nx - T, ny) * wx * (1 - wy) +
+        noise(nx, ny - T) * (1 - wx) * wy +
+        noise(nx - T, ny - T) * wx * wy;
+      noiseTexture[y * NOISE_TEX_SIZE + x] = v * 2 - 1;
     }
   }
 }
@@ -82,8 +104,13 @@ function sampleNoiseTexture(nx, ny) {
   const y0 = floor(sy) & NOISE_TEX_SIZE_MASK;
   const x1 = (x0 + 1) & NOISE_TEX_SIZE_MASK;
   const y1 = (y0 + 1) & NOISE_TEX_SIZE_MASK;
-  const fx = sx - floor(sx);
-  const fy = sy - floor(sy);
+  // Smoothstep the interpolation weights: plain bilinear is only C0, and its
+  // slope kinks at every texel edge read as polygonal particle paths once the
+  // curl field amplifies the value into an angle.
+  let fx = sx - floor(sx);
+  let fy = sy - floor(sy);
+  fx = fx * fx * (3 - 2 * fx);
+  fy = fy * fy * (3 - 2 * fy);
   const v00 = noiseTexture[y0 * NOISE_TEX_SIZE + x0];
   const v10 = noiseTexture[y0 * NOISE_TEX_SIZE + x1];
   const v01 = noiseTexture[y1 * NOISE_TEX_SIZE + x0];
@@ -277,6 +304,12 @@ function applyRenderScale(nextScale) {
   const scaleY = prevH > 0 ? nextH / prevH : 1;
 
   resizeCanvas(nextW, nextH);
+  if (fgGraphics) {
+    fgGraphics.resizeCanvas(nextW, nextH);
+  }
+  if (inkBGraphics) {
+    inkBGraphics.resizeCanvas(nextW, nextH);
+  }
   currentRenderScale = safeScale;
 
   for (let i = 0; i < particles.length; i++) {
@@ -454,23 +487,14 @@ function paintQualityHud(nowMs) {
   const internalW = max(1, width || 0);
   const internalH = max(1, height || 0);
   const autoScaleActive = CONFIG.enableAutoRenderScale && currentRenderScale < 0.999;
-  const oscillation = _frameOscillation;
   const currentFadeAlpha = getCurrentBackgroundFadeAlpha();
   const currentParticleAlpha = getCurrentParticleAlpha();
-  const oscSlots = 9;
-  const oscIndex = oscillation.enabled
-    ? constrain(Math.round(oscillation.eased * (oscSlots - 1)), 0, oscSlots - 1)
-    : 0;
-  let oscTrack = '';
-  for (let i = 0; i < oscSlots; i++) {
-    oscTrack += i === oscIndex ? '●' : '·';
-  }
   qualityState.hudEl.innerHTML =
     `<div>FPS ${fps.toFixed(1)} (Target ${targetFps.toFixed(0)}) | Avg Frame ${qualityState.avgFrameMs.toFixed(2)} ms | Quality Tier ${qualityState.tier}` +
     `${CONFIG.lockQualityTier ? ' (locked)' : ''}` +
     ` | Render Fraction ${rf.toFixed(2)} | Separation Pair Budget ${pairs} | Particles ${particles.length}/${maxParticles}</div>` +
     `<div>Viewport ${viewportW}x${viewportH}px | Render Scale ${currentRenderScale.toFixed(2)}${autoScaleActive ? ' (auto)' : ''} | Internal Canvas ${internalW}x${internalH}px</div>` +
-    `<div>Osc A ${oscTrack} B${oscillation.enabled ? ` | ${CONFIG.backgroundFadeOscillationPeriodSec.toFixed(1)}s` : ' | off'} | Bg ${currentFadeAlpha.toFixed(2)} | P ${currentParticleAlpha.toFixed(2)}</div>`;
+    `<div>Bg A ${currentFadeAlpha.toFixed(2)}${CONFIG.enableDualInkLayers ? ` | Bg B ${getCurrentBackgroundFadeAlphaB().toFixed(2)}` : ''} | P ${currentParticleAlpha.toFixed(2)}</div>`;
 }
 
 function getAdaptiveQualityThresholdsMs() {
@@ -604,6 +628,11 @@ function setup() {
   }
   canvas.style('width', '100%');
   canvas.style('height', '100%');
+  mainCanvasElt = canvas.elt;
+  ensureInkLayerB();
+  ensureForegroundLayer();
+  applyCanvasLayerVisibility();
+  applyWordShadowStyle();
   noStroke();
   const showDebugUI = new URLSearchParams(window.location.search).has('debug');
   if (showDebugUI) {
@@ -625,8 +654,6 @@ function setup() {
   }
   applySimulationPauseState();
 
-  fill(...RENDER_COLORS.fade);
-  rect(0, 0, width, height);
   simTimeMs = millis();
   simLastFrameMs = null;
   simAccumulatorMs = 0;
@@ -780,11 +807,6 @@ function draw() {
   if (typeof window.__mournTickAutoScroll === 'function') {
     window.__mournTickAutoScroll(nowMs);
   }
-  // Compute oscillation state once per frame (used by fade + render + HUD).
-  const oscState = getOscillationState();
-  _frameOscillation.enabled = oscState.enabled;
-  _frameOscillation.phase = oscState.phase;
-  _frameOscillation.eased = oscState.eased;
   tickAdaptiveQuality(nowMs);
   if (simLastFrameMs === null) {
     simLastFrameMs = nowMs;
@@ -798,6 +820,7 @@ function draw() {
   fadeCanvas();
   updateBoxes(dtFrames);
   updateActiveBoxes();
+  eraseInkUnderBoxes();
   updateParticles(nowMs, simStepCount, true, dtFrames);
   updateAdaptiveSeparationCadence(nowMs);
   renderParticles(dtFrames);
@@ -808,39 +831,518 @@ function windowResized() {
   applyRenderScale(getActiveRenderScale());
 }
 
+// Show/hide each canvas independently (visibility, not display, so it
+// composes with the foreground layer's own display toggling). The simulation
+// and rendering keep running either way — these are design-inspection knobs.
+function applyCanvasLayerVisibility() {
+  if (mainCanvasElt) {
+    mainCanvasElt.style.visibility = CONFIG.showBackgroundCanvas ? '' : 'hidden';
+  }
+  if (inkBGraphics) {
+    inkBGraphics.canvas.style.visibility = CONFIG.showBackgroundCanvasB ? '' : 'hidden';
+  }
+  if (fgGraphics) {
+    fgGraphics.canvas.style.visibility = CONFIG.showForegroundCanvas ? '' : 'hidden';
+  }
+}
+
+function ensureInkLayerB() {
+  if (inkBGraphics) return;
+  inkBGraphics = createGraphics(width, height);
+  const mount = document.getElementById('poem-bg');
+  if (mount) {
+    mount.appendChild(inkBGraphics.canvas);
+  }
+  inkBGraphics.canvas.style.display = 'block';
+}
+
+// Words separate themselves from accumulated ink with a glyph-shaped
+// drop shadow in the fade color. drop-shadow (not text-shadow) because the
+// spans use background-clip: text with a transparent fill — text-shadow
+// would bleed through the transparent glyphs.
+function applyWordShadowStyle() {
+  const root = document.documentElement;
+  if (!CONFIG.enableWordShadow) {
+    root.style.setProperty('--word-shadow', 'none');
+    return;
+  }
+  const blur = max(0, CONFIG.wordShadowBlur);
+  const opacity = constrain(CONFIG.wordShadowOpacity, 0, 1);
+  const c = `rgba(${RENDER_COLORS.fade[0]}, ${RENDER_COLORS.fade[1]}, ${RENDER_COLORS.fade[2]}, ${opacity})`;
+  root.style.setProperty(
+    '--word-shadow',
+    `drop-shadow(0 0 ${blur}px ${c}) drop-shadow(0 0 ${blur * 2.5}px ${c})`
+  );
+}
+
+function ensureForegroundLayer() {
+  if (fgGraphics) return;
+  fgGraphics = createGraphics(width, height);
+  const mount = document.getElementById('poem-bg');
+  if (mount) {
+    mount.appendChild(fgGraphics.canvas);
+  }
+  // #poem-bg canvas CSS handles position/size; p5 leaves graphics hidden.
+  fgGraphics.canvas.style.display = 'block';
+}
+
+// Erase alpha (destination-out) instead of painting the background color —
+// all three canvases stay transparent so they stack over the page backdrop.
+function applyAlphaErase(ctx, alphaByte, w, h) {
+  if (alphaByte <= 0) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.fillStyle = `rgba(0, 0, 0, ${alphaByte / 255})`;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+}
+
 function fadeCanvas() {
-  fill(...RENDER_COLORS.fade, getCurrentBackgroundFadeAlpha());
-  rect(0, 0, width, height);
+  applyAlphaErase(drawingContext, getCurrentBackgroundFadeAlpha(), width, height);
+  if (inkBGraphics) {
+    if (CONFIG.enableDualInkLayers) {
+      if (inkBGraphics.canvas.style.display === 'none') {
+        inkBGraphics.canvas.style.display = 'block';
+      }
+      applyAlphaErase(
+        inkBGraphics.drawingContext,
+        getCurrentBackgroundFadeAlphaB(),
+        inkBGraphics.width,
+        inkBGraphics.height
+      );
+    } else if (inkBGraphics.canvas.style.display !== 'none') {
+      inkBGraphics.clear();
+      inkBGraphics.canvas.style.display = 'none';
+    }
+  }
+  if (!fgGraphics) return;
+  if (CONFIG.enableForegroundLayer) {
+    if (fgGraphics.canvas.style.display === 'none') {
+      fgGraphics.canvas.style.display = 'block';
+    }
+    applyAlphaErase(
+      fgGraphics.drawingContext,
+      clampColorByte(CONFIG.foregroundTrailAlpha),
+      fgGraphics.width,
+      fgGraphics.height
+    );
+  } else if (fgGraphics.canvas.style.display !== 'none') {
+    fgGraphics.clear();
+    fgGraphics.canvas.style.display = 'none';
+  }
+}
+
+// Word colliders act as squeegees: each frame they erase the ink alpha over
+// their footprint so persistent ink is carved away rather than left behind.
+// Soft edges come from stacked concentric layers, each removing a fraction
+// of the erase alpha — the innermost region receives every coat.
+function eraseInkUnderBoxes() {
+  if (!CONFIG.enableBoxInkErase) return;
+  const eraseAlpha = clampColorByte(CONFIG.boxInkEraseAlpha);
+  if (eraseAlpha <= 0) return;
+  const pad = max(0, CONFIG.boxInkErasePadding);
+  const softness = max(0, CONFIG.boxInkEraseSoftness);
+  const layers = softness > 0 ? 4 : 1;
+  const layerAlpha = eraseAlpha / layers / 255;
+  const targets = [drawingContext];
+  if (inkBGraphics && CONFIG.enableDualInkLayers) {
+    targets.push(inkBGraphics.drawingContext);
+  }
+  for (let t = 0; t < targets.length; t++) {
+    const ctx = targets[t];
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = `rgba(0, 0, 0, ${layerAlpha})`;
+    for (let i = 0; i < activeBoxes.length; i++) {
+      const box = activeBoxes[i];
+      const displayBox = getInterpolatedBoxPosition(box);
+      for (let layer = 0; layer < layers; layer++) {
+        const inflate = pad + (layers > 1 ? softness * (1 - layer / (layers - 1)) : 0);
+        ctx.beginPath();
+        ctx.roundRect(
+          displayBox.x - inflate,
+          displayBox.y - inflate,
+          box.w + inflate * 2,
+          box.h + inflate * 2,
+          inflate + 2
+        );
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
 }
 
 function getCurrentBackgroundFadeAlpha() {
-  const alphaA = clampColorByte(CONFIG.trailAlpha);
-  const alphaB = clampColorByte(CONFIG.trailAlphaSecondary);
-  return getOscillatingAlpha(alphaA, alphaB);
+  return max(clampColorByte(CONFIG.trailAlpha), getBackgroundPulseAlpha(0));
+}
+
+function getCurrentBackgroundFadeAlphaB() {
+  return max(
+    clampColorByte(CONFIG.trailAlpha),
+    getBackgroundPulseAlpha(clamp01(CONFIG.inkLayerPhaseOffset))
+  );
+}
+
+// Pulse wipe: the fade follows the user-authored keyframe curve across each
+// period — flat stretches let trails accumulate, spikes erase the canvas.
+// Curve y maps directly to fade alpha (1.0 = full 255 wipe).
+// Scrub offset set by dragging the playhead in the curve editor — shifts
+// where the pulse cycle currently sits without touching the curve itself.
+let pulsePhaseOffsetSec = 0;
+
+function getPulsePhase(periodSec) {
+  const phase = ((millis() * 0.001 + pulsePhaseOffsetSec) / periodSec) % 1;
+  return phase < 0 ? phase + 1 : phase;
+}
+
+function getBackgroundPulseAlpha(phaseOffset01 = 0) {
+  const periodSec = CONFIG.backgroundPulsePeriodSec;
+  if (!(periodSec > 0)) return 0;
+  return 255 * samplePulseCurve((getPulsePhase(periodSec) + phaseOffset01) % 1);
+}
+
+// Unity-style keyframe editor for the pulse curve: drag points, click empty
+// space to add one, double-click a point to remove it. Endpoints are pinned
+// to phase 0 and 1 so the cycle stays closed.
+function setupPulseCurveEditor(panel) {
+  const canvas = panel.querySelector('#pulse-curve-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const PAD = 10;
+  let points = parsePulseCurve(CONFIG.backgroundPulseCurve);
+  let dragIndex = -1;
+  let draggingPlayhead = false;
+
+  const playheadPx = () => {
+    const periodSec = CONFIG.backgroundPulsePeriodSec;
+    if (!(periodSec > 0)) return null;
+    return PAD + getPulsePhase(periodSec) * (canvas.width - PAD * 2);
+  };
+  const scrubToPhase = (phase01) => {
+    const periodSec = CONFIG.backgroundPulsePeriodSec;
+    if (!(periodSec > 0)) return;
+    pulsePhaseOffsetSec = phase01 * periodSec - millis() * 0.001;
+  };
+
+  // Undo/redo (cmd/ctrl+z, cmd/ctrl+shift+z) — one history entry per
+  // completed gesture: a full drag, an add, a delete, or a reset.
+  const undoStack = [];
+  const redoStack = [];
+  let gestureStartCurve = null;
+  const pushHistory = (prevCurve) => {
+    undoStack.push(prevCurve);
+    if (undoStack.length > 100) undoStack.shift();
+    redoStack.length = 0;
+  };
+  const applyCurveString = (str) => {
+    CONFIG.backgroundPulseCurve = str;
+    points = parsePulseCurve(str);
+    syncUrlParamsFromConfig();
+  };
+  const undoCurve = () => {
+    if (!undoStack.length) return;
+    redoStack.push(CONFIG.backgroundPulseCurve);
+    applyCurveString(undoStack.pop());
+  };
+  const redoCurve = () => {
+    if (!redoStack.length) return;
+    undoStack.push(CONFIG.backgroundPulseCurve);
+    applyCurveString(redoStack.pop());
+  };
+  window.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
+    const t = e.target;
+    if (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName) && t.type === 'text')) return;
+    e.preventDefault();
+    if (e.shiftKey) redoCurve(); else undoCurve();
+  });
+
+  const toPx = (p) => ({
+    x: PAD + p.x * (canvas.width - PAD * 2),
+    y: canvas.height - PAD - p.y * (canvas.height - PAD * 2),
+  });
+  const toCurve = (px, py) => ({
+    x: constrain((px - PAD) / (canvas.width - PAD * 2), 0, 1),
+    y: constrain((canvas.height - PAD - py) / (canvas.height - PAD * 2), 0, 1),
+  });
+  const eventPos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - r.left) * (canvas.width / r.width),
+      y: (e.clientY - r.top) * (canvas.height / r.height),
+    };
+  };
+  const hitTest = (px, py) => {
+    for (let i = 0; i < points.length; i++) {
+      const p = toPx(points[i]);
+      if ((p.x - px) ** 2 + (p.y - py) ** 2 <= 14 ** 2) return i;
+    }
+    return -1;
+  };
+  const commit = () => {
+    CONFIG.backgroundPulseCurve = serializePulseCurve(points);
+    syncUrlParamsFromConfig();
+  };
+
+  canvas.addEventListener('pointerdown', (e) => {
+    const pos = eventPos(e);
+    let idx = hitTest(pos.x, pos.y);
+    // Keyframes win over the playhead; otherwise a nearby playhead is grabbed
+    // as a scrubber instead of adding a new point.
+    if (idx < 0) {
+      const ph = playheadPx();
+      if (ph !== null && Math.abs(pos.x - ph) <= 8) {
+        draggingPlayhead = true;
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
+    gestureStartCurve = CONFIG.backgroundPulseCurve;
+    if (idx < 0) {
+      const cp = toCurve(pos.x, pos.y);
+      idx = points.findIndex((p) => p.x > cp.x);
+      if (idx <= 0) return; // clicks left of the first point are ignored
+      points.splice(idx, 0, cp);
+      commit();
+    }
+    dragIndex = idx;
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    const pos = eventPos(e);
+    if (draggingPlayhead) {
+      scrubToPhase(toCurve(pos.x, pos.y).x);
+      return;
+    }
+    if (dragIndex < 0) {
+      // Hover affordances: resize cursor near the playhead, grab near a point.
+      const ph = playheadPx();
+      if (hitTest(pos.x, pos.y) >= 0) {
+        canvas.style.cursor = 'grab';
+      } else if (ph !== null && Math.abs(pos.x - ph) <= 8) {
+        canvas.style.cursor = 'ew-resize';
+      } else {
+        canvas.style.cursor = 'crosshair';
+      }
+      return;
+    }
+    const cp = toCurve(pos.x, pos.y);
+    const p = points[dragIndex];
+    p.y = cp.y;
+    if (dragIndex > 0 && dragIndex < points.length - 1) {
+      p.x = constrain(cp.x, points[dragIndex - 1].x + 0.005, points[dragIndex + 1].x - 0.005);
+    }
+    commit();
+  });
+  const endDrag = () => {
+    dragIndex = -1;
+    draggingPlayhead = false;
+    if (gestureStartCurve !== null && gestureStartCurve !== CONFIG.backgroundPulseCurve) {
+      pushHistory(gestureStartCurve);
+    }
+    gestureStartCurve = null;
+  };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('dblclick', (e) => {
+    const pos = eventPos(e);
+    const idx = hitTest(pos.x, pos.y);
+    if (idx > 0 && idx < points.length - 1) {
+      pushHistory(CONFIG.backgroundPulseCurve);
+      points.splice(idx, 1);
+      commit();
+    }
+  });
+
+  const resetBtn = panel.querySelector('#pulse-curve-reset');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      if (CONFIG.backgroundPulseCurve !== CONFIG_DEFAULTS.backgroundPulseCurve) {
+        pushHistory(CONFIG.backgroundPulseCurve);
+      }
+      points = parsePulseCurve(CONFIG_DEFAULTS.backgroundPulseCurve);
+      commit();
+    });
+  }
+
+  const render = () => {
+    // Re-pull points if the curve changed externally (URL load, reset).
+    if (serializePulseCurve(points) !== CONFIG.backgroundPulseCurve) {
+      points = parsePulseCurve(CONFIG.backgroundPulseCurve);
+    }
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(245, 222, 179, 0.15)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const gx = PAD + (i / 4) * (w - PAD * 2);
+      ctx.beginPath(); ctx.moveTo(gx, PAD); ctx.lineTo(gx, h - PAD); ctx.stroke();
+    }
+    for (let i = 0; i <= 2; i++) {
+      const gy = PAD + (i / 2) * (h - PAD * 2);
+      ctx.beginPath(); ctx.moveTo(PAD, gy); ctx.lineTo(w - PAD, gy); ctx.stroke();
+    }
+    // Axis labels. The canvas is displayed at half its internal resolution,
+    // so the font is sized 2x for crispness.
+    ctx.fillStyle = 'rgba(245, 222, 179, 0.5)';
+    ctx.font = '18px monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('time →', w - PAD - 6, h - PAD - 4);
+    ctx.save();
+    ctx.translate(PAD + 4, PAD + 6);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText('alpha →', 0, 0);
+    ctx.restore();
+    // Curve, sampled from the same LUT the simulation uses.
+    ctx.beginPath();
+    for (let i = 0; i <= 128; i++) {
+      const x = i / 128;
+      const p = toPx({ x, y: samplePulseCurve(x) });
+      if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    }
+    ctx.strokeStyle = '#ffd98a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    for (let i = 0; i < points.length; i++) {
+      const p = toPx(points[i]);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = i === dragIndex ? '#ffffff' : '#ffd98a';
+      ctx.fill();
+    }
+    // Ghost playhead for ink canvas B's phase-offset wipe (not draggable).
+    if (CONFIG.enableDualInkLayers && CONFIG.backgroundPulsePeriodSec > 0) {
+      const phaseB = (getPulsePhase(CONFIG.backgroundPulsePeriodSec) + clamp01(CONFIG.inkLayerPhaseOffset)) % 1;
+      const pbx = PAD + phaseB * (w - PAD * 2);
+      ctx.strokeStyle = 'rgba(120, 170, 255, 0.35)';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(pbx, PAD); ctx.lineTo(pbx, h - PAD); ctx.stroke();
+    }
+    // Playhead drawn last so it rides on top — draggable to scrub the cycle.
+    const px = playheadPx();
+    if (px !== null) {
+      ctx.strokeStyle = draggingPlayhead ? 'rgba(255, 130, 110, 0.9)' : 'rgba(255, 100, 80, 0.55)';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(px, PAD); ctx.lineTo(px, h - PAD); ctx.stroke();
+      // Grab handle at the top of the line.
+      ctx.beginPath();
+      ctx.arc(px, PAD, 5, 0, Math.PI * 2);
+      ctx.fillStyle = draggingPlayhead ? '#ffffff' : 'rgba(255, 100, 80, 0.9)';
+      ctx.fill();
+    }
+    requestAnimationFrame(render);
+  };
+  requestAnimationFrame(render);
+}
+
+// NOTE: the curve helpers below must not use p5 globals (constrain/floor/…)
+// because parsePulseCurve runs from applyConfigFromUrlParams at script-eval
+// time, before p5 binds its global functions.
+function clamp01(v) {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+function parsePulseCurve(str) {
+  const pts = [];
+  if (typeof str === 'string') {
+    for (const seg of str.split('|')) {
+      const parts = seg.split(',');
+      const x = Number(parts[0]);
+      const y = Number(parts[1]);
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        pts.push({ x: clamp01(x), y: clamp01(y) });
+      }
+    }
+  }
+  if (pts.length < 2) {
+    return [{ x: 0, y: 0 }, { x: 1, y: 0 }];
+  }
+  pts.sort((a, b) => a.x - b.x);
+  pts[0].x = 0;
+  pts[pts.length - 1].x = 1;
+  return pts;
+}
+
+function serializePulseCurve(pts) {
+  return pts.map((p) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`).join('|');
+}
+
+// Monotone cubic Hermite (Fritsch–Carlson) baked into a LUT — smooth between
+// keyframes with no overshoot, so the wipe strength never undershoots zero.
+const _pulseCurveLut = { source: null, table: new Float32Array(256) };
+
+function samplePulseCurve(phase01) {
+  if (_pulseCurveLut.source !== CONFIG.backgroundPulseCurve) {
+    bakePulseCurveLut();
+  }
+  const t = clamp01(phase01) * 255;
+  const i = Math.floor(t);
+  const frac = t - i;
+  const table = _pulseCurveLut.table;
+  return table[i] + (table[Math.min(255, i + 1)] - table[i]) * frac;
+}
+
+function bakePulseCurveLut() {
+  const pts = parsePulseCurve(CONFIG.backgroundPulseCurve);
+  const n = pts.length;
+  const delta = [];
+  for (let i = 0; i < n - 1; i++) {
+    const dx = Math.max(1e-6, pts[i + 1].x - pts[i].x);
+    delta.push((pts[i + 1].y - pts[i].y) / dx);
+  }
+  const m = new Array(n);
+  m[0] = delta[0];
+  m[n - 1] = delta[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    m[i] = delta[i - 1] * delta[i] <= 0 ? 0 : (delta[i - 1] + delta[i]) * 0.5;
+  }
+  for (let i = 0; i < n - 1; i++) {
+    if (delta[i] === 0) {
+      m[i] = 0;
+      m[i + 1] = 0;
+      continue;
+    }
+    const a = m[i] / delta[i];
+    const b = m[i + 1] / delta[i];
+    const s = a * a + b * b;
+    if (s > 9) {
+      const tau = 3 / Math.sqrt(s);
+      m[i] = tau * a * delta[i];
+      m[i + 1] = tau * b * delta[i];
+    }
+  }
+  const table = _pulseCurveLut.table;
+  let seg = 0;
+  for (let k = 0; k < 256; k++) {
+    const x = k / 255;
+    while (seg < n - 2 && x > pts[seg + 1].x) seg++;
+    const x0 = pts[seg].x;
+    const x1 = pts[seg + 1].x;
+    const h = Math.max(1e-6, x1 - x0);
+    const t = clamp01((x - x0) / h);
+    const t2 = t * t;
+    const t3 = t2 * t;
+    const y =
+      pts[seg].y * (2 * t3 - 3 * t2 + 1) +
+      m[seg] * h * (t3 - 2 * t2 + t) +
+      pts[seg + 1].y * (-2 * t3 + 3 * t2) +
+      m[seg + 1] * h * (t3 - t2);
+    table[k] = clamp01(y);
+  }
+  _pulseCurveLut.source = CONFIG.backgroundPulseCurve;
 }
 
 function getCurrentParticleAlpha() {
-  const alphaA = clampColorByte(RENDER_COLORS.particles.length > 3 ? RENDER_COLORS.particles[3] : 255);
-  const alphaB = clampColorByte(CONFIG.particleAlphaSecondary);
-  return getOscillatingAlpha(alphaA, alphaB);
-}
-
-function getOscillationState() {
-  const periodSec = max(0, CONFIG.backgroundFadeOscillationPeriodSec);
-  if (periodSec <= 0) {
-    return { enabled: false, phase: 0, eased: 0 };
-  }
-  const phase = (millis() * 0.001 / periodSec) % 1;
-  const eased = 0.5 - 0.5 * cos(phase * TWO_PI);
-  return { enabled: true, phase, eased };
-}
-
-function getOscillatingAlpha(alphaA, alphaB) {
-  const state = _frameOscillation;
-  if (!state.enabled || alphaA === alphaB) {
-    return alphaA;
-  }
-  return lerp(alphaA, alphaB, state.eased);
+  return clampColorByte(RENDER_COLORS.particles.length > 3 ? RENDER_COLORS.particles[3] : 255);
 }
 
 function setupDuneControls() {
@@ -851,6 +1353,7 @@ function setupDuneControls() {
 
   controlsBound = true;
   applyControlTooltips(panel);
+  setupPulseCurveEditor(panel);
   const edgeRespawnMixInput = panel.querySelector('[data-key="edgeRespawnWeightedMixPercent"]');
   const BOOSTED_CONTROL_KEYS = new Set([
     'windBoostParticleRatio',
@@ -930,6 +1433,20 @@ function setupDuneControls() {
         def.key === 'autoRenderScaleThresholdPx'
       ) {
         applyRenderScale(getActiveRenderScale());
+      }
+      if (
+        def.key === 'enableWordShadow' ||
+        def.key === 'wordShadowBlur' ||
+        def.key === 'wordShadowOpacity'
+      ) {
+        applyWordShadowStyle();
+      }
+      if (
+        def.key === 'showBackgroundCanvas' ||
+        def.key === 'showBackgroundCanvasB' ||
+        def.key === 'showForegroundCanvas'
+      ) {
+        applyCanvasLayerVisibility();
       }
       if (def.key === 'pauseSimulation') {
         applySimulationPauseState();
@@ -1659,6 +2176,11 @@ function applyConfigFromUrlParams() {
     }
   }
 
+  const curveRaw = params.get('backgroundPulseCurve');
+  if (curveRaw !== null) {
+    CONFIG.backgroundPulseCurve = serializePulseCurve(parsePulseCurve(curveRaw));
+  }
+
   for (let i = 0; i < COLOR_PARAM_DEFS.length; i++) {
     const def = COLOR_PARAM_DEFS[i];
     const raw = params.get(def.param);
@@ -1708,6 +2230,17 @@ function syncUrlParamsFromConfig() {
   params.delete('polyJitter');
   params.delete('polyEdgeAlpha');
   params.delete('polySlopeContrast');
+  params.delete('backgroundPulsePeakAlpha');
+  params.delete('backgroundPulseDutyPercent');
+  params.delete('backgroundPulseUseCurve');
+  params.delete('backgroundFadeOscillationPeriodSec');
+  params.delete('curlRotations');
+  params.delete('colorFadeAlphaSecondary');
+  params.delete('colorParticlesAlphaSecondary');
+  // Smoke controls were removed entirely — clear stale params from old URLs.
+  for (const key of [...params.keys()]) {
+    if (/^s[12][A-Z]/.test(key)) params.delete(key);
+  }
   for (let i = 0; i < CONTROL_PARAM_DEFS.length; i++) {
     const def = CONTROL_PARAM_DEFS[i];
     const val = CONFIG[def.key];
@@ -1719,6 +2252,8 @@ function syncUrlParamsFromConfig() {
       params.set(def.key, String(val));
     }
   }
+
+  params.set('backgroundPulseCurve', CONFIG.backgroundPulseCurve);
 
   for (let i = 0; i < COLOR_PARAM_DEFS.length; i++) {
     const def = COLOR_PARAM_DEFS[i];
@@ -2668,6 +3203,13 @@ function buildFrameCache(nowMs) {
   fc.dunePerpY = duneDirX;
   fc.duneBandOffsetPx = CONFIG.duneBandOffsetPx;
   fc.driftPixels = nowMs * 0.001 * CONFIG.duneDriftSpeed * 240;
+  fc.flowFieldMix = constrain(CONFIG.flowFieldMix, 0, 1);
+  fc.windAngleRad = windAngle;
+  fc.curlRangeRad = radians(constrain(CONFIG.curlAngleRangeDeg, 0, 180));
+  // Curl field drifts through noise space on both axes (different rates so
+  // the morph doesn't read as a straight translation).
+  fc.curlDriftX = nowMs * 0.001 * CONFIG.curlDriftSpeed;
+  fc.curlDriftY = nowMs * 0.001 * CONFIG.curlDriftSpeed * 0.83;
   return fc;
 }
 
@@ -2695,8 +3237,29 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
   );
   const microAmp = n * CONFIG.microTurbulenceStrength * turbulenceMultiplier;
 
-  _duneWindResult.x = frameCache.windDirX * windAmp + frameCache.windPerpX * microAmp;
-  _duneWindResult.y = frameCache.windDirY * windAmp + frameCache.windPerpY * microAmp;
+  let fx = frameCache.windDirX * windAmp + frameCache.windPerpX * microAmp;
+  let fy = frameCache.windDirY * windAmp + frameCache.windPerpY * microAmp;
+
+  // Curl field as wind-relative steering: noise deflects the force angle up
+  // to ±curlAngleRangeDeg around the wind heading, so the flow meanders but
+  // never opposes the wind head-on. The dune ridge value can scale the curl
+  // amplitude so the banding structure survives inside the meanders.
+  const mix = frameCache.flowFieldMix;
+  if (mix > 0) {
+    const cn = sampleNoiseTexture(
+      px / CONFIG.curlNoiseScale + frameCache.curlDriftX,
+      py / CONFIG.curlNoiseScale + frameCache.curlDriftY
+    );
+    const angle = frameCache.windAngleRad + cn * frameCache.curlRangeRad;
+    const duneMod = constrain(CONFIG.curlDuneModulation, 0, 1);
+    const curlAmp = CONFIG.curlStrength * (1 - duneMod + duneMod * duneMultiplier);
+    const inv = 1 - mix;
+    fx = fx * inv + fastSin(angle + HALF_PI) * curlAmp * mix;
+    fy = fy * inv + fastSin(angle) * curlAmp * mix;
+  }
+
+  _duneWindResult.x = fx;
+  _duneWindResult.y = fy;
   _duneWindResult.duneSignal = constrain((duneMultiplier - 0.25) / 0.95, 0, 1);
   return _duneWindResult;
 }
@@ -3095,6 +3658,15 @@ function renderParticles(dtFrames = 1) {
   const baseG = RENDER_COLORS.particles[1];
   const baseB = RENDER_COLORS.particles[2];
   const baseA = getCurrentParticleAlpha();
+  const fgActive = Boolean(fgGraphics && CONFIG.enableForegroundLayer);
+  const dualInkActive = Boolean(inkBGraphics && CONFIG.enableDualInkLayers);
+  // Colliders occupy the low indices, so the ink (ignorer) block is
+  // contiguous at the top — split it in half at its midpoint so render
+  // targets switch once, not per-particle.
+  const inkSplitIndex = Math.floor(
+    particles.length * (constrain(CONFIG.boxCollisionParticipantRatio, 0, 1) + 1) * 0.5
+  );
+  const fgBaseA = clampColorByte(CONFIG.foregroundParticleAlpha);
   const minSpeed = max(0, getQualityValue('particleRenderMinSpeed'));
   const minSpeedRamp = max(0.02, minSpeed * 0.7);
   const alphaBoost = max(0, CONFIG.particleSpeedAlphaBoost);
@@ -3148,6 +3720,7 @@ function renderParticles(dtFrames = 1) {
   let prevStrokeB = -1;
   let prevStrokeA = -1;
   let prevWeight = -1;
+  let prevTarget = null;
   const renderParticleAt = (p, i) => {
     const speed = sqrt(p.vel.x * p.vel.x + p.vel.y * p.vel.y);
     // Read interpolated position into locals before the scratch object is reused.
@@ -3188,8 +3761,25 @@ function renderParticles(dtFrames = 1) {
     const duneAlphaFactor = 1 + duneAlphaBoost * duneSignal;
     const duneSizeFactor = 1 + duneSizeBoost * duneSignal;
     const fastAlphaAdd = p.isBoosted ? max(0, CONFIG.windBoostAlphaMultiplier) : 0;
+    // Route word-colliding particles to the foreground overlay; ignorers lay
+    // persistent ink, alternating by index between the two ink canvases so
+    // each keeps accumulating while the other wipes. Stroke cache per-target.
+    const isFgLayer = fgActive && !p.ignoresBoxCollision;
+    let g;
+    if (isFgLayer) {
+      g = fgGraphics;
+    } else if (dualInkActive && i >= inkSplitIndex) {
+      g = inkBGraphics;
+    } else {
+      g = _mainRenderTarget;
+    }
+    if (g !== prevTarget) {
+      prevStrokeR = prevStrokeG = prevStrokeB = prevStrokeA = -1;
+      prevWeight = -1;
+      prevTarget = g;
+    }
     // Compute the normal alpha, then multiply by scroll fade factor.
-    const normalAlpha = baseA * renderAlphaWeight * minSpeedAlphaRamp * (1 + alphaBoost * (speedFactor - 1)) * duneAlphaFactor + fastAlphaAdd;
+    const normalAlpha = (isFgLayer ? fgBaseA : baseA) * renderAlphaWeight * minSpeedAlphaRamp * (1 + alphaBoost * (speedFactor - 1)) * duneAlphaFactor + fastAlphaAdd;
     const alpha = Math.round(constrain(normalAlpha * scrollFadeFactor, 0, 255));
     const alphaPercent = alpha/255;
     // Quantize weight to nearest 0.25px to reduce unique state transitions.
@@ -3215,9 +3805,9 @@ function renderParticles(dtFrames = 1) {
       // Halo pass: wider stroke, base color, low alpha scaled by intensity.
       const haloA = Math.round(glowHaloAlpha * glow);
       const haloW = Math.max(0.5, weight * glowHaloSize);
-      stroke(colorR, colorG, colorB, haloA * alphaPercent);
-      strokeWeight(haloW);
-      line(segment.fromX, segment.fromY, segment.toX, segment.toY);
+      g.stroke(colorR, colorG, colorB, haloA * alphaPercent);
+      g.strokeWeight(haloW);
+      g.line(segment.fromX, segment.fromY, segment.toX, segment.toY);
       // Core pass: lerp toward core color.
       const blend = glow * glowCoreBlend;
       let coreR, coreG, coreB;
@@ -3242,26 +3832,26 @@ function renderParticles(dtFrames = 1) {
       }
       const coreA = Math.round(constrain((normalAlpha + (glowCoreA - normalAlpha) * blend), 0, 255));
       const coreW = weight + (glowCoreDiameter - weight) * glow;
-      stroke(coreR, coreG, coreB, coreA * alphaPercent);
-      strokeWeight(coreW);
-      line(segment.fromX, segment.fromY, segment.toX, segment.toY);
+      g.stroke(coreR, coreG, coreB, coreA * alphaPercent);
+      g.strokeWeight(coreW);
+      g.line(segment.fromX, segment.fromY, segment.toX, segment.toY);
       // Invalidate tracking since glow changed state unpredictably.
       prevStrokeR = coreR; prevStrokeG = coreG; prevStrokeB = coreB; prevStrokeA = coreA;
       prevWeight = coreW;
     } else {
       // Normal non-glow path with redundancy elimination.
       if (colorR !== prevStrokeR || colorG !== prevStrokeG || colorB !== prevStrokeB || alpha !== prevStrokeA) {
-        stroke(colorR, colorG, colorB, alpha * alphaPercent);
+        g.stroke(colorR, colorG, colorB, alpha * alphaPercent);
         prevStrokeR = colorR;
         prevStrokeG = colorG;
         prevStrokeB = colorB;
         prevStrokeA = alpha;
       }
       if (weight !== prevWeight) {
-        strokeWeight(weight);
+        g.strokeWeight(weight);
         prevWeight = weight;
       }
-      line(segment.fromX, segment.fromY, segment.toX, segment.toY);
+      g.line(segment.fromX, segment.fromY, segment.toX, segment.toY);
     }
     p.displayX = segment.toX;
     p.displayY = segment.toY;

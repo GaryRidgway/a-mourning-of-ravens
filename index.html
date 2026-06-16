@@ -25,16 +25,6 @@
 
 <body>
   <div id="poem-bg"></div>
-  <div id="smoke-container-1" class="smoke-container" aria-hidden="true">
-    <div class="smoke-bg smoke-1"></div>
-    <div class="smoke-bg smoke-2"></div>
-    <div class="smoke-bg smoke-3"></div>
-  </div>
-  <div id="smoke-container-2" class="smoke-container" aria-hidden="true">
-    <div class="smoke-bg smoke-1"></div>
-    <div class="smoke-bg smoke-2"></div>
-    <div class="smoke-bg smoke-3"></div>
-  </div>
   <div id="flow-box-overlay" aria-hidden="true"></div>
   <div id="poem-staging"></div>
   <div id="poem-container"></div>
@@ -45,8 +35,8 @@
       <summary>Dune Controls</summary>
       <button id="collapse-all-btn" type="button">Collapse All</button>
 
-      <details class="control-group" open>
-        <summary>Text</summary>
+      <details class="control-group control-section">
+        <summary>Text &amp; Layout</summary>
 
         <label class="control-row">
           <span>Font Size (px)</span>
@@ -66,218 +56,686 @@
           <output id="text-texture-size-output">200</output>
         </label>
 
+        <label class="control-row control-toggle">
+          <span>Enable Word Shadow</span>
+          <input type="checkbox" data-key="enableWordShadow" />
+        </label>
+        <label class="control-row">
+          <span>Word Shadow Blur (px)</span>
+          <input type="range" min="0" max="40" step="1" data-key="wordShadowBlur" />
+          <output data-value-for="wordShadowBlur"></output>
+        </label>
+        <label class="control-row">
+          <span>Word Shadow Opacity</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="wordShadowOpacity" />
+          <output data-value-for="wordShadowOpacity"></output>
+        </label>
+
+        <details class="control-group control-subgroup">
+          <summary>Word Colliders</summary>
+
+          <label class="control-row control-toggle">
+            <span>Enable Colliders</span>
+            <input type="checkbox" id="word-collider-enabled" checked />
+          </label>
+
+          <label class="control-row control-toggle">
+            <span>Per-Word Boxes</span>
+            <input type="checkbox" id="word-boxes-enabled" checked />
+          </label>
+
+          <label class="control-row">
+            <span>Padding X (px)</span>
+            <input type="range" min="-100" max="100" step="1" value="0" id="word-inset-x" />
+            <output id="word-inset-x-out">0</output>
+          </label>
+
+          <label class="control-row">
+            <span>Padding Y (px)</span>
+            <input type="range" min="-100" max="100" step="1" value="0" id="word-inset-y" />
+            <output id="word-inset-y-out">0</output>
+          </label>
+
+          <label class="control-row">
+            <span>Offset X (px)</span>
+            <input type="range" min="-100" max="100" step="1" value="0" id="word-offset-x" />
+            <output id="word-offset-x-out">0</output>
+          </label>
+
+          <label class="control-row">
+            <span>Offset Y (px)</span>
+            <input type="range" min="-100" max="100" step="1" value="0" id="word-offset-y" />
+            <output id="word-offset-y-out">0</output>
+          </label>
+        </details>
+
+        <details class="control-group control-subgroup">
+          <summary>Vignette</summary>
+
+          <label class="control-row control-toggle">
+            <span>Enable Vignette</span>
+            <input type="checkbox" id="vignette-enabled" checked />
+          </label>
+
+          <label class="control-row">
+            <span>Color</span>
+            <input type="color" id="vignette-color-input" value="#000000" />
+            <output id="vignette-color-output">#000000</output>
+          </label>
+
+          <label class="control-row">
+            <span>Strength</span>
+            <input type="range" min="0" max="3" step="0.01" id="vignette-strength-input" />
+            <output id="vignette-strength-output">0.70</output>
+          </label>
+
+          <label class="control-row">
+            <span>Inner Stop (%)</span>
+            <input type="range" min="0" max="100" step="1" id="vignette-inner-stop-input" />
+            <output id="vignette-inner-stop-output">40</output>
+          </label>
+        </details>
+
       </details>
 
-      <details class="control-group">
-        <summary>Vignette</summary>
+      <details class="control-group control-section">
+        <summary>Simulation (Shared)</summary>
+
+        <details class="control-group control-subgroup" open>
+          <summary>Particles</summary>
+
+          <label class="control-row">
+            <span>Max Particles</span>
+            <input type="range" min="200" max="10000" step="100" data-key="particleCount" />
+            <output data-value-for="particleCount"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Particle Radius</span>
+            <input type="range" min="0.2" max="3" step="0.05" data-key="particleSize" />
+            <output data-value-for="particleSize"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Size Rand Negative</span>
+            <input type="range" min="0" max="2" step="0.01" data-key="particleSizeRandomNegative" />
+            <output data-value-for="particleSizeRandomNegative"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Size Rand Positive</span>
+            <input type="range" min="0" max="2" step="0.01" data-key="particleSizeRandomPositive" />
+            <output data-value-for="particleSizeRandomPositive"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Box Collision Fraction</span>
+            <input type="range" min="0" max="1" step="0.01" data-key="boxCollisionParticipantRatio" />
+            <output data-value-for="boxCollisionParticipantRatio"></output>
+          </label>
+        </details>
+
+        <details class="control-group control-subgroup">
+          <summary>Stroke Style (Both Canvases)</summary>
+
+          <label class="control-row">
+            <span>Particles</span>
+            <input type="color" data-color-key="particles" />
+            <output data-color-value-for="particles"></output>
+          </label>
+          <label class="control-row">
+            <span>Particles Alpha</span>
+            <input type="range" min="0" max="255" step="1" data-color-alpha-key="particles" />
+            <output data-color-alpha-value-for="particles"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Speed Alpha Boost</span>
+            <input type="range" min="0" max="8" step="0.01" data-key="particleSpeedAlphaBoost" />
+            <output data-value-for="particleSpeedAlphaBoost"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Dune Alpha Boost</span>
+            <input type="range" min="0" max="12" step="0.01" data-key="particleDuneAlphaBoost" />
+            <output data-value-for="particleDuneAlphaBoost"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Dune Size Boost</span>
+            <input type="range" min="0" max="8" step="0.01" data-key="particleDuneSizeBoost" />
+            <output data-value-for="particleDuneSizeBoost"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Speed Width Boost</span>
+            <input type="range" min="0" max="4" step="0.01" data-key="particleSpeedWidthBoost" />
+            <output data-value-for="particleSpeedWidthBoost"></output>
+          </label>
+        </details>
+
+        <details class="control-group control-subgroup">
+          <summary>Wind &amp; Turbulence</summary>
+
+          <label class="control-row control-toggle">
+            <span>Enable Ambient Motion</span>
+            <input type="checkbox" data-key="enableAmbientMotion" />
+          </label>
+
+          <label class="control-row control-toggle">
+            <span>Enable Dunes</span>
+            <input type="checkbox" data-key="enableDuneBands" />
+          </label>
+
+          <label class="control-row control-angle-row">
+            <span>Wind Direction</span>
+            <input class="control-angle-input" type="range" min="-180" max="180" step="1" data-key="ambientWindDirectionDeg" />
+            <button class="control-angle" type="button" data-angle-key="ambientWindDirectionDeg" aria-label="Wind direction"></button>
+            <output data-value-for="ambientWindDirectionDeg"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Wind Strength</span>
+            <input type="range" min="0" max="0.5" step="0.001" data-key="ambientWindStrength" />
+            <output data-value-for="ambientWindStrength"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Micro Noise Scale</span>
+            <input type="range" min="40" max="1000" step="1" data-key="microNoiseScale" />
+            <output data-value-for="microNoiseScale"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Micro Turbulence</span>
+            <input type="range" min="0" max="0.1" step="0.001" data-key="microTurbulenceStrength" />
+            <output data-value-for="microTurbulenceStrength"></output>
+          </label>
+        </details>
+
+        <details class="control-group control-subgroup" open>
+          <summary>Curl Field Mix</summary>
+
+          <label class="control-row">
+            <span>Flow Field Mix</span>
+            <input type="range" min="0" max="1" step="0.01" data-key="flowFieldMix" />
+            <output data-value-for="flowFieldMix"></output>
+          </label>
+          <label class="control-row">
+            <span>Curl Strength</span>
+            <input type="range" min="0" max="0.5" step="0.001" data-key="curlStrength" />
+            <output data-value-for="curlStrength"></output>
+          </label>
+          <label class="control-row">
+            <span>Curl Noise Scale</span>
+            <input type="range" min="40" max="1000" step="1" data-key="curlNoiseScale" />
+            <output data-value-for="curlNoiseScale"></output>
+          </label>
+          <label class="control-row">
+            <span>Curl Angle Range (±°)</span>
+            <input type="range" min="0" max="180" step="1" data-key="curlAngleRangeDeg" />
+            <output data-value-for="curlAngleRangeDeg"></output>
+          </label>
+          <label class="control-row">
+            <span>Curl Drift Speed</span>
+            <input type="range" min="0" max="0.2" step="0.001" data-key="curlDriftSpeed" />
+            <output data-value-for="curlDriftSpeed"></output>
+          </label>
+          <label class="control-row">
+            <span>Curl Dune Modulation</span>
+            <input type="range" min="0" max="1" step="0.01" data-key="curlDuneModulation" />
+            <output data-value-for="curlDuneModulation"></output>
+          </label>
+        </details>
+
+        <details class="control-group control-subgroup">
+          <summary>Dune Field</summary>
+
+          <label class="control-row control-angle-row">
+            <span>Dune Band Angle</span>
+            <input class="control-angle-input" type="range" min="-180" max="180" step="1" data-key="duneBandRotationDeg" />
+            <button class="control-angle" type="button" data-angle-key="duneBandRotationDeg" aria-label="Dune band angle"></button>
+            <output data-value-for="duneBandRotationDeg"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Dune Band Scale</span>
+            <input type="range" min="40" max="600" step="1" data-key="duneBandScale" />
+            <output data-value-for="duneBandScale"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Dune Band Offset</span>
+            <input type="range" min="-600" max="600" step="1" data-key="duneBandOffsetPx" />
+            <output data-value-for="duneBandOffsetPx"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Dune Along Warp Scale</span>
+            <input type="range" min="80" max="900" step="1" data-key="duneAlongWarpScale" />
+            <output data-value-for="duneAlongWarpScale"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Dune Warp Strength</span>
+            <input type="range" min="0" max="4" step="0.01" data-key="duneWarpStrength" />
+            <output data-value-for="duneWarpStrength"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Dune Contrast</span>
+            <input type="range" min="0.2" max="4" step="0.01" data-key="duneContrast" />
+            <output data-value-for="duneContrast"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Dune Drift Speed</span>
+            <input type="range" min="0" max="1.2" step="0.01" data-key="duneDriftSpeed" />
+            <output data-value-for="duneDriftSpeed"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Edge Respawn Base</span>
+            <input type="range" min="0" max="0.5" step="0.01" data-key="edgeRespawnWeightBase" />
+            <output data-value-for="edgeRespawnWeightBase"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Edge Respawn Strength</span>
+            <input type="range" min="0" max="3" step="0.05" data-key="edgeRespawnWeightStrength" />
+            <output data-value-for="edgeRespawnWeightStrength"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Edge Respawn Exponent</span>
+            <input type="range" min="0.5" max="4" step="0.1" data-key="edgeRespawnWeightExponent" />
+            <output data-value-for="edgeRespawnWeightExponent"></output>
+          </label>
+
+          <label class="control-row control-toggle">
+            <span>Weighted Edge Respawn</span>
+            <input type="checkbox" data-key="useWeightedEdgeRespawn" />
+          </label>
+
+          <label class="control-row">
+            <span>Weighted Mix When Off (%)</span>
+            <input type="range" min="0" max="100" step="1" data-key="edgeRespawnWeightedMixPercent" />
+            <output data-value-for="edgeRespawnWeightedMixPercent"></output>
+          </label>
+        </details>
+
+        <details class="control-group control-subgroup">
+          <summary>Boid Flocking</summary>
+
+          <label class="control-row control-toggle">
+            <span>Enable Flocking</span>
+            <input type="checkbox" data-key="enableBoidFlocking" />
+          </label>
+
+          <label class="control-row">
+            <span>Neighbor Radius</span>
+            <input type="range" min="10" max="200" step="1" data-key="boidNeighborRadius" />
+            <output data-value-for="boidNeighborRadius"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Separation Radius</span>
+            <input type="range" min="2" max="100" step="1" data-key="boidSeparationRadius" />
+            <output data-value-for="boidSeparationRadius"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Separation Strength</span>
+            <input type="range" min="0" max="5" step="0.01" data-key="boidSeparationStrength" />
+            <output data-value-for="boidSeparationStrength"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Alignment Strength</span>
+            <input type="range" min="0" max="5" step="0.01" data-key="boidAlignmentStrength" />
+            <output data-value-for="boidAlignmentStrength"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Cohesion Strength</span>
+            <input type="range" min="0" max="5" step="0.01" data-key="boidCohesionStrength" />
+            <output data-value-for="boidCohesionStrength"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Max Steer Force</span>
+            <input type="range" min="0.001" max="1" step="0.001" data-key="boidMaxSteerForce" />
+            <output data-value-for="boidMaxSteerForce"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Wind Blend</span>
+            <input type="range" min="0" max="1" step="0.01" data-key="boidWindBlend" />
+            <output data-value-for="boidWindBlend"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Max Group Size</span>
+            <input type="range" min="1" max="30" step="1" data-key="boidMaxGroupSize" />
+            <output data-value-for="boidMaxGroupSize"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Dispersal Strength</span>
+            <input type="range" min="0" max="5" step="0.01" data-key="boidDispersalStrength" />
+            <output data-value-for="boidDispersalStrength"></output>
+          </label>
+        </details>
+
+        <details class="control-group control-subgroup">
+          <summary>Particle Separation</summary>
+
+          <label class="control-row control-toggle">
+            <span>Enable Separation</span>
+            <input type="checkbox" data-key="enableParticleSeparation" />
+          </label>
+
+          <label class="control-row">
+            <span>Collision Radius</span>
+            <input type="range" min="0.4" max="3" step="0.05" data-key="particleCollisionRadius" />
+            <output data-value-for="particleCollisionRadius"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Collision Strength</span>
+            <input type="range" min="0" max="1.5" step="0.01" data-key="particleCollisionStrength" />
+            <output data-value-for="particleCollisionStrength"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Velocity Damp</span>
+            <input type="range" min="0" max="0.5" step="0.01" data-key="particleCollisionVelocityDamp" />
+            <output data-value-for="particleCollisionVelocityDamp"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Frames Per Solve</span>
+            <input type="range" min="1" max="6" step="1" data-key="separationEveryNFrames" />
+            <output data-value-for="separationEveryNFrames"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Near Box Radius</span>
+            <input type="range" min="1" max="100" step="1" data-key="separationNearBoxRadius" />
+            <output data-value-for="separationNearBoxRadius"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Min Active Speed</span>
+            <input type="range" min="0" max="1" step="0.01" data-key="separationMinSpeed" />
+            <output data-value-for="separationMinSpeed"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Box Force Max Radius</span>
+            <input type="range" min="0.5" max="20" step="0.1" data-key="boxForceMaxRadius" />
+            <output data-value-for="boxForceMaxRadius"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Surface Slide Band</span>
+            <input type="range" min="0.2" max="4" step="0.05" data-key="surfaceSlideBand" />
+            <output data-value-for="surfaceSlideBand"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Forward Dot Min</span>
+            <input type="range" min="0" max="0.5" step="0.01" data-key="staticInfluenceForwardDotMin" />
+            <output data-value-for="staticInfluenceForwardDotMin"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Backside Drag</span>
+            <input type="range" min="0" max="1" step="0.01" data-key="backsideDragStrength" />
+            <output data-value-for="backsideDragStrength"></output>
+          </label>
+          <label class="control-row">
+            <span>Scroll Freeze Debounce (ms)</span>
+            <input type="range" min="50" max="2000" step="10" data-key="scrollFreezeDebounceMs" />
+            <output data-value-for="scrollFreezeDebounceMs"></output>
+          </label>
+          <label class="control-row">
+            <span>Scroll Freeze Fade In (ms)</span>
+            <input type="range" min="0" max="3000" step="10" data-key="scrollFreezeFadeInMs" />
+            <output data-value-for="scrollFreezeFadeInMs"></output>
+          </label>
+        </details>
+
+      </details>
+
+      <details class="control-group control-section" open>
+        <summary>Background Canvas — Ink</summary>
 
         <label class="control-row control-toggle">
-          <span>Enable Vignette</span>
-          <input type="checkbox" id="vignette-enabled" checked />
+          <span>Show Ink Canvas A</span>
+          <input type="checkbox" data-key="showBackgroundCanvas" />
+        </label>
+        <label class="control-row control-toggle">
+          <span>Show Ink Canvas B</span>
+          <input type="checkbox" data-key="showBackgroundCanvasB" />
+        </label>
+        <label class="control-row control-toggle">
+          <span>Dual Ink Layers</span>
+          <input type="checkbox" data-key="enableDualInkLayers" />
+        </label>
+        <label class="control-row">
+          <span>Wipe Phase Offset</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="inkLayerPhaseOffset" />
+          <output data-value-for="inkLayerPhaseOffset"></output>
         </label>
 
         <label class="control-row">
-          <span>Color</span>
-          <input type="color" id="vignette-color-input" value="#000000" />
-          <output id="vignette-color-output">#000000</output>
+          <span>Background Fade</span>
+          <input type="color" data-color-key="fade" />
+          <output data-color-value-for="fade"></output>
         </label>
-
         <label class="control-row">
-          <span>Strength</span>
-          <input type="range" min="0" max="3" step="0.01" id="vignette-strength-input" />
-          <output id="vignette-strength-output">0.70</output>
+          <span>Background Fade Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-color-alpha-key="fade" />
+          <output data-color-alpha-value-for="fade"></output>
         </label>
-
         <label class="control-row">
-          <span>Inner Stop (%)</span>
-          <input type="range" min="0" max="100" step="1" id="vignette-inner-stop-input" />
-          <output id="vignette-inner-stop-output">40</output>
+          <span>Pulse Period (s)</span>
+          <input type="range" min="0" max="120" step="0.1" data-key="backgroundPulsePeriodSec" />
+          <output data-value-for="backgroundPulsePeriodSec"></output>
         </label>
+        <div class="control-row control-curve-row">
+          <span class="control-curve-label" title="Wipe envelope across one pulse period. Curve height maps directly to fade alpha (top = full wipe). Drag points to shape it, click empty space to add a point, double-click a point to remove it. Cmd/Ctrl+Z to undo, with Shift to redo. Drag the red playhead to scrub the cycle.">Wipe Curve</span>
+          <canvas id="pulse-curve-canvas" width="520" height="160"></canvas>
+        </div>
+        <div class="control-row">
+          <span>Restore the default pulse curve.</span>
+          <button type="button" id="pulse-curve-reset">Reset Curve</button>
+        </div>
+
+        <details class="control-group control-subgroup">
+          <summary>Word Ink Erase</summary>
+
+          <label class="control-row control-toggle">
+            <span>Enable Ink Erase</span>
+            <input type="checkbox" data-key="enableBoxInkErase" />
+          </label>
+          <label class="control-row">
+            <span>Erase Alpha</span>
+            <input type="range" min="0" max="255" step="1" data-key="boxInkEraseAlpha" />
+            <output data-value-for="boxInkEraseAlpha"></output>
+          </label>
+          <label class="control-row">
+            <span>Erase Padding (px)</span>
+            <input type="range" min="0" max="40" step="1" data-key="boxInkErasePadding" />
+            <output data-value-for="boxInkErasePadding"></output>
+          </label>
+          <label class="control-row">
+            <span>Edge Softness (px)</span>
+            <input type="range" min="0" max="60" step="1" data-key="boxInkEraseSoftness" />
+            <output data-value-for="boxInkEraseSoftness"></output>
+          </label>
+        </details>
 
       </details>
 
-      <details class="control-group" open>
-        <summary>Particles</summary>
-
-        <label class="control-row">
-          <span>Particle Radius</span>
-          <input type="range" min="0.2" max="3" step="0.05" data-key="particleSize" />
-          <output data-value-for="particleSize"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Size Rand Negative</span>
-          <input type="range" min="0" max="2" step="0.01" data-key="particleSizeRandomNegative" />
-          <output data-value-for="particleSizeRandomNegative"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Size Rand Positive</span>
-          <input type="range" min="0" max="2" step="0.01" data-key="particleSizeRandomPositive" />
-          <output data-value-for="particleSizeRandomPositive"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Box Collision Fraction</span>
-          <input type="range" min="0" max="1" step="0.01" data-key="boxCollisionParticipantRatio" />
-          <output data-value-for="boxCollisionParticipantRatio"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Min Speed To Draw</span>
-          <input type="range" min="0" max="3" step="0.01" data-key="particleRenderMinSpeed" />
-          <output data-value-for="particleRenderMinSpeed"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Speed Alpha Boost</span>
-          <input type="range" min="0" max="8" step="0.01" data-key="particleSpeedAlphaBoost" />
-          <output data-value-for="particleSpeedAlphaBoost"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Dune Alpha Boost</span>
-          <input type="range" min="0" max="12" step="0.01" data-key="particleDuneAlphaBoost" />
-          <output data-value-for="particleDuneAlphaBoost"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Dune Size Boost</span>
-          <input type="range" min="0" max="8" step="0.01" data-key="particleDuneSizeBoost" />
-          <output data-value-for="particleDuneSizeBoost"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Speed Width Boost</span>
-          <input type="range" min="0" max="4" step="0.01" data-key="particleSpeedWidthBoost" />
-          <output data-value-for="particleSpeedWidthBoost"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Render Fraction</span>
-          <input type="range" min="0.05" max="1" step="0.01" data-key="particleRenderFraction" />
-          <output data-value-for="particleRenderFraction"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Max Particles</span>
-          <input type="range" min="200" max="10000" step="100" data-key="particleCount" />
-          <output data-value-for="particleCount"></output>
-        </label>
-
-      </details>
-
-      <details class="control-group">
-        <summary>Boosted Particles</summary>
-
-        <label class="control-row">
-          <span>Boosted Fraction</span>
-          <input type="range" min="0" max="0.2" step="0.001" data-key="windBoostParticleRatio" />
-          <output data-value-for="windBoostParticleRatio"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Boosted Size</span>
-          <input type="range" min="0.1" max="2.0" step="0.01" data-key="windBoostSizeMultiplier" />
-          <output data-value-for="windBoostSizeMultiplier"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Boosted Alpha</span>
-          <input type="range" min="0" max="255" step="1" data-key="windBoostAlphaMultiplier" />
-          <output data-value-for="windBoostAlphaMultiplier"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Boosted Wind Min</span>
-          <input type="range" min="1" max="20" step="0.1" data-key="windBoostMinMultiplier" />
-          <output data-value-for="windBoostMinMultiplier"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Boosted Wind Max</span>
-          <input type="range" min="1" max="30" step="0.1" data-key="windBoostMaxMultiplier" />
-          <output data-value-for="windBoostMaxMultiplier"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Boosted Turbulence Min</span>
-          <input type="range" min="1" max="20" step="0.1" data-key="windBoostTurbulenceMinMultiplier" />
-          <output data-value-for="windBoostTurbulenceMinMultiplier"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Boosted Turbulence Max</span>
-          <input type="range" min="1" max="30" step="0.1" data-key="windBoostTurbulenceMaxMultiplier" />
-          <output data-value-for="windBoostTurbulenceMaxMultiplier"></output>
-        </label>
-      </details>
-
-      <details class="control-group">
-        <summary>Boid Flocking</summary>
+      <details class="control-group control-section" open>
+        <summary>Foreground Canvas — Words</summary>
 
         <label class="control-row control-toggle">
-          <span>Enable Flocking</span>
-          <input type="checkbox" data-key="enableBoidFlocking" />
+          <span>Show Foreground Canvas</span>
+          <input type="checkbox" data-key="showForegroundCanvas" />
+        </label>
+        <label class="control-row control-toggle">
+          <span>Foreground Layer</span>
+          <input type="checkbox" data-key="enableForegroundLayer" />
+        </label>
+        <label class="control-row">
+          <span>Foreground Trail Fade</span>
+          <input type="range" min="0" max="255" step="1" data-key="foregroundTrailAlpha" />
+          <output data-value-for="foregroundTrailAlpha"></output>
+        </label>
+        <label class="control-row">
+          <span>Foreground Alpha</span>
+          <input type="range" min="0" max="255" step="1" data-key="foregroundParticleAlpha" />
+          <output data-value-for="foregroundParticleAlpha"></output>
         </label>
 
-        <label class="control-row">
-          <span>Neighbor Radius</span>
-          <input type="range" min="10" max="200" step="1" data-key="boidNeighborRadius" />
-          <output data-value-for="boidNeighborRadius"></output>
-        </label>
+        <details class="control-group control-subgroup">
+          <summary>Boosted Particles</summary>
 
-        <label class="control-row">
-          <span>Separation Radius</span>
-          <input type="range" min="2" max="100" step="1" data-key="boidSeparationRadius" />
-          <output data-value-for="boidSeparationRadius"></output>
-        </label>
+          <label class="control-row">
+            <span>Boosted Fraction</span>
+            <input type="range" min="0" max="0.2" step="0.001" data-key="windBoostParticleRatio" />
+            <output data-value-for="windBoostParticleRatio"></output>
+          </label>
 
-        <label class="control-row">
-          <span>Separation Strength</span>
-          <input type="range" min="0" max="5" step="0.01" data-key="boidSeparationStrength" />
-          <output data-value-for="boidSeparationStrength"></output>
-        </label>
+          <label class="control-row">
+            <span>Boosted Color</span>
+            <input type="color" data-color-key="windBoostColor" />
+            <output data-color-value-for="windBoostColor"></output>
+          </label>
 
-        <label class="control-row">
-          <span>Alignment Strength</span>
-          <input type="range" min="0" max="5" step="0.01" data-key="boidAlignmentStrength" />
-          <output data-value-for="boidAlignmentStrength"></output>
-        </label>
+          <label class="control-row">
+            <span>Boosted Size</span>
+            <input type="range" min="0.1" max="2.0" step="0.01" data-key="windBoostSizeMultiplier" />
+            <output data-value-for="windBoostSizeMultiplier"></output>
+          </label>
 
-        <label class="control-row">
-          <span>Cohesion Strength</span>
-          <input type="range" min="0" max="5" step="0.01" data-key="boidCohesionStrength" />
-          <output data-value-for="boidCohesionStrength"></output>
-        </label>
+          <label class="control-row">
+            <span>Boosted Alpha</span>
+            <input type="range" min="0" max="255" step="1" data-key="windBoostAlphaMultiplier" />
+            <output data-value-for="windBoostAlphaMultiplier"></output>
+          </label>
 
-        <label class="control-row">
-          <span>Max Steer Force</span>
-          <input type="range" min="0.001" max="1" step="0.001" data-key="boidMaxSteerForce" />
-          <output data-value-for="boidMaxSteerForce"></output>
-        </label>
+          <label class="control-row">
+            <span>Boosted Wind Min</span>
+            <input type="range" min="1" max="20" step="0.1" data-key="windBoostMinMultiplier" />
+            <output data-value-for="windBoostMinMultiplier"></output>
+          </label>
 
-        <label class="control-row">
-          <span>Wind Blend</span>
-          <input type="range" min="0" max="1" step="0.01" data-key="boidWindBlend" />
-          <output data-value-for="boidWindBlend"></output>
-        </label>
+          <label class="control-row">
+            <span>Boosted Wind Max</span>
+            <input type="range" min="1" max="30" step="0.1" data-key="windBoostMaxMultiplier" />
+            <output data-value-for="windBoostMaxMultiplier"></output>
+          </label>
 
-        <label class="control-row">
-          <span>Max Group Size</span>
-          <input type="range" min="1" max="30" step="1" data-key="boidMaxGroupSize" />
-          <output data-value-for="boidMaxGroupSize"></output>
-        </label>
+          <label class="control-row">
+            <span>Boosted Turbulence Min</span>
+            <input type="range" min="1" max="20" step="0.1" data-key="windBoostTurbulenceMinMultiplier" />
+            <output data-value-for="windBoostTurbulenceMinMultiplier"></output>
+          </label>
 
-        <label class="control-row">
-          <span>Dispersal Strength</span>
-          <input type="range" min="0" max="5" step="0.01" data-key="boidDispersalStrength" />
-          <output data-value-for="boidDispersalStrength"></output>
-        </label>
+          <label class="control-row">
+            <span>Boosted Turbulence Max</span>
+            <input type="range" min="1" max="30" step="0.1" data-key="windBoostTurbulenceMaxMultiplier" />
+            <output data-value-for="windBoostTurbulenceMaxMultiplier"></output>
+          </label>
+        </details>
+
+        <details class="control-group control-subgroup">
+          <summary>Box Glow</summary>
+
+          <label class="control-row control-toggle">
+            <span>Enable Glow</span>
+            <input type="checkbox" data-key="enableBoxGlow" />
+          </label>
+
+          <label class="control-row">
+            <span>Glow Core Color</span>
+            <input type="color" data-color-key="boxGlowCore" />
+            <output data-color-value-for="boxGlowCore"></output>
+          </label>
+          <label class="control-row">
+            <span>Glow Core Color Alpha</span>
+            <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxGlowCore" />
+            <output data-color-alpha-value-for="boxGlowCore"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Glow Proximity</span>
+            <input type="range" min="1" max="60" step="1" data-key="boxGlowRadius" />
+            <output data-value-for="boxGlowRadius"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Core Diameter</span>
+            <input type="range" min="0.5" max="12" step="0.1" data-key="boxGlowCoreDiameter" />
+            <output data-value-for="boxGlowCoreDiameter"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Halo Size</span>
+            <input type="range" min="1" max="10" step="0.1" data-key="boxGlowHaloSize" />
+            <output data-value-for="boxGlowHaloSize"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Halo Alpha</span>
+            <input type="range" min="0" max="255" step="1" data-key="boxGlowHaloAlpha" />
+            <output data-value-for="boxGlowHaloAlpha"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Core Blend</span>
+            <input type="range" min="0" max="1" step="0.01" data-key="boxGlowCoreWhite" />
+            <output data-value-for="boxGlowCoreWhite"></output>
+          </label>
+
+          <label class="control-row control-toggle">
+            <span>OkLCh Blend</span>
+            <input type="checkbox" data-key="glowBlendOklch" />
+          </label>
+
+          <label class="control-row">
+            <span>Blend Chroma Floor</span>
+            <input type="range" min="0" max="0.6" step="0.001" data-key="glowBlendChromaFloor" />
+            <output data-value-for="glowBlendChromaFloor"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Blend Hue Shift</span>
+            <input type="range" min="-180" max="180" step="1" data-key="glowBlendHueShift" />
+            <output data-value-for="glowBlendHueShift"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Fade Delay (ms)</span>
+            <input type="range" min="0" max="2000" step="10" data-key="boxGlowFadeDelayMs" />
+            <output data-value-for="boxGlowFadeDelayMs"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Fade Duration (ms)</span>
+            <input type="range" min="0" max="3000" step="10" data-key="boxGlowFadeDurationMs" />
+            <output data-value-for="boxGlowFadeDurationMs"></output>
+          </label>
+        </details>
+
       </details>
 
-      <details class="control-group" open>
-        <summary>Performance</summary>
+      <details class="control-group control-section">
+        <summary>Performance &amp; Debug</summary>
 
         <label class="control-row control-toggle">
           <span>Enable Adaptive Quality</span>
@@ -329,650 +787,60 @@
           <input type="checkbox" data-key="qualityHudEnabled" />
         </label>
 
-      </details>
-
-      <details class="control-group" open>
-        <summary>Ambient Motion</summary>
-
-        <label class="control-row control-toggle">
-          <span>Enable Ambient Motion</span>
-          <input type="checkbox" data-key="enableAmbientMotion" />
-        </label>
-
-        <label class="control-row control-toggle">
-          <span>Enable Dunes</span>
-          <input type="checkbox" data-key="enableDuneBands" />
-        </label>
-
-        <label class="control-row control-angle-row">
-          <span>Wind Direction</span>
-          <input class="control-angle-input" type="range" min="-180" max="180" step="1" data-key="ambientWindDirectionDeg" />
-          <button class="control-angle" type="button" data-angle-key="ambientWindDirectionDeg" aria-label="Wind direction"></button>
-          <output data-value-for="ambientWindDirectionDeg"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Wind Strength</span>
-          <input type="range" min="0" max="0.5" step="0.001" data-key="ambientWindStrength" />
-          <output data-value-for="ambientWindStrength"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Micro Noise Scale</span>
-          <input type="range" min="40" max="1000" step="1" data-key="microNoiseScale" />
-          <output data-value-for="microNoiseScale"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Micro Turbulence</span>
-          <input type="range" min="0" max="0.1" step="0.001" data-key="microTurbulenceStrength" />
-          <output data-value-for="microTurbulenceStrength"></output>
-        </label>
-
-      </details>
-
-      <details class="control-group" open>
-        <summary>Dunes</summary>
-
-        <label class="control-row control-angle-row">
-          <span>Dune Band Angle</span>
-          <input class="control-angle-input" type="range" min="-180" max="180" step="1" data-key="duneBandRotationDeg" />
-          <button class="control-angle" type="button" data-angle-key="duneBandRotationDeg" aria-label="Dune band angle"></button>
-          <output data-value-for="duneBandRotationDeg"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Dune Band Scale</span>
-          <input type="range" min="40" max="600" step="1" data-key="duneBandScale" />
-          <output data-value-for="duneBandScale"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Dune Band Offset</span>
-          <input type="range" min="-600" max="600" step="1" data-key="duneBandOffsetPx" />
-          <output data-value-for="duneBandOffsetPx"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Dune Along Warp Scale</span>
-          <input type="range" min="80" max="900" step="1" data-key="duneAlongWarpScale" />
-          <output data-value-for="duneAlongWarpScale"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Dune Warp Strength</span>
-          <input type="range" min="0" max="4" step="0.01" data-key="duneWarpStrength" />
-          <output data-value-for="duneWarpStrength"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Dune Contrast</span>
-          <input type="range" min="0.2" max="4" step="0.01" data-key="duneContrast" />
-          <output data-value-for="duneContrast"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Dune Drift Speed</span>
-          <input type="range" min="0" max="1.2" step="0.01" data-key="duneDriftSpeed" />
-          <output data-value-for="duneDriftSpeed"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Edge Respawn Base</span>
-          <input type="range" min="0" max="0.5" step="0.01" data-key="edgeRespawnWeightBase" />
-          <output data-value-for="edgeRespawnWeightBase"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Edge Respawn Strength</span>
-          <input type="range" min="0" max="3" step="0.05" data-key="edgeRespawnWeightStrength" />
-          <output data-value-for="edgeRespawnWeightStrength"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Edge Respawn Exponent</span>
-          <input type="range" min="0.5" max="4" step="0.1" data-key="edgeRespawnWeightExponent" />
-          <output data-value-for="edgeRespawnWeightExponent"></output>
-        </label>
-
-        <label class="control-row control-toggle">
-          <span>Weighted Edge Respawn</span>
-          <input type="checkbox" data-key="useWeightedEdgeRespawn" />
-        </label>
-
-        <label class="control-row">
-          <span>Weighted Mix When Off (%)</span>
-          <input type="range" min="0" max="100" step="1" data-key="edgeRespawnWeightedMixPercent" />
-          <output data-value-for="edgeRespawnWeightedMixPercent"></output>
-        </label>
-
-      </details>
-
-      <details class="control-group">
-        <summary>Collision Separation</summary>
-
-        <label class="control-row control-toggle">
-          <span>Enable Separation</span>
-          <input type="checkbox" data-key="enableParticleSeparation" />
-        </label>
-
-        <label class="control-row">
-          <span>Collision Radius</span>
-          <input type="range" min="0.4" max="3" step="0.05" data-key="particleCollisionRadius" />
-          <output data-value-for="particleCollisionRadius"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Collision Strength</span>
-          <input type="range" min="0" max="1.5" step="0.01" data-key="particleCollisionStrength" />
-          <output data-value-for="particleCollisionStrength"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Velocity Damp</span>
-          <input type="range" min="0" max="0.5" step="0.01" data-key="particleCollisionVelocityDamp" />
-          <output data-value-for="particleCollisionVelocityDamp"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Frames Per Solve</span>
-          <input type="range" min="1" max="6" step="1" data-key="separationEveryNFrames" />
-          <output data-value-for="separationEveryNFrames"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Near Box Radius</span>
-          <input type="range" min="1" max="100" step="1" data-key="separationNearBoxRadius" />
-          <output data-value-for="separationNearBoxRadius"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Min Active Speed</span>
-          <input type="range" min="0" max="1" step="0.01" data-key="separationMinSpeed" />
-          <output data-value-for="separationMinSpeed"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Box Force Max Radius</span>
-          <input type="range" min="0.5" max="20" step="0.1" data-key="boxForceMaxRadius" />
-          <output data-value-for="boxForceMaxRadius"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Surface Slide Band</span>
-          <input type="range" min="0.2" max="4" step="0.05" data-key="surfaceSlideBand" />
-          <output data-value-for="surfaceSlideBand"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Forward Dot Min</span>
-          <input type="range" min="0" max="0.5" step="0.01" data-key="staticInfluenceForwardDotMin" />
-          <output data-value-for="staticInfluenceForwardDotMin"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Backside Drag</span>
-          <input type="range" min="0" max="1" step="0.01" data-key="backsideDragStrength" />
-          <output data-value-for="backsideDragStrength"></output>
-        </label>
-        <label class="control-row">
-          <span>Scroll Freeze Debounce (ms)</span>
-          <input type="range" min="50" max="2000" step="10" data-key="scrollFreezeDebounceMs" />
-          <output data-value-for="scrollFreezeDebounceMs"></output>
-        </label>
-        <label class="control-row">
-          <span>Scroll Freeze Fade In (ms)</span>
-          <input type="range" min="0" max="3000" step="10" data-key="scrollFreezeFadeInMs" />
-          <output data-value-for="scrollFreezeFadeInMs"></output>
-        </label>
-      </details>
-
-      <details class="control-group">
-        <summary>Render Colors</summary>
-
-        <label class="control-row">
-          <span>Background Fade</span>
-          <input type="color" data-color-key="fade" />
-          <output data-color-value-for="fade"></output>
-        </label>
-        <label class="control-row">
-          <span>Background Fade Alpha</span>
-          <input type="range" min="0" max="255" step="1" data-color-alpha-key="fade" />
-          <output data-color-alpha-value-for="fade"></output>
-        </label>
-        <label class="control-row">
-          <span>Background Fade Alpha B</span>
-          <input type="range" min="0" max="255" step="1" data-color-alpha-key="fadeSecondary" />
-          <output data-color-alpha-value-for="fadeSecondary"></output>
-        </label>
-        <label class="control-row">
-          <span>Oscillation Period (s)</span>
-          <input type="range" min="0" max="30" step="0.1" data-key="backgroundFadeOscillationPeriodSec" />
-          <output data-value-for="backgroundFadeOscillationPeriodSec"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Particles</span>
-          <input type="color" data-color-key="particles" />
-          <output data-color-value-for="particles"></output>
-        </label>
-        <label class="control-row">
-          <span>Particles Alpha</span>
-          <input type="range" min="0" max="255" step="1" data-color-alpha-key="particles" />
-          <output data-color-alpha-value-for="particles"></output>
-        </label>
-        <label class="control-row">
-          <span>Particles Alpha B</span>
-          <input type="range" min="0" max="255" step="1" data-color-alpha-key="particlesSecondary" />
-          <output data-color-alpha-value-for="particlesSecondary"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Boosted Color</span>
-          <input type="color" data-color-key="windBoostColor" />
-          <output data-color-value-for="windBoostColor"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Glow Core Color</span>
-          <input type="color" data-color-key="boxGlowCore" />
-          <output data-color-value-for="boxGlowCore"></output>
-        </label>
-        <label class="control-row">
-          <span>Glow Core Color Alpha</span>
-          <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxGlowCore" />
-          <output data-color-alpha-value-for="boxGlowCore"></output>
-        </label>
-
-      </details>
-
-      <details class="control-group">
-        <summary>Box Glow</summary>
-
-        <label class="control-row control-toggle">
-          <span>Enable Glow</span>
-          <input type="checkbox" data-key="enableBoxGlow" />
-        </label>
-
-        <label class="control-row">
-          <span>Glow Proximity</span>
-          <input type="range" min="1" max="60" step="1" data-key="boxGlowRadius" />
-          <output data-value-for="boxGlowRadius"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Core Diameter</span>
-          <input type="range" min="0.5" max="12" step="0.1" data-key="boxGlowCoreDiameter" />
-          <output data-value-for="boxGlowCoreDiameter"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Halo Size</span>
-          <input type="range" min="1" max="10" step="0.1" data-key="boxGlowHaloSize" />
-          <output data-value-for="boxGlowHaloSize"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Halo Alpha</span>
-          <input type="range" min="0" max="255" step="1" data-key="boxGlowHaloAlpha" />
-          <output data-value-for="boxGlowHaloAlpha"></output>
-        </label>
-
         <label class="control-row">
-          <span>Core Blend</span>
-          <input type="range" min="0" max="1" step="0.01" data-key="boxGlowCoreWhite" />
-          <output data-value-for="boxGlowCoreWhite"></output>
-        </label>
-
-        <label class="control-row control-toggle">
-          <span>OkLCh Blend</span>
-          <input type="checkbox" data-key="glowBlendOklch" />
-        </label>
-
-        <label class="control-row">
-          <span>Blend Chroma Floor</span>
-          <input type="range" min="0" max="0.6" step="0.001" data-key="glowBlendChromaFloor" />
-          <output data-value-for="glowBlendChromaFloor"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Blend Hue Shift</span>
-          <input type="range" min="-180" max="180" step="1" data-key="glowBlendHueShift" />
-          <output data-value-for="glowBlendHueShift"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Fade Delay (ms)</span>
-          <input type="range" min="0" max="2000" step="10" data-key="boxGlowFadeDelayMs" />
-          <output data-value-for="boxGlowFadeDelayMs"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Fade Duration (ms)</span>
-          <input type="range" min="0" max="3000" step="10" data-key="boxGlowFadeDurationMs" />
-          <output data-value-for="boxGlowFadeDurationMs"></output>
-        </label>
-      </details>
-
-      <details class="control-group">
-        <summary>Word Colliders</summary>
-
-        <label class="control-row control-toggle">
-          <span>Enable Colliders</span>
-          <input type="checkbox" id="word-collider-enabled" checked />
-        </label>
-
-        <label class="control-row control-toggle">
-          <span>Per-Word Boxes</span>
-          <input type="checkbox" id="word-boxes-enabled" checked />
-        </label>
-
-        <label class="control-row">
-          <span>Padding X (px)</span>
-          <input type="range" min="-100" max="100" step="1" value="0" id="word-inset-x" />
-          <output id="word-inset-x-out">0</output>
-        </label>
-
-        <label class="control-row">
-          <span>Padding Y (px)</span>
-          <input type="range" min="-100" max="100" step="1" value="0" id="word-inset-y" />
-          <output id="word-inset-y-out">0</output>
-        </label>
-
-        <label class="control-row">
-          <span>Offset X (px)</span>
-          <input type="range" min="-100" max="100" step="1" value="0" id="word-offset-x" />
-          <output id="word-offset-x-out">0</output>
-        </label>
-
-        <label class="control-row">
-          <span>Offset Y (px)</span>
-          <input type="range" min="-100" max="100" step="1" value="0" id="word-offset-y" />
-          <output id="word-offset-y-out">0</output>
-        </label>
-      </details>
-
-      <details class="control-group">
-        <summary>Debug Colors</summary>
-
-        <label class="control-row">
-          <span>Box Stroke (Idle)</span>
-          <input type="color" data-color-key="boxStrokeIdle" />
-          <output data-color-value-for="boxStrokeIdle"></output>
-        </label>
-        <label class="control-row">
-          <span>Box Stroke (Idle) Alpha</span>
-          <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxStrokeIdle" />
-          <output data-color-alpha-value-for="boxStrokeIdle"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Box Stroke (Dragged)</span>
-          <input type="color" data-color-key="boxStrokeDragged" />
-          <output data-color-value-for="boxStrokeDragged"></output>
-        </label>
-        <label class="control-row">
-          <span>Box Stroke (Dragged) Alpha</span>
-          <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxStrokeDragged" />
-          <output data-color-alpha-value-for="boxStrokeDragged"></output>
-        </label>
-
-        <label class="control-row">
-          <span>Separation Zone</span>
-          <input type="color" data-color-key="separationZone" />
-          <output data-color-value-for="separationZone"></output>
-        </label>
-        <label class="control-row">
-          <span>Separation Zone Alpha</span>
-          <input type="range" min="0" max="255" step="1" data-color-alpha-key="separationZone" />
-          <output data-color-alpha-value-for="separationZone"></output>
-        </label>
-
-      </details>
-
-      <details class="control-group">
-        <summary>Smoke A</summary>
-
-        <label class="control-row control-toggle">
-          <span>Enable Smoke A</span>
-          <input type="checkbox" checked data-smoke-enable-target="#smoke-container-1" />
-        </label>
-
-        <h4>Transform</h4>
-        <label class="control-row">
-          <span>Scale</span>
-          <input type="range" min="0.1" max="3" step="0.01" value="1" data-smoke-target="#smoke-container-1" data-smoke-var="--scale" />
-          <output data-smoke-out>1</output>
-        </label>
-        <label class="control-row">
-          <span>Offset X (px)</span>
-          <input type="range" min="-2000" max="2000" step="1" value="0" data-smoke-target="#smoke-container-1" data-smoke-var="--offset-x" data-smoke-unit="px" />
-          <output data-smoke-out>0px</output>
-        </label>
-        <label class="control-row">
-          <span>Offset Y (px)</span>
-          <input type="range" min="-2000" max="2000" step="1" value="0" data-smoke-target="#smoke-container-1" data-smoke-var="--offset-y" data-smoke-unit="px" />
-          <output data-smoke-out>0px</output>
-        </label>
-        <label class="control-row">
-          <span>Rotation</span>
-          <input type="range" min="-180" max="180" step="1" value="45" data-smoke-target="#smoke-container-1" data-smoke-var="--rotation" data-smoke-unit="deg" />
-          <output data-smoke-out>45deg</output>
-        </label>
-
-        <h4>Color</h4>
-        <label class="control-row">
-          <span>Opacity</span>
-          <input type="range" min="0" max="1" step="0.01" value="1" data-smoke-target="#smoke-container-1" data-smoke-var="--smoke-opacity" />
-          <output data-smoke-out>1</output>
-        </label>
-        <label class="control-row">
-          <span>Brightness</span>
-          <input type="range" min="0" max="3" step="0.01" value="1" data-smoke-target="#smoke-container-1" data-smoke-var="--brightness" />
-          <output data-smoke-out>1</output>
-        </label>
-        <label class="control-row">
-          <span>Saturation</span>
-          <input type="range" min="0" max="5" step="0.01" value="2" data-smoke-target="#smoke-container-1" data-smoke-var="--saturation" />
-          <output data-smoke-out>2</output>
-        </label>
-        <label class="control-row">
-          <span>Hue</span>
-          <input type="range" min="0" max="360" step="1" value="221" data-smoke-target="#smoke-container-1" data-smoke-var="--hue" data-smoke-unit="deg" />
-          <output data-smoke-out>221deg</output>
-        </label>
-
-        <h4>Motion</h4>
-        <label class="control-row control-toggle">
-          <span>Reverse Direction</span>
-          <input type="checkbox" data-smoke-direction-target="#smoke-container-1" />
-        </label>
-        <label class="control-row">
-          <span>Blend Mode</span>
-          <select data-smoke-target="#smoke-container-1" data-smoke-var="--smoke-blend">
-            <option value="normal">normal</option>
-            <option value="screen" selected>screen</option>
-            <option value="lighten">lighten</option>
-            <option value="plus-lighter">plus-lighter</option>
-            <option value="color-dodge">color-dodge</option>
-            <option value="multiply">multiply</option>
-            <option value="overlay">overlay</option>
-            <option value="hard-light">hard-light</option>
-            <option value="soft-light">soft-light</option>
-            <option value="difference">difference</option>
-            <option value="exclusion">exclusion</option>
-            <option value="color-burn">color-burn</option>
-            <option value="darken">darken</option>
-          </select>
-        </label>
-
-        <h4>Layer 1</h4>
-        <label class="control-row">
-          <span>Speed</span>
-          <input type="range" min="0.5" max="180" step="0.1" value="5" data-smoke-target="#smoke-container-1 .smoke-1" data-smoke-var="--speed" data-smoke-unit="s" />
-          <output data-smoke-out>5s</output>
-        </label>
-        <label class="control-row">
-          <span>Start</span>
-          <input type="range" min="-60" max="0" step="0.1" value="0" data-smoke-target="#smoke-container-1 .smoke-1" data-smoke-var="--start" data-smoke-unit="s" />
-          <output data-smoke-out>0s</output>
-        </label>
-
-        <h4>Layer 2</h4>
-        <label class="control-row">
-          <span>Speed</span>
-          <input type="range" min="0.5" max="180" step="0.1" value="5" data-smoke-target="#smoke-container-1 .smoke-2" data-smoke-var="--speed" data-smoke-unit="s" />
-          <output data-smoke-out>5s</output>
-        </label>
-        <label class="control-row">
-          <span>Start</span>
-          <input type="range" min="-60" max="0" step="0.1" value="0" data-smoke-target="#smoke-container-1 .smoke-2" data-smoke-var="--start" data-smoke-unit="s" />
-          <output data-smoke-out>0s</output>
-        </label>
-
-        <h4>Layer 3</h4>
-        <label class="control-row">
-          <span>Speed</span>
-          <input type="range" min="0.5" max="180" step="0.1" value="5" data-smoke-target="#smoke-container-1 .smoke-3" data-smoke-var="--speed" data-smoke-unit="s" />
-          <output data-smoke-out>5s</output>
-        </label>
-        <label class="control-row">
-          <span>Start</span>
-          <input type="range" min="-60" max="0" step="0.1" value="0" data-smoke-target="#smoke-container-1 .smoke-3" data-smoke-var="--start" data-smoke-unit="s" />
-          <output data-smoke-out>0s</output>
-        </label>
-
-        <div class="control-row">
-          <span>Reset Smoke A controls to defaults.</span>
-          <button type="button" data-smoke-reset>Reset Smoke A</button>
-        </div>
-      </details>
-
-      <details class="control-group">
-        <summary>Smoke B</summary>
-
-        <label class="control-row control-toggle">
-          <span>Enable Smoke B</span>
-          <input type="checkbox" checked data-smoke-enable-target="#smoke-container-2" />
-        </label>
-
-        <h4>Transform</h4>
-        <label class="control-row">
-          <span>Scale</span>
-          <input type="range" min="0.1" max="3" step="0.01" value="1" data-smoke-target="#smoke-container-2" data-smoke-var="--scale" />
-          <output data-smoke-out>1</output>
-        </label>
-        <label class="control-row">
-          <span>Offset X (px)</span>
-          <input type="range" min="-2000" max="2000" step="1" value="0" data-smoke-target="#smoke-container-2" data-smoke-var="--offset-x" data-smoke-unit="px" />
-          <output data-smoke-out>0px</output>
-        </label>
-        <label class="control-row">
-          <span>Offset Y (px)</span>
-          <input type="range" min="-2000" max="2000" step="1" value="0" data-smoke-target="#smoke-container-2" data-smoke-var="--offset-y" data-smoke-unit="px" />
-          <output data-smoke-out>0px</output>
-        </label>
-        <label class="control-row">
-          <span>Rotation</span>
-          <input type="range" min="-180" max="180" step="1" value="45" data-smoke-target="#smoke-container-2" data-smoke-var="--rotation" data-smoke-unit="deg" />
-          <output data-smoke-out>45deg</output>
-        </label>
-
-        <h4>Color</h4>
-        <label class="control-row">
-          <span>Opacity</span>
-          <input type="range" min="0" max="1" step="0.01" value="1" data-smoke-target="#smoke-container-2" data-smoke-var="--smoke-opacity" />
-          <output data-smoke-out>1</output>
-        </label>
-        <label class="control-row">
-          <span>Brightness</span>
-          <input type="range" min="0" max="3" step="0.01" value="1" data-smoke-target="#smoke-container-2" data-smoke-var="--brightness" />
-          <output data-smoke-out>1</output>
-        </label>
-        <label class="control-row">
-          <span>Saturation</span>
-          <input type="range" min="0" max="5" step="0.01" value="2" data-smoke-target="#smoke-container-2" data-smoke-var="--saturation" />
-          <output data-smoke-out>2</output>
-        </label>
-        <label class="control-row">
-          <span>Hue</span>
-          <input type="range" min="0" max="360" step="1" value="221" data-smoke-target="#smoke-container-2" data-smoke-var="--hue" data-smoke-unit="deg" />
-          <output data-smoke-out>221deg</output>
-        </label>
-
-        <h4>Motion</h4>
-        <label class="control-row control-toggle">
-          <span>Reverse Direction</span>
-          <input type="checkbox" data-smoke-direction-target="#smoke-container-2" />
-        </label>
-        <label class="control-row">
-          <span>Blend Mode</span>
-          <select data-smoke-target="#smoke-container-2" data-smoke-var="--smoke-blend">
-            <option value="normal">normal</option>
-            <option value="screen" selected>screen</option>
-            <option value="lighten">lighten</option>
-            <option value="plus-lighter">plus-lighter</option>
-            <option value="color-dodge">color-dodge</option>
-            <option value="multiply">multiply</option>
-            <option value="overlay">overlay</option>
-            <option value="hard-light">hard-light</option>
-            <option value="soft-light">soft-light</option>
-            <option value="difference">difference</option>
-            <option value="exclusion">exclusion</option>
-            <option value="color-burn">color-burn</option>
-            <option value="darken">darken</option>
-          </select>
-        </label>
-
-        <h4>Layer 1</h4>
-        <label class="control-row">
-          <span>Speed</span>
-          <input type="range" min="0.5" max="180" step="0.1" value="5" data-smoke-target="#smoke-container-2 .smoke-1" data-smoke-var="--speed" data-smoke-unit="s" />
-          <output data-smoke-out>5s</output>
-        </label>
-        <label class="control-row">
-          <span>Start</span>
-          <input type="range" min="-60" max="0" step="0.1" value="0" data-smoke-target="#smoke-container-2 .smoke-1" data-smoke-var="--start" data-smoke-unit="s" />
-          <output data-smoke-out>0s</output>
-        </label>
-
-        <h4>Layer 2</h4>
-        <label class="control-row">
-          <span>Speed</span>
-          <input type="range" min="0.5" max="180" step="0.1" value="5" data-smoke-target="#smoke-container-2 .smoke-2" data-smoke-var="--speed" data-smoke-unit="s" />
-          <output data-smoke-out>5s</output>
-        </label>
-        <label class="control-row">
-          <span>Start</span>
-          <input type="range" min="-60" max="0" step="0.1" value="0" data-smoke-target="#smoke-container-2 .smoke-2" data-smoke-var="--start" data-smoke-unit="s" />
-          <output data-smoke-out>0s</output>
-        </label>
-
-        <h4>Layer 3</h4>
-        <label class="control-row">
-          <span>Speed</span>
-          <input type="range" min="0.5" max="180" step="0.1" value="5" data-smoke-target="#smoke-container-2 .smoke-3" data-smoke-var="--speed" data-smoke-unit="s" />
-          <output data-smoke-out>5s</output>
-        </label>
-        <label class="control-row">
-          <span>Start</span>
-          <input type="range" min="-60" max="0" step="0.1" value="0" data-smoke-target="#smoke-container-2 .smoke-3" data-smoke-var="--start" data-smoke-unit="s" />
-          <output data-smoke-out>0s</output>
-        </label>
-
-        <div class="control-row">
-          <span>Reset Smoke B controls to defaults.</span>
-          <button type="button" data-smoke-reset>Reset Smoke B</button>
-        </div>
-      </details>
-
-      <details class="control-group">
-        <summary>Reset</summary>
+          <span>Min Speed To Draw</span>
+          <input type="range" min="0" max="3" step="0.01" data-key="particleRenderMinSpeed" />
+          <output data-value-for="particleRenderMinSpeed"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Render Fraction</span>
+          <input type="range" min="0.05" max="1" step="0.01" data-key="particleRenderFraction" />
+          <output data-value-for="particleRenderFraction"></output>
+        </label>
+
+        <details class="control-group control-subgroup">
+          <summary>Debug Colors</summary>
+
+          <label class="control-row">
+            <span>Box Stroke (Idle)</span>
+            <input type="color" data-color-key="boxStrokeIdle" />
+            <output data-color-value-for="boxStrokeIdle"></output>
+          </label>
+          <label class="control-row">
+            <span>Box Stroke (Idle) Alpha</span>
+            <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxStrokeIdle" />
+            <output data-color-alpha-value-for="boxStrokeIdle"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Box Stroke (Dragged)</span>
+            <input type="color" data-color-key="boxStrokeDragged" />
+            <output data-color-value-for="boxStrokeDragged"></output>
+          </label>
+          <label class="control-row">
+            <span>Box Stroke (Dragged) Alpha</span>
+            <input type="range" min="0" max="255" step="1" data-color-alpha-key="boxStrokeDragged" />
+            <output data-color-alpha-value-for="boxStrokeDragged"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Separation Zone</span>
+            <input type="color" data-color-key="separationZone" />
+            <output data-color-value-for="separationZone"></output>
+          </label>
+          <label class="control-row">
+            <span>Separation Zone Alpha</span>
+            <input type="range" min="0" max="255" step="1" data-color-alpha-key="separationZone" />
+            <output data-color-alpha-value-for="separationZone"></output>
+          </label>
+        </details>
 
         <div class="control-row">
           <span>Clear saved control cache and restore baked defaults.</span>
           <button type="button" id="reset-controls-button">Reset Defaults</button>
         </div>
+
       </details>
       </details>
     </aside>
@@ -1002,140 +870,6 @@
     })();
   </script>
 
-  <script defer>
-    document.addEventListener('DOMContentLoaded', () => {
-      const valueInputs = document.querySelectorAll('[data-smoke-target]');
-      const directionInputs = document.querySelectorAll('input[data-smoke-direction-target]');
-      const enableInputs = document.querySelectorAll('input[data-smoke-enable-target]');
-      const defaults = new Map();
-
-      const deriveKey = (el) => {
-        if (el.dataset.smokeKey) return el.dataset.smokeKey;
-        if (el.dataset.smokeDirectionTarget) {
-          const m = el.dataset.smokeDirectionTarget.match(/smoke-container-(\d+)/);
-          return `s${m ? m[1] : 'X'}Reverse`;
-        }
-        if (el.dataset.smokeEnableTarget) {
-          const m = el.dataset.smokeEnableTarget.match(/smoke-container-(\d+)/);
-          return `s${m ? m[1] : 'X'}Enabled`;
-        }
-        const target = el.dataset.smokeTarget || '';
-        const inst = (target.match(/smoke-container-(\d+)/) || [])[1] || 'X';
-        const layer = (target.match(/\.smoke-(\d+)/) || [])[1];
-        let v = (el.dataset.smokeVar || '').replace(/^--smoke-/, '').replace(/^--/, '');
-        v = v.replace(/-(.)/g, (_, c) => c.toUpperCase());
-        v = v.charAt(0).toUpperCase() + v.slice(1);
-        return `s${inst}${layer ? `L${layer}` : ''}${v}`;
-      };
-
-      const writeUrlParam = (key, value) => {
-        try {
-          const params = new URLSearchParams(window.location.search);
-          params.set(key, String(value));
-          window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
-        } catch (e) {}
-      };
-
-      const deleteUrlParam = (key) => {
-        try {
-          const params = new URLSearchParams(window.location.search);
-          params.delete(key);
-          const qs = params.toString();
-          window.history.replaceState({}, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
-        } catch (e) {}
-      };
-
-      const readUrlParam = (key) => {
-        try { return new URLSearchParams(window.location.search).get(key); } catch (e) { return null; }
-      };
-
-      const applyValue = (el) => {
-        const unit = el.dataset.smokeUnit || '';
-        const value = el.value + unit;
-        const target = document.querySelector(el.dataset.smokeTarget);
-        if (target) target.style.setProperty(el.dataset.smokeVar, value);
-        const out = el.parentElement.querySelector('[data-smoke-out]');
-        if (out) out.textContent = value;
-      };
-
-      const applyDirection = (input) => {
-        const target = document.querySelector(input.dataset.smokeDirectionTarget);
-        if (target) target.classList.toggle('is-reversed', input.checked);
-      };
-
-      const applyEnabled = (input) => {
-        const target = document.querySelector(input.dataset.smokeEnableTarget);
-        if (target) target.hidden = !input.checked;
-      };
-
-      const constDefaults = (typeof SMOKE_DEFAULTS !== 'undefined') ? SMOKE_DEFAULTS : {};
-
-      valueInputs.forEach((el) => {
-        const key = deriveKey(el);
-        if (constDefaults[key] !== undefined) el.value = constDefaults[key];
-        defaults.set(el, el.value);
-        const fromUrl = readUrlParam(key);
-        if (fromUrl !== null) el.value = fromUrl;
-        el.addEventListener('input', () => {
-          applyValue(el);
-          writeUrlParam(key, el.value);
-        });
-        el.addEventListener('change', () => {
-          applyValue(el);
-          writeUrlParam(key, el.value);
-        });
-        applyValue(el);
-      });
-
-      directionInputs.forEach((input) => {
-        const key = deriveKey(input);
-        if (typeof constDefaults[key] === 'boolean') input.checked = constDefaults[key];
-        defaults.set(input, input.checked);
-        const fromUrl = readUrlParam(key);
-        if (fromUrl !== null) input.checked = fromUrl === '1' || fromUrl === 'true';
-        input.addEventListener('change', () => {
-          applyDirection(input);
-          writeUrlParam(key, input.checked ? '1' : '0');
-        });
-        applyDirection(input);
-      });
-
-      enableInputs.forEach((input) => {
-        const key = deriveKey(input);
-        if (typeof constDefaults[key] === 'boolean') input.checked = constDefaults[key];
-        defaults.set(input, input.checked);
-        const fromUrl = readUrlParam(key);
-        if (fromUrl !== null) input.checked = fromUrl === '1' || fromUrl === 'true';
-        input.addEventListener('change', () => {
-          applyEnabled(input);
-          writeUrlParam(key, input.checked ? '1' : '0');
-        });
-        applyEnabled(input);
-      });
-
-      document.querySelectorAll('[data-smoke-reset]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const group = btn.closest('details') || document;
-          group.querySelectorAll('[data-smoke-target]').forEach((el) => {
-            el.value = defaults.get(el);
-            applyValue(el);
-            deleteUrlParam(deriveKey(el));
-          });
-          group.querySelectorAll('input[data-smoke-direction-target]').forEach((input) => {
-            input.checked = defaults.get(input);
-            applyDirection(input);
-            deleteUrlParam(deriveKey(input));
-          });
-          group.querySelectorAll('input[data-smoke-enable-target]').forEach((input) => {
-            input.checked = defaults.get(input);
-            applyEnabled(input);
-            deleteUrlParam(deriveKey(input));
-          });
-        });
-      });
-    });
-  </script>
-
   <!-- vvv Add scripts here from dist folder vvv -->
   <script src="./src/vendor/p5/p5.min.js" defer></script>
   <script src="./src/vendor/p5/p5.dom.min.js" defer></script>
@@ -1143,7 +877,6 @@
   <script src="./src/js/constants/renderColors.js" defer></script>
   <script src="./src/js/constants/controlParamDefs.js" defer></script>
   <script src="./src/js/constants/controlTooltips.js" defer></script>
-  <script src="./src/js/constants/smokeDefaults.js" defer></script>
   <script src="./src/js/flowField.js" defer></script>
   <script src="./src/js/poem_json.js" defer></script>
   <script src="./src/js/variables.js" defer></script>
