@@ -286,6 +286,39 @@
             <input type="range" min="0" max="1" step="0.01" data-key="curlDuneModulation" />
             <output data-value-for="curlDuneModulation"></output>
           </label>
+          <label class="control-row control-toggle">
+            <span>Equalize Noise</span>
+            <input type="checkbox" data-key="equalizeNoiseTexture" />
+          </label>
+          <label class="control-row control-toggle">
+            <span>Divergence-Free Curl</span>
+            <input type="checkbox" data-key="curlDivergenceFree" />
+          </label>
+          <label class="control-row">
+            <span>Curl Compressibility (banding)</span>
+            <input type="range" min="0" max="1" step="0.01" data-key="curlCompressibility" />
+            <output data-value-for="curlCompressibility"></output>
+          </label>
+          <label class="control-row">
+            <span>Dune Ribbon Banding</span>
+            <input type="range" min="0" max="1" step="0.01" data-key="curlDuneRibbon" />
+            <output data-value-for="curlDuneRibbon"></output>
+          </label>
+          <label class="control-row">
+            <span>Respawn Velocity Random</span>
+            <input type="range" min="0" max="2" step="0.01" data-key="respawnRandomizeVelocity" />
+            <output data-value-for="respawnRandomizeVelocity"></output>
+          </label>
+          <label class="control-row">
+            <span>Per-Particle Force Mult</span>
+            <input type="range" min="1" max="3" step="0.01" data-key="perParticleForceMultMax" />
+            <output data-value-for="perParticleForceMultMax"></output>
+          </label>
+          <label class="control-row">
+            <span>Per-Particle Vel Mult</span>
+            <input type="range" min="1" max="3" step="0.01" data-key="perParticleVelMultMax" />
+            <output data-value-for="perParticleVelMultMax"></output>
+          </label>
         </details>
 
         <details class="control-group control-subgroup">

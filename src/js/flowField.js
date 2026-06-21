@@ -70,6 +70,11 @@ const NOISE_TEX_SIZE = 256;
 const NOISE_TEX_SIZE_MASK = NOISE_TEX_SIZE - 1; // bitmask for wrapping
 const NOISE_TEX_TILE = 4.0; // noise-space units per tile
 const NOISE_TEX_INV_TILE = 1 / NOISE_TEX_TILE;
+// Divergence-free curl-noise tuning: finite-difference step (noise-space units)
+// and a gain that brings the raw curl magnitude up to roughly unit scale so
+// curlStrength stays comparable between the two field modes.
+const CURL_NOISE_DIFF_STEP = 0.02;
+const CURL_NOISE_GAIN = 0.25;
 let noiseTexture = null; // Float32Array, baked in setup()
 
 function bakeNoiseTexture() {
@@ -91,6 +96,27 @@ function bakeNoiseTexture() {
         noise(nx - T, ny - T) * wx * wy;
       noiseTexture[y * NOISE_TEX_SIZE + x] = v * 2 - 1;
     }
+  }
+  if (CONFIG.equalizeNoiseTexture) {
+    equalizeNoiseTextureValues();
+  }
+}
+
+// Histogram-equalize the baked texture: Perlin values cluster in a narrow bell
+// around the midpoint, so a linear read (e.g. the curl angle lerp) only ever
+// uses the middle of its range. Remapping each texel by its percentile rank
+// spreads the values uniformly across [-1, 1] so the full range gets used.
+// This is a monotonic remap, so it preserves both the seamless tiling and the
+// smoothstep-interpolated continuity established above.
+function equalizeNoiseTextureValues() {
+  const n = noiseTexture.length;
+  const order = new Uint32Array(n);
+  for (let i = 0; i < n; i++) order[i] = i;
+  // Sort indices by their texel value (ascending).
+  Array.prototype.sort.call(order, (a, b) => noiseTexture[a] - noiseTexture[b]);
+  const inv = n > 1 ? 2 / (n - 1) : 0;
+  for (let r = 0; r < n; r++) {
+    noiseTexture[order[r]] = r * inv - 1; // rank → uniform across [-1, 1]
   }
 }
 
@@ -1451,6 +1477,9 @@ function setupDuneControls() {
       if (def.key === 'pauseSimulation') {
         applySimulationPauseState();
       }
+      if (def.key === 'equalizeNoiseTexture') {
+        bakeNoiseTexture();
+      }
       updateQualityBaseline(def.key, CONFIG[def.key]);
       if (def.key === 'useWeightedEdgeRespawn') {
         syncEdgeRespawnMixDisabledState();
@@ -2235,6 +2264,9 @@ function syncUrlParamsFromConfig() {
   params.delete('backgroundPulseUseCurve');
   params.delete('backgroundFadeOscillationPeriodSec');
   params.delete('curlRotations');
+  params.delete('flowJitterStrength');
+  params.delete('perParticleForceMultSpread');
+  params.delete('perParticleVelMultSpread');
   params.delete('colorFadeAlphaSecondary');
   params.delete('colorParticlesAlphaSecondary');
   // Smoke controls were removed entirely — clear stale params from old URLs.
@@ -2502,6 +2534,14 @@ function syncBoostedParticleConfig(reseedBoosted = false) {
   }
 }
 
+// Fixed per-particle multiplier in [1, maxMult], held until respawn so motion
+// stays smooth (no per-frame noise). Always >= 1, so raising the control only
+// speeds particles up — it never slows or freezes them. maxMult 1 → all 1.
+function rollParticleMult(maxMult) {
+  const m = max(1, maxMult);
+  return m > 1 ? 1 + random() * (m - 1) : 1;
+}
+
 function createParticle(x, y, ignoresBoxCollision = false) {
   const boosted = random() < CONFIG.windBoostParticleRatio;
   const randomSizeModifier = random(
@@ -2551,6 +2591,8 @@ function createParticle(x, y, ignoresBoxCollision = false) {
     scrollUnfrozeAtMs: 0,
     scrollFadeProgress: 0,
     scrollCollisionDisabled: false,
+    forceMult: rollParticleMult(CONFIG.perParticleForceMultMax),
+    velMult: rollParticleMult(CONFIG.perParticleVelMultMax),
   };
 }
 
@@ -2731,8 +2773,8 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
         frameCache,
         particle.turbulenceBoostMultiplier
       );
-      accX += ambient.x * particle.windBoostMultiplier;
-      accY += ambient.y * particle.windBoostMultiplier;
+      accX += ambient.x * particle.windBoostMultiplier * particle.forceMult;
+      accY += ambient.y * particle.windBoostMultiplier * particle.forceMult;
       particle.duneAlphaSignal = ambient.duneSignal;
     } else {
       particle.duneAlphaSignal = 0;
@@ -2765,8 +2807,8 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
       particle.vel.x *= scale;
       particle.vel.y *= scale;
     }
-    particle.pos.x += particle.vel.x * safeDtFrames;
-    particle.pos.y += particle.vel.y * safeDtFrames;
+    particle.pos.x += particle.vel.x * safeDtFrames * particle.velMult;
+    particle.pos.y += particle.vel.y * safeDtFrames * particle.velMult;
 
     // Strict occupancy: particles are not allowed to remain inside boxes.
     if (!skipBoxCollision) {
@@ -3210,6 +3252,13 @@ function buildFrameCache(nowMs) {
   // the morph doesn't read as a straight translation).
   fc.curlDriftX = nowMs * 0.001 * CONFIG.curlDriftSpeed;
   fc.curlDriftY = nowMs * 0.001 * CONFIG.curlDriftSpeed * 0.83;
+  // Rotate the noise gradient: -90deg (compressibility 0) = divergence-free
+  // curl (no banding); 0deg (compressibility 1) = raw gradient (full banding).
+  const cComp = constrain(CONFIG.curlCompressibility, 0, 1);
+  const phi = -HALF_PI * (1 - cComp);
+  fc.curlRotCos = Math.cos(phi);
+  fc.curlRotSin = Math.sin(phi);
+  fc.curlDuneRibbon = constrain(CONFIG.curlDuneRibbon, 0, 1);
   return fc;
 }
 
@@ -3246,16 +3295,48 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
   // amplitude so the banding structure survives inside the meanders.
   const mix = frameCache.flowFieldMix;
   if (mix > 0) {
-    const cn = sampleNoiseTexture(
-      px / CONFIG.curlNoiseScale + frameCache.curlDriftX,
-      py / CONFIG.curlNoiseScale + frameCache.curlDriftY
-    );
-    const angle = frameCache.windAngleRad + cn * frameCache.curlRangeRad;
-    const duneMod = constrain(CONFIG.curlDuneModulation, 0, 1);
-    const curlAmp = CONFIG.curlStrength * (1 - duneMod + duneMod * duneMultiplier);
     const inv = 1 - mix;
-    fx = fx * inv + fastSin(angle + HALF_PI) * curlAmp * mix;
-    fy = fy * inv + fastSin(angle) * curlAmp * mix;
+    if (CONFIG.curlDivergenceFree) {
+      // Curl-noise flow from a scalar noise potential. The force is the
+      // gradient (dN/dx, dN/dy) rotated by curlRot: at -90deg it's the curl
+      // (dN/dy, -dN/dx) — divergence-free, no convergence zones, no banding;
+      // at 0deg it's the raw gradient — fully compressible, clusters into
+      // bands. curlCompressibility lerps the rotation between them, so it dials
+      // in "some banding" continuously. Wind is a uniform term, which adds no
+      // divergence of its own, so banding scales purely with compressibility.
+      const s = CONFIG.curlNoiseScale;
+      const u = px / s + frameCache.curlDriftX;
+      const v = py / s + frameCache.curlDriftY;
+      const h = CURL_NOISE_DIFF_STEP;
+      const dNdu = (sampleNoiseTexture(u + h, v) - sampleNoiseTexture(u - h, v)) / (2 * h);
+      const dNdv = (sampleNoiseTexture(u, v + h) - sampleNoiseTexture(u, v - h)) / (2 * h);
+      const cr = frameCache.curlRotCos;
+      const sr = frameCache.curlRotSin;
+      const cvx = dNdu * cr - dNdv * sr;
+      const cvy = dNdu * sr + dNdv * cr;
+      // Dune ribbon banding: scale the curl magnitude by the dune signal so the
+      // flow runs slower in the troughs and particles pool there, forming bands
+      // aligned with the dune ridges. Unlike compressibility this keeps the
+      // rotational direction, so it makes ribbons, not spiral vortex traps.
+      const ribbon = frameCache.curlDuneRibbon;
+      const g = CONFIG.curlStrength * CURL_NOISE_GAIN * (1 - ribbon + ribbon * duneMultiplier);
+      const windUniformX = frameCache.windDirX * CONFIG.ambientWindStrength;
+      const windUniformY = frameCache.windDirY * CONFIG.ambientWindStrength;
+      fx = windUniformX * inv + cvx * g * mix + frameCache.windPerpX * microAmp;
+      fy = windUniformY * inv + cvy * g * mix + frameCache.windPerpY * microAmp;
+    } else {
+      // Legacy angle-from-noise curl: noise sets the flow angle. Compressible —
+      // tends to collect particles into filaments over time (see curl mode).
+      const cn = sampleNoiseTexture(
+        px / CONFIG.curlNoiseScale + frameCache.curlDriftX,
+        py / CONFIG.curlNoiseScale + frameCache.curlDriftY
+      );
+      const angle = frameCache.windAngleRad + cn * frameCache.curlRangeRad;
+      const duneMod = constrain(CONFIG.curlDuneModulation, 0, 1);
+      const curlAmp = CONFIG.curlStrength * (1 - duneMod + duneMod * duneMultiplier);
+      fx = fx * inv + fastSin(angle + HALF_PI) * curlAmp * mix;
+      fy = fy * inv + fastSin(angle) * curlAmp * mix;
+    }
   }
 
   _duneWindResult.x = fx;
@@ -3641,6 +3722,15 @@ function resolveParticleBounds(particle, nowMs = millis()) {
   }
 
   if (wrapped) {
+    const rv = CONFIG.respawnRandomizeVelocity;
+    if (rv > 0) {
+      const ang = Math.random() * TWO_PI;
+      const mag = Math.random() * rv;
+      particle.vel.x = Math.cos(ang) * mag;
+      particle.vel.y = Math.sin(ang) * mag;
+    }
+    particle.forceMult = rollParticleMult(CONFIG.perParticleForceMultMax);
+    particle.velMult = rollParticleMult(CONFIG.perParticleVelMultMax);
     syncParticleDisplayState(particle, p.x, p.y);
     particle.scrollCollisionDisabled = false;
   }
