@@ -36,6 +36,30 @@ body {
     }
 }
 
+// Debug-only dune field. Above the vignette (3) so the picture is not darkened
+// at the edges, below the control panel (99999) so the panel stays usable.
+// Created by JS only when the toggle is switched on.
+#dune-debug-canvas {
+    position: fixed;
+    inset: 0;
+    display: block;
+    width: 100vw;
+    height: 100dvh;
+    z-index: 4;
+    pointer-events: none;
+}
+
+// Flow arrows sit one above the dune field so the two can be read together.
+#flow-arrows-canvas {
+    position: fixed;
+    inset: 0;
+    display: block;
+    width: 100vw;
+    height: 100dvh;
+    z-index: 5;
+    pointer-events: none;
+}
+
 #flow-box-overlay {
     position: fixed;
     inset: 0;
@@ -372,6 +396,14 @@ body {
 
 #dune-controls .control-curve-row {
     display: block;
+    // Block row, so the pin can't ride a grid cell — anchor it to the corner.
+    position: relative;
+
+    > .control-pin {
+        position: absolute;
+        top: 0;
+        right: 0;
+    }
 
     .control-curve-label {
         display: block;
@@ -408,7 +440,13 @@ body {
 }
 
 #dune-controls .control-row > span {
+    // grid-row must be explicit: the pin claims all of row 1, so an auto-placed
+    // span would be pushed down to a row of its own instead of sharing the line.
+    grid-row: 1;
     grid-column: 1 / 3;
+    // The pin shares this cell rather than taking a column of its own, so long
+    // labels keep the full panel width; the padding is what reserves its space.
+    padding-right: 18px;
     opacity: 0.92;
 }
 
@@ -511,11 +549,279 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
     margin-bottom: 10px;
+}
+
+// Pin affordance. Sits in the label cell of a grid row (overlapping the span,
+// which reserves room via padding) and as a trailing flex child on toggles.
+#dune-controls .control-pin {
+    grid-row: 1;
+    grid-column: 1 / 3;
+    // The pin shares its grid cell with the label, so it needs an explicit lift
+    // to win hit-testing. Without it the only thing raising the pin is the
+    // stacking context created by opacity < 1 — which vanishes the instant
+    // :hover animates opacity to 1, handing the pointer back to the span,
+    // dropping :hover, and oscillating the cursor every frame.
+    position: relative;
+    z-index: 1;
+    justify-self: end;
+    align-self: start;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: #f4ecdd;
+    opacity: 0.35;
+    cursor: pointer;
+    transition: opacity 120ms ease, color 120ms ease;
+
+    svg {
+        width: 11px;
+        height: 11px;
+        fill: currentColor;
+    }
+
+    &:hover {
+        opacity: 1;
+    }
+
+    &:focus-visible {
+        outline: 1px solid rgba(255, 228, 172, 0.7);
+        outline-offset: 1px;
+        opacity: 1;
+    }
+}
+
+#dune-controls .control-row.is-pinned > .control-pin,
+#dune-controls .control-ghost > .control-pin {
+    color: #6cf;
+    opacity: 1;
+}
+
+// Reorder grip. Shares the label cell with the pin, offset left to clear it,
+// and only exists once a row is actually in the pinned list.
+#dune-controls .control-drag {
+    display: none;
+    grid-row: 1;
+    grid-column: 1 / 3;
+    justify-self: end;
+    align-self: start;
+    margin-right: 18px;
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: #f4ecdd;
+    opacity: 0.35;
+    cursor: grab;
+    transition: opacity 120ms ease;
+
+    svg {
+        width: 11px;
+        height: 11px;
+        fill: currentColor;
+    }
+
+    &:hover {
+        opacity: 1;
+    }
+
+    &:focus-visible {
+        outline: 1px solid rgba(255, 228, 172, 0.7);
+        outline-offset: 1px;
+        opacity: 1;
+    }
+
+    &:active {
+        cursor: grabbing;
+    }
+}
+
+#dune-controls .control-row.is-pinned > .control-drag {
+    display: inline-flex;
+}
+
+// Two icons to clear now, not one.
+#dune-controls .control-row.is-pinned > span {
+    padding-right: 36px;
+}
+
+// Flex rows sit the grip and pin side by side, so no offset is needed and the
+// label never runs under either.
+#dune-controls .control-toggle > .control-drag {
+    margin-right: 0;
+}
+
+#dune-controls .control-toggle.is-pinned > span {
+    padding-right: 0;
+}
+
+#dune-controls .control-curve-row > .control-drag {
+    position: absolute;
+    top: 0;
+    right: 18px;
+    margin-right: 0;
+}
+
+#dune-controls .control-row.is-dragging {
+    opacity: 0.5;
+    outline: 1px dashed rgba(102, 204, 255, 0.7);
+    outline-offset: 2px;
+}
+
+// Left behind in the row's home group so a pinned control never just vanishes
+// from the category you expected to find it in.
+#dune-controls .control-ghost {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    opacity: 0.45;
+    font-style: italic;
+    cursor: pointer;
+
+    > span {
+        flex: 1;
+        min-width: 0;
+    }
+
+    &:hover {
+        opacity: 0.75;
+    }
+}
+
+#dune-controls .control-hint {
+    opacity: 0.65;
+    font-size: 0.85em;
+    line-height: 1.35;
+}
+
+// Numeric keyframe mirror under the pulse curve canvas. The header shares the
+// row grid so its labels line up with the inputs beneath them.
+#dune-controls .curve-point-list {
+    display: grid;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+// Index, phase, alpha, remove. Shared by the header and the rows so the
+// labels stay aligned with the fields beneath them.
+#dune-controls .curve-point-head,
+#dune-controls .curve-point-row {
+    display: grid;
+    // px, not em: the header is 0.85em, so an em-based track would resolve
+    // narrower there and knock every column out of alignment with the rows.
+    grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1fr) 22px;
+    gap: 6px;
+    align-items: center;
+}
+
+#dune-controls .curve-point-head {
+    margin-bottom: 4px;
+    opacity: 0.6;
+    font-size: 0.85em;
+
+    > span:not(:first-child) {
+        padding-left: 6px;
+    }
+}
+
+#dune-controls .curve-point-row {
+    > span {
+        opacity: 0.55;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    input[type="number"] {
+        // The panel's inputs are content-box, so width:100% plus padding and
+        // border overflowed the grid track and the columns collided.
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+        padding: 3px 6px;
+        border: 1px solid rgba(245, 222, 179, 0.25);
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.35);
+        color: #ffe4ac;
+        font: inherit;
+        font-variant-numeric: tabular-nums;
+
+        &:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        &:focus-visible {
+            outline: 1px solid rgba(255, 228, 172, 0.7);
+            outline-offset: 1px;
+        }
+    }
+}
+
+// A control the current mode ignores is disabled in JS. The browser only fades
+// the widget itself, which leaves the label at full strength and reads as an
+// enabled control that happens to look odd — fade the whole row instead. The
+// pin and drag handle keep their opacity: an inert control is still pinnable.
+#dune-controls .control-row:has(> input:disabled) {
+    cursor: not-allowed;
+
+    > span,
+    > input,
+    > output {
+        opacity: 0.4;
+    }
+}
+
+#dune-controls .curve-point-remove {
+    box-sizing: border-box;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid rgba(245, 222, 179, 0.25);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.35);
+    color: #ffe4ac;
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+        border-color: rgba(255, 150, 130, 0.8);
+        color: #ff9682;
+    }
+
+    // Endpoints anchor the cycle, so their button is a spacer, not a control.
+    &:disabled {
+        visibility: hidden;
+    }
+
+    &:focus-visible {
+        outline: 1px solid rgba(255, 228, 172, 0.7);
+        outline-offset: 1px;
+    }
 }
 
 #dune-controls .control-toggle > span {
     grid-column: auto;
+    // Flex row, so the pin is a real sibling and needs no reserved gutter.
+    flex: 1;
+    min-width: 0;
+    padding-right: 0;
 }
 
 #dune-controls .control-notice {

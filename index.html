@@ -35,6 +35,13 @@
       <summary>Dune Controls</summary>
       <button id="collapse-all-btn" type="button">Collapse All</button>
 
+      <!-- Pinned rows are moved here from their home groups; the section stays
+           hidden while empty so it costs nothing when unused. -->
+      <details class="control-group control-section" id="pinned-section" hidden open>
+        <summary>Pinned</summary>
+        <div id="pinned-controls"></div>
+      </details>
+
       <details class="control-group control-section">
         <summary>Text &amp; Layout</summary>
 
@@ -294,6 +301,10 @@
             <span>Divergence-Free Curl</span>
             <input type="checkbox" data-key="curlDivergenceFree" />
           </label>
+          <label class="control-row control-toggle">
+            <span>Calibrate Angle Range</span>
+            <input type="checkbox" data-key="curlAngleCalibrated" />
+          </label>
           <label class="control-row">
             <span>Curl Compressibility (banding)</span>
             <input type="range" min="0" max="1" step="0.01" data-key="curlCompressibility" />
@@ -304,6 +315,21 @@
             <input type="range" min="0" max="1" step="0.01" data-key="curlDuneRibbon" />
             <output data-value-for="curlDuneRibbon"></output>
           </label>
+          <label class="control-row control-toggle">
+            <span>Show Flow Arrows (debug)</span>
+            <input type="checkbox" data-key="showFlowArrows" />
+          </label>
+          <label class="control-row">
+            <span>Arrow Spacing (px)</span>
+            <input type="range" min="8" max="96" step="1" data-key="flowArrowSpacing" />
+            <output data-value-for="flowArrowSpacing"></output>
+          </label>
+          <label class="control-row">
+            <span>Arrow Opacity</span>
+            <input type="range" min="0" max="1" step="0.01" data-key="flowArrowOpacity" />
+            <output data-value-for="flowArrowOpacity"></output>
+          </label>
+
           <label class="control-row">
             <span>Respawn Velocity Random</span>
             <input type="range" min="0" max="2" step="0.01" data-key="respawnRandomizeVelocity" />
@@ -365,6 +391,27 @@
             <span>Dune Drift Speed</span>
             <input type="range" min="0" max="1.2" step="0.01" data-key="duneDriftSpeed" />
             <output data-value-for="duneDriftSpeed"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Ridge Attraction (banding)</span>
+            <input type="range" min="0" max="0.5" step="0.005" data-key="duneRidgeAttraction" />
+            <output data-value-for="duneRidgeAttraction"></output>
+          </label>
+          <label class="control-row">
+            <span>Ridge Crest Falloff</span>
+            <input type="range" min="0" max="4" step="0.05" data-key="duneRidgeFalloff" />
+            <output data-value-for="duneRidgeFalloff"></output>
+          </label>
+
+          <label class="control-row control-toggle">
+            <span>Show Dune Field (debug)</span>
+            <input type="checkbox" data-key="showDuneDebugLayer" />
+          </label>
+          <label class="control-row">
+            <span>Dune Field Opacity</span>
+            <input type="range" min="0" max="1" step="0.01" data-key="duneDebugOpacity" />
+            <output data-value-for="duneDebugOpacity"></output>
           </label>
 
           <label class="control-row">
@@ -577,10 +624,28 @@
           <input type="range" min="0" max="120" step="0.1" data-key="backgroundPulsePeriodSec" />
           <output data-value-for="backgroundPulsePeriodSec"></output>
         </label>
+        <label class="control-row">
+          <span>Wipe Curve Y Zoom</span>
+          <input type="range" min="0.05" max="1" step="0.05" data-key="backgroundPulseCurveMaxY" />
+          <output data-value-for="backgroundPulseCurveMaxY"></output>
+        </label>
         <div class="control-row control-curve-row">
-          <span class="control-curve-label" title="Wipe envelope across one pulse period. Curve height maps directly to fade alpha (top = full wipe). Drag points to shape it, click empty space to add a point, double-click a point to remove it. Cmd/Ctrl+Z to undo, with Shift to redo. Drag the red playhead to scrub the cycle.">Wipe Curve</span>
+          <span class="control-curve-label" title="Wipe envelope across one pulse period. Curve height maps directly to fade alpha; the top of the canvas is the Wipe Curve Y Zoom value, not necessarily a full wipe. Drag points to shape it, click empty space to add a point, double-click a point to remove it. Cmd/Ctrl+Z to undo, with Shift to redo. Drag the red playhead to scrub the cycle.">Wipe Curve</span>
           <canvas id="pulse-curve-canvas" width="520" height="160"></canvas>
         </div>
+        <details class="control-group control-subgroup">
+          <summary>Curve Keyframes</summary>
+          <div class="control-row">
+            <span class="control-hint">Phase and alpha for each anchor, in sync with the canvas above. Endpoint phases are pinned to 0 and 1 so the cycle stays closed; alpha is free to 1.0 even above the Y zoom ceiling.</span>
+          </div>
+          <div class="curve-point-head" aria-hidden="true">
+            <span>#</span>
+            <span>Phase</span>
+            <span>Alpha</span>
+            <span></span>
+          </div>
+          <div id="pulse-curve-points" class="curve-point-list"></div>
+        </details>
         <div class="control-row">
           <span>Restore the default pulse curve.</span>
           <button type="button" id="pulse-curve-reset">Reset Curve</button>

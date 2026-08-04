@@ -1,6 +1,6 @@
 const RENDER_COLORS = {
   fade: [0, 0, 0],
-  particles: [117, 0, 0, 12],
+  particles: [128, 0, 0, 80],
   windBoostColor: [255, 174, 0],
   separationZone: [130, 175, 235],
   boxStrokeIdle: [200, 200, 180, 0],

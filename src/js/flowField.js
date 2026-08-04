@@ -44,6 +44,8 @@ const _frameCacheScratch = {
   nowMs: 0, windDirX: 0, windDirY: 0, windPerpX: 0, windPerpY: 0,
   duneDirX: 0, duneDirY: 0, dunePerpX: 0, dunePerpY: 0,
   duneBandOffsetPx: 0, driftPixels: 0,
+  ridgeFalloff: 0, ridgeFalloffNorm: 1,
+  curlAngleCalibrated: false, curlCalibratedGain: 0,
 };
 const _interpolatedBoxPos = { x: 0, y: 0 };
 
@@ -75,7 +77,20 @@ const NOISE_TEX_INV_TILE = 1 / NOISE_TEX_TILE;
 // curlStrength stays comparable between the two field modes.
 const CURL_NOISE_DIFF_STEP = 0.02;
 const CURL_NOISE_GAIN = 0.25;
+// At duneContrast 1 the ridge-attraction shape term peaks at 0.475, so this
+// brings duneRidgeAttraction = 1 to roughly one whole wind force of pull.
+const DUNE_RIDGE_ATTRACTION_GAIN = 2.1;
+// Bounds the trough singularity when duneContrast < 1. No effect at contrast >= 1.
+const DUNE_RIDGE_SHAPE_CAP = 4;
+// Grid resolution for measuring the texture's peak gradient, and how many of
+// the best cells get a local refinement pass afterwards.
+const CURL_GRAD_SCAN_STEPS = 512;
+const CURL_GRAD_REFINE_CELLS = 32;
 let noiseTexture = null; // Float32Array, baked in setup()
+// Peak |grad N| over the whole tile, measured after each bake. p5's Perlin
+// table is unseeded, so this lands anywhere from ~9 to ~17 depending on the
+// page load — it has to be measured, not baked in as a constant.
+let curlGradMax = 1;
 
 function bakeNoiseTexture() {
   // Perlin noise is not periodic, so a raw bake has hard value seams wherever
@@ -100,6 +115,76 @@ function bakeNoiseTexture() {
   if (CONFIG.equalizeNoiseTexture) {
     equalizeNoiseTextureValues();
   }
+  measureCurlGradientMax();
+}
+
+// Peak gradient magnitude of the baked texture, sampled the same way the curl
+// field samples it (same finite-difference step, same wrapped tile). Angle
+// calibration divides by this to guarantee its deflection bound, so an
+// underestimate would let the field bend further than the control claims.
+//
+// A plain grid scan is not enough: at 768 steps this misses the true peak that
+// 512 and 1024 both find, because the peak sits between samples. So take the
+// best cells from a coarse pass and refine inside each one.
+function measureCurlGradientMax() {
+  const T = NOISE_TEX_TILE;
+  const h = CURL_NOISE_DIFF_STEP;
+  const gradAt = (u, v) => {
+    const du = (sampleNoiseTexture(u + h, v) - sampleNoiseTexture(u - h, v)) / (2 * h);
+    const dv = (sampleNoiseTexture(u, v + h) - sampleNoiseTexture(u, v - h)) / (2 * h);
+    return Math.sqrt(du * du + dv * dv);
+  };
+
+  const N = CURL_GRAD_SCAN_STEPS;
+  const step = T / N;
+  // Min-heap would be tidier, but the candidate list is tiny — a linear insert
+  // into a sorted array of 32 beats the bookkeeping.
+  const bestMag = new Float64Array(CURL_GRAD_REFINE_CELLS);
+  const bestU = new Float64Array(CURL_GRAD_REFINE_CELLS);
+  const bestV = new Float64Array(CURL_GRAD_REFINE_CELLS);
+  for (let j = 0; j < N; j++) {
+    const v = j * step;
+    for (let i = 0; i < N; i++) {
+      const u = i * step;
+      const m = gradAt(u, v);
+      if (m <= bestMag[CURL_GRAD_REFINE_CELLS - 1]) continue;
+      let k = CURL_GRAD_REFINE_CELLS - 1;
+      while (k > 0 && bestMag[k - 1] < m) {
+        bestMag[k] = bestMag[k - 1];
+        bestU[k] = bestU[k - 1];
+        bestV[k] = bestV[k - 1];
+        k--;
+      }
+      bestMag[k] = m;
+      bestU[k] = u;
+      bestV[k] = v;
+    }
+  }
+
+  // Two rounds of local search around each candidate, each round shrinking the
+  // window by 4x, so the final resolution is ~1/16 of a coarse cell.
+  let peak = bestMag[0];
+  for (let c = 0; c < CURL_GRAD_REFINE_CELLS; c++) {
+    let cu = bestU[c];
+    let cv = bestV[c];
+    let mag = bestMag[c];
+    let radius = step;
+    for (let round = 0; round < 2; round++) {
+      const sub = radius / 2;
+      for (let j = -2; j <= 2; j++) {
+        for (let i = -2; i <= 2; i++) {
+          if (i === 0 && j === 0) continue;
+          const u = cu + i * sub;
+          const v = cv + j * sub;
+          const m = gradAt(u, v);
+          if (m > mag) { mag = m; cu = u; cv = v; }
+        }
+      }
+      radius = sub;
+    }
+    if (mag > peak) peak = mag;
+  }
+  curlGradMax = peak > 1e-6 ? peak : 1;
 }
 
 // Histogram-equalize the baked texture: Perlin values cluster in a narrow bell
@@ -843,6 +928,8 @@ function draw() {
   const dtFrames = constrain(frameDeltaMs / SIM_FIXED_STEP_MS, 0, 3);
   simTimeMs = nowMs;
   simStepCount += 1;
+  renderDuneDebugLayer(nowMs);
+  renderFlowArrowLayer(nowMs);
   fadeCanvas();
   updateBoxes(dtFrames);
   updateActiveBoxes();
@@ -870,6 +957,271 @@ function applyCanvasLayerVisibility() {
   if (fgGraphics) {
     fgGraphics.canvas.style.visibility = CONFIG.showForegroundCanvas ? '' : 'hidden';
   }
+}
+
+// --- Dune debug overlay -----------------------------------------------------
+// Greyscale picture of the dune signal: black in the troughs, white on the
+// crests. It shows exactly the value particles read for their dune alpha/size
+// boost, so where it is white is where they brighten and widen.
+//
+// Mounted on <body>, not inside #poem-bg: that wrapper has z-index 0, which
+// makes it a stacking context its children can never escape. Sitting on top of
+// the ink, the poem and the vignette means the field can be read against live
+// particles, which is the whole point — hence the opacity control.
+//
+// Drawn into a deliberately tiny backing store and stretched to the viewport by
+// CSS. The dune bands are very low frequency (one cycle every
+// 2*PI*duneBandScale px, ~630px at the default 100), so a texel every 6px is
+// heavy oversampling, and the browser's own smoothing on the upscale gives a
+// cleaner gradient than drawing it at full resolution would.
+const DUNE_DEBUG_TEXEL_PX = 6;
+// Field value where bands are switched off: the flat multiplier of 1 pushed
+// back through the same (m - 0.25) / 0.95 normalisation the particles use.
+const DUNE_DEBUG_FLAT_SIGNAL = (1 - 0.25) / 0.95;
+
+let duneDebugCanvas = null;
+let duneDebugCtx = null;
+let duneDebugImage = null;
+let duneDebugAppliedOpacity = -1;
+
+function ensureDuneDebugLayer() {
+  if (duneDebugCanvas) return;
+  duneDebugCanvas = document.createElement('canvas');
+  duneDebugCanvas.id = 'dune-debug-canvas';
+  duneDebugCanvas.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(duneDebugCanvas);
+  duneDebugCtx = duneDebugCanvas.getContext('2d');
+}
+
+function renderDuneDebugLayer(nowMs) {
+  if (!CONFIG.showDuneDebugLayer) {
+    if (duneDebugCanvas) duneDebugCanvas.style.display = 'none';
+    return;
+  }
+  ensureDuneDebugLayer();
+  if (!duneDebugCtx) return;
+  duneDebugCanvas.style.display = 'block';
+
+  // Only touch the style when it actually changes — an every-frame write would
+  // invalidate style on an element that covers the whole viewport.
+  const opacity = constrain(CONFIG.duneDebugOpacity, 0, 1);
+  if (opacity !== duneDebugAppliedOpacity) {
+    duneDebugCanvas.style.opacity = String(opacity);
+    duneDebugAppliedOpacity = opacity;
+  }
+
+  const cols = max(1, ceil(width / DUNE_DEBUG_TEXEL_PX));
+  const rows = max(1, ceil(height / DUNE_DEBUG_TEXEL_PX));
+  if (duneDebugCanvas.width !== cols || duneDebugCanvas.height !== rows) {
+    duneDebugCanvas.width = cols;
+    duneDebugCanvas.height = rows;
+    duneDebugImage = duneDebugCtx.createImageData(cols, rows);
+  }
+
+  const data = duneDebugImage.data;
+
+  if (!CONFIG.enableDuneBands) {
+    const flat = round(constrain(DUNE_DEBUG_FLAT_SIGNAL, 0, 1) * 255);
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = flat;
+      data[i + 1] = flat;
+      data[i + 2] = flat;
+      data[i + 3] = 255;
+    }
+    duneDebugCtx.putImageData(duneDebugImage, 0, 0);
+    return;
+  }
+
+  // Same drift-shifted axes as sampleDuneWindForceXY, hoisted out of the loop.
+  const windAngle = radians(CONFIG.ambientWindDirectionDeg);
+  const driftPixels = nowMs * 0.001 * CONFIG.duneDriftSpeed * 240;
+  const originX = -cos(windAngle) * driftPixels;
+  const originY = -sin(windAngle) * driftPixels;
+  const duneBandAngle = radians(CONFIG.duneBandRotationDeg);
+  const duneDirX = cos(duneBandAngle);
+  const duneDirY = sin(duneBandAngle);
+  const dunePerpX = -duneDirY;
+  const dunePerpY = duneDirX;
+
+  // along/across are linear in x and y, so stepping a texel is a single add.
+  const alongPerCol = DUNE_DEBUG_TEXEL_PX * duneDirX;
+  const alongPerRow = DUNE_DEBUG_TEXEL_PX * duneDirY;
+  const acrossPerCol = DUNE_DEBUG_TEXEL_PX * dunePerpX;
+  const acrossPerRow = DUNE_DEBUG_TEXEL_PX * dunePerpY;
+  let alongRow = originX * duneDirX + originY * duneDirY;
+  let acrossRow = originX * dunePerpX + originY * dunePerpY + CONFIG.duneBandOffsetPx;
+
+  const contrast = CONFIG.duneContrast;
+  const isLinear = contrast === 1;
+  let i = 0;
+  for (let r = 0; r < rows; r++) {
+    let along = alongRow;
+    let across = acrossRow;
+    for (let c = 0; c < cols; c++) {
+      const ridge01 = (fastSin(duneWarpedAcross(along, across)) + 1) * 0.5;
+      const signal = isLinear ? ridge01 : pow(ridge01, contrast);
+      const v = signal * 255;
+      data[i] = v;
+      data[i + 1] = v;
+      data[i + 2] = v;
+      data[i + 3] = 255;
+      i += 4;
+      along += alongPerCol;
+      across += acrossPerCol;
+    }
+    alongRow += alongPerRow;
+    acrossRow += acrossPerRow;
+  }
+
+  duneDebugCtx.putImageData(duneDebugImage, 0, 0);
+}
+
+// --- Flow arrow overlay -----------------------------------------------------
+// Quiver plot of the total flow field — the same vector sampleDuneWindForceXY
+// hands each particle, so it includes wind, dune banding, ridge attraction,
+// micro turbulence and the curl mix together. Arrows show the curl's eddy size
+// and shape directly, which a greyscale of any single term cannot.
+//
+// Colour encodes alignment with the ambient wind, because "which way is this
+// actually pushing things" is the question the field is hardest to eyeball:
+// cyan runs downwind, amber crosswind, red upwind. Red marks the regions that
+// drive particles back against the wind.
+const FLOW_ARROW_BUCKETS = 11;
+const FLOW_ARROW_MIN_SPACING = 8;
+const FLOW_ARROW_UPWIND = [255, 59, 48];
+const FLOW_ARROW_CROSS = [255, 228, 172];
+const FLOW_ARROW_DOWNWIND = [102, 204, 255];
+
+let flowArrowCanvas = null;
+let flowArrowCtx = null;
+let flowArrowField = null;
+let flowArrowPalette = null;
+
+function buildFlowArrowPalette() {
+  const lerpByte = (a, b, t) => round(a + (b - a) * t);
+  const out = [];
+  for (let i = 0; i < FLOW_ARROW_BUCKETS; i++) {
+    // bucket -> alignment in -1..1
+    const a = (i / (FLOW_ARROW_BUCKETS - 1)) * 2 - 1;
+    const from = FLOW_ARROW_CROSS;
+    const to = a >= 0 ? FLOW_ARROW_DOWNWIND : FLOW_ARROW_UPWIND;
+    const t = a >= 0 ? a : -a;
+    out.push(`rgb(${lerpByte(from[0], to[0], t)}, ${lerpByte(from[1], to[1], t)}, ${lerpByte(from[2], to[2], t)})`);
+  }
+  return out;
+}
+
+function ensureFlowArrowLayer() {
+  if (flowArrowCanvas) return;
+  flowArrowCanvas = document.createElement('canvas');
+  flowArrowCanvas.id = 'flow-arrows-canvas';
+  flowArrowCanvas.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(flowArrowCanvas);
+  flowArrowCtx = flowArrowCanvas.getContext('2d');
+  flowArrowPalette = buildFlowArrowPalette();
+}
+
+function renderFlowArrowLayer(nowMs) {
+  if (!CONFIG.showFlowArrows) {
+    if (flowArrowCanvas) flowArrowCanvas.style.display = 'none';
+    return;
+  }
+  ensureFlowArrowLayer();
+  if (!flowArrowCtx) return;
+  flowArrowCanvas.style.display = 'block';
+
+  if (flowArrowCanvas.width !== width || flowArrowCanvas.height !== height) {
+    flowArrowCanvas.width = width;
+    flowArrowCanvas.height = height;
+  }
+
+  const spacing = max(FLOW_ARROW_MIN_SPACING, round(CONFIG.flowArrowSpacing));
+  const cols = max(1, floor(width / spacing));
+  const rows = max(1, floor(height / spacing));
+  const needed = cols * rows * 2;
+  if (!flowArrowField || flowArrowField.length < needed) {
+    flowArrowField = new Float32Array(needed);
+  }
+
+  // Sample first, draw second: arrow length is scaled against the strongest
+  // vector on screen, so the plot stays readable at any wind strength instead
+  // of collapsing to dots or overshooting into a solid mat.
+  const fc = buildFrameCache(nowMs);
+  const originX = spacing * 0.5;
+  const originY = spacing * 0.5;
+  let maxMag = 0;
+  let w = 0;
+  for (let r = 0; r < rows; r++) {
+    const py = originY + r * spacing;
+    for (let c = 0; c < cols; c++) {
+      const res = sampleDuneWindForceXY(originX + c * spacing, py, fc);
+      flowArrowField[w] = res.x;
+      flowArrowField[w + 1] = res.y;
+      const mag = Math.hypot(res.x, res.y);
+      if (mag > maxMag) maxMag = mag;
+      w += 2;
+    }
+  }
+
+  const ctx = flowArrowCtx;
+  ctx.clearRect(0, 0, flowArrowCanvas.width, flowArrowCanvas.height);
+  if (maxMag <= 1e-9) return;
+
+  // One path per colour bucket, so the whole plot is a handful of strokes
+  // rather than a thousand.
+  const paths = [];
+  for (let i = 0; i < FLOW_ARROW_BUCKETS; i++) paths.push(new Path2D());
+
+  const maxLen = spacing * 0.46;
+  const headLen = min(4.5, maxLen * 0.4);
+  const windX = fc.windDirX;
+  const windY = fc.windDirY;
+  let readIndex = 0;
+  for (let r = 0; r < rows; r++) {
+    const py = originY + r * spacing;
+    for (let c = 0; c < cols; c++) {
+      const fx = flowArrowField[readIndex];
+      const fy = flowArrowField[readIndex + 1];
+      readIndex += 2;
+      const mag = Math.hypot(fx, fy);
+      if (mag <= 1e-9) continue;
+      const ux = fx / mag;
+      const uy = fy / mag;
+      const len = (mag / maxMag) * maxLen;
+      const px = originX + c * spacing;
+      // Centred on the sample point so the grid stays visually even.
+      const baseX = px - ux * len * 0.5;
+      const baseY = py - uy * len * 0.5;
+      const tipX = px + ux * len * 0.5;
+      const tipY = py + uy * len * 0.5;
+
+      const align = constrain(ux * windX + uy * windY, -1, 1);
+      const bucket = constrain(
+        round((align + 1) * 0.5 * (FLOW_ARROW_BUCKETS - 1)), 0, FLOW_ARROW_BUCKETS - 1
+      );
+      const path = paths[bucket];
+      path.moveTo(baseX, baseY);
+      path.lineTo(tipX, tipY);
+      // Barbs at +/-150 degrees from the heading.
+      const h = min(headLen, len * 0.55);
+      if (h > 0.6) {
+        const cosA = -0.866, sinA = 0.5;
+        path.moveTo(tipX, tipY);
+        path.lineTo(tipX + (ux * cosA - uy * sinA) * h, tipY + (ux * sinA + uy * cosA) * h);
+        path.moveTo(tipX, tipY);
+        path.lineTo(tipX + (ux * cosA + uy * sinA) * h, tipY + (-ux * sinA + uy * cosA) * h);
+      }
+    }
+  }
+
+  ctx.lineWidth = 1;
+  ctx.lineCap = 'round';
+  ctx.globalAlpha = constrain(CONFIG.flowArrowOpacity, 0, 1);
+  for (let i = 0; i < FLOW_ARROW_BUCKETS; i++) {
+    ctx.strokeStyle = flowArrowPalette[i];
+    ctx.stroke(paths[i]);
+  }
+  ctx.globalAlpha = 1;
 }
 
 function ensureInkLayerB() {
@@ -1065,6 +1417,7 @@ function setupPulseCurveEditor(panel) {
     CONFIG.backgroundPulseCurve = str;
     points = parsePulseCurve(str);
     syncUrlParamsFromConfig();
+    syncPointRows();
   };
   const undoCurve = () => {
     if (!undoStack.length) return;
@@ -1084,13 +1437,19 @@ function setupPulseCurveEditor(panel) {
     if (e.shiftKey) redoCurve(); else undoCurve();
   });
 
+  // Alpha at the top of the canvas. Keyframes are stored in real 0..1 alpha
+  // units regardless — this only rescales the drawing/dragging mapping, so a
+  // lower ceiling buys precision without changing what any curve means.
+  const curveMaxY = () => constrain(CONFIG.backgroundPulseCurveMaxY, 0.05, 1);
   const toPx = (p) => ({
     x: PAD + p.x * (canvas.width - PAD * 2),
-    y: canvas.height - PAD - p.y * (canvas.height - PAD * 2),
+    // Clamp so a curve loaded from a URL above the ceiling pins to the top
+    // edge instead of drawing off-canvas.
+    y: canvas.height - PAD - constrain(p.y / curveMaxY(), 0, 1) * (canvas.height - PAD * 2),
   });
   const toCurve = (px, py) => ({
     x: constrain((px - PAD) / (canvas.width - PAD * 2), 0, 1),
-    y: constrain((canvas.height - PAD - py) / (canvas.height - PAD * 2), 0, 1),
+    y: constrain((canvas.height - PAD - py) / (canvas.height - PAD * 2), 0, 1) * curveMaxY(),
   });
   const eventPos = (e) => {
     const r = canvas.getBoundingClientRect();
@@ -1109,7 +1468,116 @@ function setupPulseCurveEditor(panel) {
   const commit = () => {
     CONFIG.backgroundPulseCurve = serializePulseCurve(points);
     syncUrlParamsFromConfig();
+    syncPointRows();
   };
+
+  // Numeric mirror of the keyframes, for values too fine to hit by dragging.
+  // Two-way: edits here move the anchors, and drags/adds/removes on the canvas
+  // rewrite these fields. Rows are rebuilt only when the anchor count changes
+  // so typing is never interrupted by a rebuild.
+  const pointsList = panel.querySelector('#pulse-curve-points');
+  let pointRowsSignature = null;
+  let editStartCurve = null;
+
+  const applyPointEdit = (index, axis, raw) => {
+    const v = Number(raw);
+    if (!Number.isFinite(v) || !points[index]) return;
+    if (axis === 'y') {
+      points[index].y = clamp01(v);
+    } else {
+      // Endpoints stay at 0 and 1; interior anchors keep the same minimum
+      // separation the drag path enforces, so the curve can't fold over.
+      if (index === 0 || index === points.length - 1) return;
+      points[index].x = constrain(
+        v,
+        points[index - 1].x + 0.005,
+        points[index + 1].x - 0.005
+      );
+    }
+    commit();
+  };
+
+  const buildPointRows = () => {
+    pointsList.textContent = '';
+    for (let i = 0; i < points.length; i++) {
+      const isEndpoint = i === 0 || i === points.length - 1;
+      const row = document.createElement('div');
+      row.className = 'curve-point-row';
+      const label = document.createElement('span');
+      label.textContent = i + 1;
+      row.appendChild(label);
+      for (const axis of ['x', 'y']) {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '0';
+        input.max = '1';
+        input.step = '0.001';
+        input.dataset.axis = axis;
+        if (axis === 'x' && isEndpoint) {
+          input.disabled = true;
+          input.title = 'Endpoint phase is pinned so the cycle stays closed.';
+        }
+        // One undo entry per edit session, matching how a drag gesture behaves.
+        input.addEventListener('focus', () => {
+          editStartCurve = CONFIG.backgroundPulseCurve;
+        });
+        input.addEventListener('input', () => applyPointEdit(i, axis, input.value));
+        input.addEventListener('change', () => {
+          applyPointEdit(i, axis, input.value);
+          // Show the clamped result rather than whatever was typed.
+          if (points[i]) input.value = points[i][axis].toFixed(3);
+        });
+        input.addEventListener('blur', () => {
+          if (editStartCurve !== null && editStartCurve !== CONFIG.backgroundPulseCurve) {
+            pushHistory(editStartCurve);
+          }
+          editStartCurve = null;
+        });
+        row.appendChild(input);
+      }
+      // Mirrors the canvas double-click delete. Endpoints keep a hidden button
+      // so every row stays on the same grid.
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'curve-point-remove';
+      remove.textContent = '×';
+      if (isEndpoint) {
+        remove.disabled = true;
+        remove.tabIndex = -1;
+        remove.setAttribute('aria-hidden', 'true');
+      } else {
+        remove.title = 'Remove this anchor';
+        remove.setAttribute('aria-label', `Remove anchor ${i + 1}`);
+        remove.addEventListener('click', () => {
+          if (i <= 0 || i >= points.length - 1) return;
+          pushHistory(CONFIG.backgroundPulseCurve);
+          points.splice(i, 1);
+          commit();
+        });
+      }
+      row.appendChild(remove);
+      pointsList.appendChild(row);
+    }
+  };
+
+  function syncPointRows() {
+    if (!pointsList) return;
+    const signature = serializePulseCurve(points);
+    if (signature === pointRowsSignature) return;
+    pointRowsSignature = signature;
+    if (pointsList.childElementCount !== points.length) {
+      buildPointRows();
+    }
+    for (let i = 0; i < points.length; i++) {
+      const inputs = pointsList.children[i].querySelectorAll('input');
+      for (const input of inputs) {
+        // Never clobber the field being typed into.
+        if (input !== document.activeElement) {
+          input.value = points[i][input.dataset.axis].toFixed(3);
+        }
+      }
+    }
+  }
 
   canvas.addEventListener('pointerdown', (e) => {
     const pos = eventPos(e);
@@ -1196,6 +1664,7 @@ function setupPulseCurveEditor(panel) {
     // Re-pull points if the curve changed externally (URL load, reset).
     if (serializePulseCurve(points) !== CONFIG.backgroundPulseCurve) {
       points = parsePulseCurve(CONFIG.backgroundPulseCurve);
+      syncPointRows();
     }
     const w = canvas.width;
     const h = canvas.height;
@@ -1224,7 +1693,8 @@ function setupPulseCurveEditor(panel) {
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
-    ctx.fillText('alpha →', 0, 0);
+    // Label the ceiling so the zoom level is readable off the axis itself.
+    ctx.fillText(`alpha → ${curveMaxY().toFixed(2)}`, 0, 0);
     ctx.restore();
     // Curve, sampled from the same LUT the simulation uses.
     ctx.beginPath();
@@ -1267,6 +1737,7 @@ function setupPulseCurveEditor(panel) {
     }
     requestAnimationFrame(render);
   };
+  syncPointRows();
   requestAnimationFrame(render);
 }
 
@@ -1394,6 +1865,33 @@ function setupDuneControls() {
     edgeRespawnMixInput.disabled = Boolean(CONFIG.useWeightedEdgeRespawn);
   };
 
+  // The two curl modes read different controls, and calibration changes which
+  // ones again, so which sliders are live is a three-way question. Grey out the
+  // ones the active combination ignores rather than leaving them looking
+  // functional while doing nothing.
+  const curlModeInputs = {};
+  for (const key of ['flowFieldMix', 'curlStrength', 'curlAngleRangeDeg',
+                     'curlDuneModulation', 'curlAngleCalibrated']) {
+    curlModeInputs[key] = panel.querySelector(`[data-key="${key}"]`);
+  }
+  const syncCurlModeDisabledState = () => {
+    const divFree = Boolean(CONFIG.curlDivergenceFree);
+    const calibrated = divFree && Boolean(CONFIG.curlAngleCalibrated);
+    const set = (key, disabled) => {
+      const input = curlModeInputs[key];
+      if (input) input.disabled = disabled;
+    };
+    // Calibration is the only thing that gives the angle range meaning in
+    // divergence-free mode; the legacy branch uses it directly.
+    set('curlAngleRangeDeg', divFree && !calibrated);
+    set('curlDuneModulation', divFree);
+    set('curlAngleCalibrated', !divFree);
+    // Calibration derives the curl amplitude from the angle bound and holds the
+    // wind at full strength, so neither of these has anything left to scale.
+    set('curlStrength', calibrated);
+    set('flowFieldMix', calibrated);
+  };
+
   for (let i = 0; i < CONTROL_PARAM_DEFS.length; i++) {
     const def = CONTROL_PARAM_DEFS[i];
     const input = panel.querySelector(`[data-key="${def.key}"]`);
@@ -1403,7 +1901,7 @@ function setupDuneControls() {
       input.checked = Boolean(CONFIG[def.key]);
     } else {
       input.value = String(CONFIG[def.key]);
-      updateControlOutput(def.key, CONFIG[def.key], def.digits);
+      updateControlOutput(def.key, CONFIG[def.key], def.digits, def.display);
     }
 
     input.addEventListener('dblclick', () => {
@@ -1440,7 +1938,7 @@ function setupDuneControls() {
           input.value = String(nextValue);
         }
         CONFIG[def.key] = nextValue;
-        updateControlOutput(def.key, nextValue, def.digits);
+        updateControlOutput(def.key, nextValue, def.digits, def.display);
         if (def.key === 'particleCount') {
           const target = max(1, floor(CONFIG.particleCount));
           if (particles.length < target) {
@@ -1484,6 +1982,9 @@ function setupDuneControls() {
       if (def.key === 'useWeightedEdgeRespawn') {
         syncEdgeRespawnMixDisabledState();
       }
+      if (def.key === 'curlDivergenceFree' || def.key === 'curlAngleCalibrated') {
+        syncCurlModeDisabledState();
+      }
       if (BOOSTED_CONTROL_KEYS.has(def.key)) {
         syncBoostedParticleConfig(def.key === 'windBoostParticleRatio');
       }
@@ -1492,6 +1993,7 @@ function setupDuneControls() {
     });
   }
   syncEdgeRespawnMixDisabledState();
+  syncCurlModeDisabledState();
 
   bindColorControls(panel);
   bindColorAlphaControls(panel);
@@ -1507,6 +2009,8 @@ function setupDuneControls() {
   bindVignetteControls();
   bindPanelResizeHandle(panel);
   bindCollapseAllButton(panel);
+  // Last: pinning moves rows, so everything else binds against the home layout.
+  setupControlPinning(panel);
 }
 
 function bindAngleControls(panel) {
@@ -2055,6 +2559,195 @@ function bindCollapseAllButton(panel) {
   });
 }
 
+// --- Control pinning --------------------------------------------------------
+// Pinned rows are MOVED into #pinned-controls rather than cloned. Cloning would
+// duplicate data-key attributes and quietly break every panel.querySelector()
+// lookup in this file; moving keeps each row a single node with its bound
+// listeners intact. A ghost is left in the row's home position so the control
+// never just vanishes from its group, and so it can be unpinned from there.
+const PIN_ICON_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
+  '<path d="M9.4 1 15 6.6l-1.2 1.2-1.5-.4-2.6 2.6.6 2.6-1.2 1.2-3.2-3.2L2.2 14 2 14l.1-.2 3.4-3.7-3.2-3.2 1.2-1.2 2.6.6L8.7 3.7l-.4-1.5z"/>' +
+  '</svg>';
+
+const DRAG_ICON_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
+  '<circle cx="6" cy="3.5" r="1.4"/><circle cx="10" cy="3.5" r="1.4"/>' +
+  '<circle cx="6" cy="8" r="1.4"/><circle cx="10" cy="8" r="1.4"/>' +
+  '<circle cx="6" cy="12.5" r="1.4"/><circle cx="10" cy="12.5" r="1.4"/>' +
+  '</svg>';
+
+function getControlPinId(row) {
+  const keyed = row.querySelector('[data-key]');
+  if (keyed) return `k-${keyed.getAttribute('data-key')}`;
+  const color = row.querySelector('[data-color-key]');
+  if (color) return `c-${color.getAttribute('data-color-key')}`;
+  const colorAlpha = row.querySelector('[data-color-alpha-key]');
+  if (colorAlpha) return `a-${colorAlpha.getAttribute('data-color-alpha-key')}`;
+  const ided = row.querySelector('[id]');
+  if (ided && ided.id) return `i-${ided.id}`;
+  return '';
+}
+
+function setupControlPinning(panel) {
+  const section = document.getElementById('pinned-section');
+  const list = document.getElementById('pinned-controls');
+  if (!section || !list) return;
+
+  const entries = new Map();
+
+  const makePinButton = (id, onToggle) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'control-pin';
+    btn.innerHTML = PIN_ICON_SVG;
+    btn.addEventListener('click', (event) => {
+      // Rows are <label>s: without preventDefault the click forwards to the
+      // labelled input and would flip the very checkbox being pinned.
+      event.preventDefault();
+      event.stopPropagation();
+      onToggle(id);
+    });
+    return btn;
+  };
+
+  const syncSectionVisibility = () => {
+    section.hidden = list.children.length === 0;
+  };
+
+  const persist = () => {
+    CONFIG.pinnedControls = Array.from(list.children)
+      .map(child => child.dataset.pinId || '')
+      .filter(Boolean)
+      .join('.');
+    syncUrlParamsFromConfig();
+  };
+
+  // Reorder by dragging the grip. Pointer events rather than HTML5 drag and
+  // drop: the rows are <label>s wrapping range inputs, and making one
+  // draggable steals the pointer from its own slider.
+  const moveRowToPointer = (row, clientY) => {
+    const siblings = Array.from(list.children).filter(c => c !== row);
+    for (let i = 0; i < siblings.length; i++) {
+      const r = siblings[i].getBoundingClientRect();
+      if (clientY < r.top + r.height * 0.5) {
+        list.insertBefore(row, siblings[i]);
+        return;
+      }
+    }
+    list.appendChild(row);
+  };
+
+  const nudgeRow = (row, delta) => {
+    const order = Array.from(list.children);
+    const from = order.indexOf(row);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= order.length) return false;
+    if (delta < 0) list.insertBefore(row, order[to]);
+    else list.insertBefore(row, order[to].nextSibling);
+    persist();
+    return true;
+  };
+
+  const makeDragHandle = (id) => {
+    const handle = document.createElement('button');
+    handle.type = 'button';
+    handle.className = 'control-drag';
+    handle.innerHTML = DRAG_ICON_SVG;
+    handle.title = 'Drag to reorder, or focus and use the arrow keys';
+
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      const entry = entries.get(id);
+      if (!entry || !entry.ghost) return;
+      // Suppress the label's activation behaviour and any text selection.
+      event.preventDefault();
+      const row = entry.row;
+      row.classList.add('is-dragging');
+      document.body.style.userSelect = 'none';
+
+      const onMove = (moveEvent) => moveRowToPointer(row, moveEvent.clientY);
+      const onUp = () => {
+        row.classList.remove('is-dragging');
+        document.body.style.userSelect = '';
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onUp);
+        persist();
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+    });
+
+    handle.addEventListener('keydown', (event) => {
+      const delta = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
+      if (!delta) return;
+      const entry = entries.get(id);
+      if (!entry || !entry.ghost) return;
+      event.preventDefault();
+      if (nudgeRow(entry.row, delta)) handle.focus();
+    });
+
+    // A grip inside a <label> would otherwise toggle the labelled control.
+    handle.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    return handle;
+  };
+
+  const togglePin = (id) => {
+    const entry = entries.get(id);
+    if (!entry) return;
+    if (entry.ghost) {
+      entry.ghost.replaceWith(entry.row);
+      entry.ghost = null;
+      entry.row.classList.remove('is-pinned');
+      entry.button.title = 'Pin to the top of the panel';
+    } else {
+      const ghost = document.createElement('div');
+      ghost.className = 'control-ghost';
+      ghost.dataset.pinId = id;
+      ghost.title = 'Pinned to the top of the panel — click to unpin';
+      const text = document.createElement('span');
+      text.textContent = entry.label;
+      ghost.appendChild(text);
+      ghost.appendChild(makePinButton(id, togglePin));
+      entry.row.replaceWith(ghost);
+      entry.ghost = ghost;
+      list.appendChild(entry.row);
+      entry.row.classList.add('is-pinned');
+      entry.button.title = 'Unpin — return to its group';
+    }
+    syncSectionVisibility();
+    persist();
+  };
+
+  const rows = panel.querySelectorAll('.control-row');
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const id = getControlPinId(row);
+    if (!id || entries.has(id)) continue;
+    const span = row.querySelector('span');
+    const button = makePinButton(id, togglePin);
+    button.title = 'Pin to the top of the panel';
+    row.dataset.pinId = id;
+    // Grip first so it lands left of the pin in the flex toggle rows; the grid
+    // rows place both explicitly and CSS hides the grip until the row is pinned.
+    row.appendChild(makeDragHandle(id));
+    row.appendChild(button);
+    entries.set(id, { row, button, ghost: null, label: span ? span.textContent.trim() : id });
+  }
+
+  // Ids that no longer match a row are skipped, and the rewrite below drops
+  // them from the URL. Each step re-persists, which is redundant but keeps
+  // togglePin the single place that knows how a pin is applied.
+  const saved = String(CONFIG.pinnedControls || '').split('.');
+  for (let i = 0; i < saved.length; i++) {
+    if (saved[i] && entries.has(saved[i])) togglePin(saved[i]);
+  }
+  syncSectionVisibility();
+}
+
 function applyControlTooltips(panel) {
   const applyTitle = (target, text) => {
     if (!target || !text) return;
@@ -2172,12 +2865,25 @@ function getDetailsStorageKey(detailsEl, index) {
   return `dune-controls:details:${label}`;
 }
 
-function updateControlOutput(key, value, digits) {
+// Readout formats, selected by a def's `display` key. These change the panel
+// text only — CONFIG and the URL params always hold the raw slider value.
+const CONTROL_OUTPUT_FORMATTERS = {
+  deg: (v) => `${Math.round(v)}deg`,
+  // Boost knobs are gains, not final values: the renderer applies
+  // (1 + boost * signal), so a raw 1.2 is really a 2.2x multiplier. Show the
+  // factor. Speed signals are unbounded, so quote the rate per px/frame; dune
+  // signals are normalized 0..1, so quote the ridge maximum.
+  gainPerSpeed: (v) => `${(1 + v).toFixed(2)}×/px`,
+  gainPeak: (v) => `${(1 + v).toFixed(2)}× max`,
+};
+
+function updateControlOutput(key, value, digits, display) {
   const output = document.querySelector(`[data-value-for="${key}"]`);
   if (!output) return;
 
-  if (key === 'ambientWindDirectionDeg' || key === 'duneBandRotationDeg') {
-    output.textContent = `${Math.round(Number(value))}deg`;
+  const format = display ? CONTROL_OUTPUT_FORMATTERS[display] : null;
+  if (format) {
+    output.textContent = format(Number(value));
     return;
   }
 
@@ -2208,6 +2914,11 @@ function applyConfigFromUrlParams() {
   const curveRaw = params.get('backgroundPulseCurve');
   if (curveRaw !== null) {
     CONFIG.backgroundPulseCurve = serializePulseCurve(parsePulseCurve(curveRaw));
+  }
+
+  const pinnedRaw = params.get('pinnedControls');
+  if (pinnedRaw !== null) {
+    CONFIG.pinnedControls = pinnedRaw;
   }
 
   for (let i = 0; i < COLOR_PARAM_DEFS.length; i++) {
@@ -2286,6 +2997,13 @@ function syncUrlParamsFromConfig() {
   }
 
   params.set('backgroundPulseCurve', CONFIG.backgroundPulseCurve);
+
+  // Omitted rather than emitted empty, so an unused feature adds no URL noise.
+  if (CONFIG.pinnedControls) {
+    params.set('pinnedControls', CONFIG.pinnedControls);
+  } else {
+    params.delete('pinnedControls');
+  }
 
   for (let i = 0; i < COLOR_PARAM_DEFS.length; i++) {
     const def = COLOR_PARAM_DEFS[i];
@@ -2399,7 +3117,7 @@ function syncStandardControlInput(configKey) {
     input.checked = Boolean(CONFIG[configKey]);
   } else {
     input.value = String(CONFIG[configKey]);
-    updateControlOutput(configKey, CONFIG[configKey], def.digits);
+    updateControlOutput(configKey, CONFIG[configKey], def.digits, def.display);
   }
 }
 
@@ -3259,7 +3977,60 @@ function buildFrameCache(nowMs) {
   fc.curlRotCos = Math.cos(phi);
   fc.curlRotSin = Math.sin(phi);
   fc.curlDuneRibbon = constrain(CONFIG.curlDuneRibbon, 0, 1);
+  // Angle-calibrated divergence-free curl. Bounding the deflection off the wind
+  // cannot be done by clamping the curl's direction — a pointwise remap of the
+  // direction field puts the divergence straight back, which is the one thing
+  // this mode exists to avoid. But the resultant angle is already bounded by the
+  // magnitude ratio: with a uniform wind W and a curl term of magnitude C < W,
+  // the sum can never deflect further than asin(C / W). So solve for the gain
+  // instead of clamping the angle. The gain is a spatial constant, so the field
+  // stays exactly divergence-free and the bound still holds everywhere.
+  //
+  // The wind reference is the full ambientWindStrength, not the mix-attenuated
+  // term: the bound is a ratio, and letting flowFieldMix shrink the reference
+  // would collapse the whole field to nothing as it approaches 1. In this mode
+  // flowFieldMix and curlStrength do not apply — the deflection bound sets the
+  // curl amplitude, and ambientWindStrength sets the speed.
+  fc.curlAngleCalibrated = !!CONFIG.curlAngleCalibrated && !!CONFIG.curlDivergenceFree;
+  if (fc.curlAngleCalibrated) {
+    // 90deg is the ceiling: at C = W the resultant already reaches a right
+    // angle, and past that no gain bounds anything. Stop just short so the
+    // wind and curl can never cancel exactly and leave a direction-less point.
+    const deg = constrain(CONFIG.curlAngleRangeDeg, 0, 89);
+    // The ribbon multiplies the gain by (1 - r + r * duneMultiplier), which
+    // peaks above 1 because duneMultiplier reaches 1.2. Divide that peak out so
+    // the ribbon reshapes the field without letting it breach the bound.
+    const ribbonPeak = 1 + 0.2 * fc.curlDuneRibbon;
+    fc.curlCalibratedGain =
+      CONFIG.ambientWindStrength * Math.sin(radians(deg)) / (curlGradMax * ribbonPeak);
+  } else {
+    fc.curlCalibratedGain = 0;
+  }
+  // Ridge-attraction crest falloff, and the constant that renormalises it.
+  // At contrast 1 the product cos(w) * (1 - ridge01)^k peaks where
+  // sin(w) = -k / (1 + k); dividing by that peak holds the maximum pull at the
+  // no-falloff value, so k moves where the pull acts without changing how hard
+  // it pulls. Exact at contrast 1, close enough either side of it.
+  const ridgeFalloff = max(0, CONFIG.duneRidgeFalloff);
+  fc.ridgeFalloff = ridgeFalloff;
+  if (ridgeFalloff > 0) {
+    const u = -ridgeFalloff / (1 + ridgeFalloff);
+    const peak = Math.sqrt(1 - u * u) * pow((1 - u) * 0.5, ridgeFalloff);
+    fc.ridgeFalloffNorm = peak > 1e-6 ? 1 / peak : 1;
+  } else {
+    fc.ridgeFalloffNorm = 1;
+  }
   return fc;
+}
+
+// The band phase at a point, given its distance along and across the dune
+// axis. Shared by the force sampler and the debug overlay so the picture can
+// never drift from the field the particles actually feel. Callers derive
+// ridge01 = (fastSin(w) + 1) / 2 — 0 in the troughs, 1 on the crests — and the
+// force sampler also needs w itself for the ridge-attraction gradient.
+function duneWarpedAcross(along, across) {
+  return across / CONFIG.duneBandScale +
+    fastSin(along / CONFIG.duneAlongWarpScale) * CONFIG.duneWarpStrength;
 }
 
 function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
@@ -3271,9 +4042,7 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
     sampleY * frameCache.dunePerpY +
     frameCache.duneBandOffsetPx;
 
-  const warpedAcross =
-    across / CONFIG.duneBandScale +
-    fastSin(along / CONFIG.duneAlongWarpScale) * CONFIG.duneWarpStrength;
+  const warpedAcross = duneWarpedAcross(along, across);
   const ridge01 = (fastSin(warpedAcross) + 1) * 0.5;
   const duneMultiplier = CONFIG.enableDuneBands
     ? 0.25 + 0.95 * pow(ridge01, CONFIG.duneContrast)
@@ -3294,7 +4063,10 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
   // never opposes the wind head-on. The dune ridge value can scale the curl
   // amplitude so the banding structure survives inside the meanders.
   const mix = frameCache.flowFieldMix;
-  if (mix > 0) {
+  // Calibrated mode ignores flowFieldMix entirely, so it must not be gated by
+  // it either — otherwise mix 0 would be a hidden off switch for a control the
+  // panel greys out in this mode.
+  if (mix > 0 || frameCache.curlAngleCalibrated) {
     const inv = 1 - mix;
     if (CONFIG.curlDivergenceFree) {
       // Curl-noise flow from a scalar noise potential. The force is the
@@ -3319,11 +4091,21 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
       // aligned with the dune ridges. Unlike compressibility this keeps the
       // rotational direction, so it makes ribbons, not spiral vortex traps.
       const ribbon = frameCache.curlDuneRibbon;
-      const g = CONFIG.curlStrength * CURL_NOISE_GAIN * (1 - ribbon + ribbon * duneMultiplier);
+      const ribbonScale = 1 - ribbon + ribbon * duneMultiplier;
       const windUniformX = frameCache.windDirX * CONFIG.ambientWindStrength;
       const windUniformY = frameCache.windDirY * CONFIG.ambientWindStrength;
-      fx = windUniformX * inv + cvx * g * mix + frameCache.windPerpX * microAmp;
-      fy = windUniformY * inv + cvy * g * mix + frameCache.windPerpY * microAmp;
+      if (frameCache.curlAngleCalibrated) {
+        // Wind at full strength against a curl sized to the deflection bound.
+        // No mix term on either: the bound is the ratio between them, so
+        // attenuating the wind would let the curl swing past the limit.
+        const g = frameCache.curlCalibratedGain * ribbonScale;
+        fx = windUniformX + cvx * g + frameCache.windPerpX * microAmp;
+        fy = windUniformY + cvy * g + frameCache.windPerpY * microAmp;
+      } else {
+        const g = CONFIG.curlStrength * CURL_NOISE_GAIN * ribbonScale;
+        fx = windUniformX * inv + cvx * g * mix + frameCache.windPerpX * microAmp;
+        fy = windUniformY * inv + cvy * g * mix + frameCache.windPerpY * microAmp;
+      }
     } else {
       // Legacy angle-from-noise curl: noise sets the flow angle. Compressible —
       // tends to collect particles into filaments over time (see curl mode).
@@ -3337,6 +4119,47 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
       fx = fx * inv + fastSin(angle + HALF_PI) * curlAmp * mix;
       fy = fy * inv + fastSin(angle) * curlAmp * mix;
     }
+  }
+
+  // Ridge attraction: pull particles ACROSS the bands toward dune ridges while
+  // leaving along-band flow untouched. Converging onto a line makes ribbons;
+  // curlCompressibility converges onto points, which is why it makes vortices.
+  //
+  // The dune signal is analytic, so its gradient is too. dunePerp is
+  // perpendicular to duneDir, so stepping along it moves `across` and leaves
+  // `along` fixed — the derivative needs no extra samples, just the cosine
+  // partnering the sine already computed above:
+  //   ridge01 = (sin(w) + 1) / 2                  -> d/dw = cos(w) / 2
+  //   duneMultiplier = 0.25 + 0.95 * ridge01^c    -> d/dridge01 = 0.95c*ridge01^(c-1)
+  // Deliberately NOT divided by duneBandScale: the true spatial gradient shrinks
+  // as bands widen, which would silently weaken the effect every time that
+  // slider moves. Scaling by wind strength instead makes the control read as
+  // "fraction of the wind force pulling toward ridges" at any band scale.
+  const ridgePull = CONFIG.duneRidgeAttraction;
+  if (ridgePull > 0 && CONFIG.enableDuneBands) {
+    const contrast = CONFIG.duneContrast;
+    // ridge01 hits 0 in the troughs, where contrast < 1 sends
+    // ridge01^(contrast-1) to infinity — an unbounded pull at trough centres.
+    // The cap bounds that; it is inactive for contrast >= 1, where the peak
+    // gradient is 0.47-0.84 either way.
+    const shaped = contrast === 1
+      ? 1
+      : min(DUNE_RIDGE_SHAPE_CAP, pow(max(ridge01, 1e-3), contrast - 1));
+    const dMult = 0.95 * contrast * shaped * 0.5 * fastSin(warpedAcross + HALF_PI);
+    // Crest falloff. The raw gradient still pulls at ~60% of peak where the
+    // field reads 0.9 white, which packs particles into the ridge centre;
+    // scaling by (1 - signal)^k fades the pull out well before the crest so
+    // they ease onto the flank instead. Normalised so k only reshapes the
+    // profile — without it, sharpening the falloff would also quietly weaken
+    // the whole force and force a re-tune of Ridge Attraction.
+    let falloff = 1;
+    if (frameCache.ridgeFalloff > 0) {
+      const signal = contrast === 1 ? ridge01 : pow(ridge01, contrast);
+      falloff = pow(max(1 - signal, 0), frameCache.ridgeFalloff) * frameCache.ridgeFalloffNorm;
+    }
+    const pull = ridgePull * CONFIG.ambientWindStrength * DUNE_RIDGE_ATTRACTION_GAIN * falloff;
+    fx += frameCache.dunePerpX * dMult * pull;
+    fy += frameCache.dunePerpY * dMult * pull;
   }
 
   _duneWindResult.x = fx;
@@ -3750,12 +4573,18 @@ function renderParticles(dtFrames = 1) {
   const baseA = getCurrentParticleAlpha();
   const fgActive = Boolean(fgGraphics && CONFIG.enableForegroundLayer);
   const dualInkActive = Boolean(inkBGraphics && CONFIG.enableDualInkLayers);
-  // Colliders occupy the low indices, so the ink (ignorer) block is
-  // contiguous at the top — split it in half at its midpoint so render
-  // targets switch once, not per-particle.
-  const inkSplitIndex = Math.floor(
-    particles.length * (constrain(CONFIG.boxCollisionParticipantRatio, 0, 1) + 1) * 0.5
+  // Colliders occupy the low indices, so the ink block is contiguous at the
+  // top — split it in half at its midpoint so render targets switch once, not
+  // per-particle. Where the ink block starts depends on whether the foreground
+  // layer is there to take the colliders: with it off they fall through to the
+  // ink layers, so the split has to move down or canvas A gets twice B's share.
+  const collidersEndIndex = Math.floor(
+    particles.length * constrain(CONFIG.boxCollisionParticipantRatio, 0, 1)
   );
+  const inkStartIndex = fgActive ? collidersEndIndex : 0;
+  const inkSplitIndex = dualInkActive
+    ? Math.floor((inkStartIndex + particles.length) * 0.5)
+    : particles.length;
   const fgBaseA = clampColorByte(CONFIG.foregroundParticleAlpha);
   const minSpeed = max(0, getQualityValue('particleRenderMinSpeed'));
   const minSpeedRamp = max(0.02, minSpeed * 0.7);
@@ -3840,9 +4669,6 @@ function renderParticles(dtFrames = 1) {
       return;
     }
     const minSpeedAlphaRamp = constrain((speed - minSpeed) / minSpeedRamp, 0, 1);
-    const t = particleCount > 1 ? i / (particleCount - 1) : 0;
-    const renderAlphaWeight = lerp(1, tailAlphaWeight, t);
-    const renderWidthWeight = lerp(1, tailWidthWeight, t);
     const colorR = p.isBoosted ? boostedColor.r : baseR;
     const colorG = p.isBoosted ? boostedColor.g : baseG;
     const colorB = p.isBoosted ? boostedColor.b : baseB;
@@ -3863,6 +4689,30 @@ function renderParticles(dtFrames = 1) {
     } else {
       g = _mainRenderTarget;
     }
+    // Tail ramp, normalized within the target layer's own index range rather
+    // than the whole array. Ramping across the array would hand whichever
+    // layer owns the high indices (ink B) the entire dim, thin end of the
+    // ramp while A kept the bright end — the layers would drift apart in
+    // weight whenever adaptive quality pushed renderFraction below 1.
+    let rampStart;
+    let rampEnd;
+    if (isFgLayer) {
+      rampStart = 0;
+      rampEnd = collidersEndIndex;
+    } else if (g === inkBGraphics) {
+      rampStart = inkSplitIndex;
+      rampEnd = particleCount;
+    } else {
+      rampStart = inkStartIndex;
+      rampEnd = inkSplitIndex;
+    }
+    // Boosted particles are colliders wherever they sit in the array, so a
+    // boosted index can fall outside its layer's block — clamp rather than
+    // let the ramp run past its ends.
+    const rampSpan = rampEnd - rampStart;
+    const t = rampSpan > 1 ? constrain((i - rampStart) / (rampSpan - 1), 0, 1) : 0;
+    const renderAlphaWeight = lerp(1, tailAlphaWeight, t);
+    const renderWidthWeight = lerp(1, tailWidthWeight, t);
     if (g !== prevTarget) {
       prevStrokeR = prevStrokeG = prevStrokeB = prevStrokeA = -1;
       prevWeight = -1;

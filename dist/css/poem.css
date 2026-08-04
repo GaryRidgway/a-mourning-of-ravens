@@ -33,6 +33,26 @@ body {
   max-height: none;
 }
 
+#dune-debug-canvas {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100vw;
+  height: 100dvh;
+  z-index: 4;
+  pointer-events: none;
+}
+
+#flow-arrows-canvas {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100vw;
+  height: 100dvh;
+  z-index: 5;
+  pointer-events: none;
+}
+
 #flow-box-overlay {
   position: fixed;
   inset: 0;
@@ -310,6 +330,12 @@ body {
 
 #dune-controls .control-curve-row {
   display: block;
+  position: relative;
+}
+#dune-controls .control-curve-row > .control-pin {
+  position: absolute;
+  top: 0;
+  right: 0;
 }
 #dune-controls .control-curve-row .control-curve-label {
   display: block;
@@ -344,7 +370,9 @@ body {
 }
 
 #dune-controls .control-row > span {
+  grid-row: 1;
   grid-column: 1/3;
+  padding-right: 18px;
   opacity: 0.92;
 }
 
@@ -443,11 +471,232 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   margin-bottom: 10px;
+}
+
+#dune-controls .control-pin {
+  grid-row: 1;
+  grid-column: 1/3;
+  position: relative;
+  z-index: 1;
+  justify-self: end;
+  align-self: start;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #f4ecdd;
+  opacity: 0.35;
+  cursor: pointer;
+  transition: opacity 120ms ease, color 120ms ease;
+}
+#dune-controls .control-pin svg {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
+}
+#dune-controls .control-pin:hover {
+  opacity: 1;
+}
+#dune-controls .control-pin:focus-visible {
+  outline: 1px solid rgba(255, 228, 172, 0.7);
+  outline-offset: 1px;
+  opacity: 1;
+}
+
+#dune-controls .control-row.is-pinned > .control-pin,
+#dune-controls .control-ghost > .control-pin {
+  color: #6cf;
+  opacity: 1;
+}
+
+#dune-controls .control-drag {
+  display: none;
+  grid-row: 1;
+  grid-column: 1/3;
+  justify-self: end;
+  align-self: start;
+  margin-right: 18px;
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #f4ecdd;
+  opacity: 0.35;
+  cursor: grab;
+  transition: opacity 120ms ease;
+}
+#dune-controls .control-drag svg {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
+}
+#dune-controls .control-drag:hover {
+  opacity: 1;
+}
+#dune-controls .control-drag:focus-visible {
+  outline: 1px solid rgba(255, 228, 172, 0.7);
+  outline-offset: 1px;
+  opacity: 1;
+}
+#dune-controls .control-drag:active {
+  cursor: grabbing;
+}
+
+#dune-controls .control-row.is-pinned > .control-drag {
+  display: inline-flex;
+}
+
+#dune-controls .control-row.is-pinned > span {
+  padding-right: 36px;
+}
+
+#dune-controls .control-toggle > .control-drag {
+  margin-right: 0;
+}
+
+#dune-controls .control-toggle.is-pinned > span {
+  padding-right: 0;
+}
+
+#dune-controls .control-curve-row > .control-drag {
+  position: absolute;
+  top: 0;
+  right: 18px;
+  margin-right: 0;
+}
+
+#dune-controls .control-row.is-dragging {
+  opacity: 0.5;
+  outline: 1px dashed rgba(102, 204, 255, 0.7);
+  outline-offset: 2px;
+}
+
+#dune-controls .control-ghost {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  opacity: 0.45;
+  font-style: italic;
+  cursor: pointer;
+}
+#dune-controls .control-ghost > span {
+  flex: 1;
+  min-width: 0;
+}
+#dune-controls .control-ghost:hover {
+  opacity: 0.75;
+}
+
+#dune-controls .control-hint {
+  opacity: 0.65;
+  font-size: 0.85em;
+  line-height: 1.35;
+}
+
+#dune-controls .curve-point-list {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+#dune-controls .curve-point-head,
+#dune-controls .curve-point-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1fr) 22px;
+  gap: 6px;
+  align-items: center;
+}
+
+#dune-controls .curve-point-head {
+  margin-bottom: 4px;
+  opacity: 0.6;
+  font-size: 0.85em;
+}
+#dune-controls .curve-point-head > span:not(:first-child) {
+  padding-left: 6px;
+}
+
+#dune-controls .curve-point-row > span {
+  opacity: 0.55;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+#dune-controls .curve-point-row input[type=number] {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid rgba(245, 222, 179, 0.25);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #ffe4ac;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+#dune-controls .curve-point-row input[type=number]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+#dune-controls .curve-point-row input[type=number]:focus-visible {
+  outline: 1px solid rgba(255, 228, 172, 0.7);
+  outline-offset: 1px;
+}
+
+#dune-controls .control-row:has(> input:disabled) {
+  cursor: not-allowed;
+}
+#dune-controls .control-row:has(> input:disabled) > span,
+#dune-controls .control-row:has(> input:disabled) > input,
+#dune-controls .control-row:has(> input:disabled) > output {
+  opacity: 0.4;
+}
+
+#dune-controls .curve-point-remove {
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(245, 222, 179, 0.25);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #ffe4ac;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+#dune-controls .curve-point-remove:hover:not(:disabled) {
+  border-color: rgba(255, 150, 130, 0.8);
+  color: #ff9682;
+}
+#dune-controls .curve-point-remove:disabled {
+  visibility: hidden;
+}
+#dune-controls .curve-point-remove:focus-visible {
+  outline: 1px solid rgba(255, 228, 172, 0.7);
+  outline-offset: 1px;
 }
 
 #dune-controls .control-toggle > span {
   grid-column: auto;
+  flex: 1;
+  min-width: 0;
+  padding-right: 0;
 }
 
 #dune-controls .control-notice {
@@ -541,3 +790,5 @@ body {
 #simulation-pause-toggle.is-paused .pause-icon::after {
   display: none;
 }
+
+/*# sourceMappingURL=poem.css.map */

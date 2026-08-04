@@ -4,48 +4,72 @@ const CONFIG = {
   autoRenderScaleThresholdPx: 1080,
   particleSize: 0.25,
   particleSizeRandomNegative: 0,
-  particleSizeRandomPositive: 0.64,
+  particleSizeRandomPositive: 0.42,
   boxCollisionParticipantRatio: 0.35,
   enableForegroundLayer: true,
   showBackgroundCanvas: true,
   showBackgroundCanvasB: true,
-  showForegroundCanvas: true,
+  showForegroundCanvas: false,
   enableDualInkLayers: true,
   inkLayerPhaseOffset: 0.5,
-  foregroundTrailAlpha: 30,
-  foregroundParticleAlpha: 160,
+  foregroundTrailAlpha: 12,
+  foregroundParticleAlpha: 91,
   particleRenderMinSpeed: 0,
-  particleSpeedAlphaBoost: 1.2,
-  particleDuneAlphaBoost: 2.2,
-  particleDuneSizeBoost: 1.87,
-  particleSpeedWidthBoost: 1.17,
+  particleSpeedAlphaBoost: 0,
+  particleDuneAlphaBoost: 0,
+  particleDuneSizeBoost: 0,
+  particleSpeedWidthBoost: 0.5,
   particleRenderFraction: 1,
   enableAmbientMotion: true,
   enableDuneBands: true,
-  ambientWindDirectionDeg: 42,
-  ambientWindStrength: 0.069,
-  duneBandRotationDeg: 135,
-  duneBandScale: 100,
-  duneBandOffsetPx: 0,
-  duneAlongWarpScale: 316,
-  duneWarpStrength: 1.5,
+  // Greyscale picture of the dune signal over the whole scene, for finding the
+  // ridges by eye when the particles alone are too sparse to read.
+  showDuneDebugLayer: false,
+  // Kept below 1 by default so the particles stay visible through the field —
+  // reading the two together is the point of drawing it on top.
+  duneDebugOpacity: 0.15,
+  // Quiver plot of the total flow field, coloured by wind alignment. Reads the
+  // curl's eddy size and any upwind pockets straight off the screen.
+  showFlowArrows: false,
+  flowArrowSpacing: 32,
+  flowArrowOpacity: 0.85,
+  ambientWindDirectionDeg: 30,
+  ambientWindStrength: 0.112,
+  duneBandRotationDeg: 30,
+  duneBandScale: 76,
+  duneBandOffsetPx: -103,
+  duneAlongWarpScale: 306,
+  duneWarpStrength: 3.12,
   duneContrast: 1,
-  duneDriftSpeed: 0.1,
-  microNoiseScale: 596,
-  microTurbulenceStrength: 0.014,
-  flowFieldMix: 0.87,
-  curlStrength: 0.07,
-  curlNoiseScale: 300,
-  curlAngleRangeDeg: 180,
-  curlDriftSpeed: 0.02,
-  curlDuneModulation: 1,
+  duneDriftSpeed: 0.05,
+  microNoiseScale: 403,
+  microTurbulenceStrength: 0.068,
+  flowFieldMix: 0.68,
+  curlStrength: 0.04,
+  curlNoiseScale: 151,
+  curlAngleRangeDeg: 93,
+  curlDriftSpeed: 0,
+  curlDuneModulation: 0.8,
   equalizeNoiseTexture: true,
-  curlDivergenceFree: true,
+  curlDivergenceFree: false,
+  // Size the divergence-free curl so the flow can never bend further off the
+  // wind than curlAngleRangeDeg, giving that control the same meaning it has in
+  // the legacy curl mode. Replaces curlStrength and flowFieldMix while on.
+  // Off by default: it rescales the field, so URLs tuned before it existed keep
+  // the look they were saved with.
+  curlAngleCalibrated: false,
   curlCompressibility: 0,
   curlDuneRibbon: 0,
-  respawnRandomizeVelocity: 0,
-  perParticleForceMultMax: 2,
-  perParticleVelMultMax: 1,
+  // Pull across the bands toward dune ridges, as a fraction of wind strength.
+  // 1-D convergence, so it forms ribbons instead of the point sinks that
+  // curlCompressibility creates.
+  duneRidgeAttraction: 0.235,
+  // Exponent on (1 - dune signal) applied to the ridge pull, fading it out as
+  // the field approaches white. 0 = the raw gradient.
+  duneRidgeFalloff: 4,
+  respawnRandomizeVelocity: 2,
+  perParticleForceMultMax: 1.29,
+  perParticleVelMultMax: 3,
   windBoostParticleRatio: 0.019,
   windBoostSizeMultiplier: 0.42,
   windBoostAlphaMultiplier: 60,
@@ -63,7 +87,7 @@ const CONFIG = {
   boidWindBlend: 0.45,
   boidMaxGroupSize: 4,
   boidDispersalStrength: 2.13,
-  enableWordShadow: true,
+  enableWordShadow: false,
   wordShadowBlur: 10,
   wordShadowOpacity: 0.85,
   enableBoxInkErase: false,
@@ -85,7 +109,7 @@ const CONFIG = {
   edgeRespawnWeightStrength: 0.45,
   edgeRespawnWeightExponent: 2,
   useWeightedEdgeRespawn: false,
-  edgeRespawnWeightedMixPercent: 0,
+  edgeRespawnWeightedMixPercent: 22,
   enableParticleSeparation: true,
   particleCollisionRadius: 0.65,
   particleCollisionStrength: 0.64,
@@ -109,16 +133,30 @@ const CONFIG = {
   separationZoneAlpha: 0,
   damping: 0.86,
   maxSpeed: 1.7,
-  trailAlpha: 0,
+  trailAlpha: 1,
   autoScrollSpeed: 0.1,
   wordOffsetX: -2,
   wordOffsetY: 0,
   scrollFreezeDebounceMs: 50,
   scrollFreezeFadeInMs: 1960,
-  backgroundPulsePeriodSec: 18,
+  backgroundPulsePeriodSec: 30.7,
   // Phase→strength keyframes 'x,y|x,y|…' (both 0..1), monotone-cubic sampled.
   // y maps directly to fade alpha: 1.0 = full 255 wipe.
-  backgroundPulseCurve: '0.000,0.000|0.330,0.000|0.774,0.170|0.880,0.078|1.000,0.000',
+  backgroundPulseCurve:
+    '0.000,0.000|0.200,0.000|0.390,0.130|0.500,0.174|0.598,0.060|0.800,0.000|1.000,0.000',
+  // Editor-only vertical zoom: alpha value at the top of the curve canvas.
+  // Stored keyframes keep their real 0..1 alpha meaning — this just spreads
+  // the useful low range across the full canvas height for finer dragging.
+  backgroundPulseCurveMaxY: 0.3,
+  // Control rows lifted into the panel's Pinned section, in pin order.
+  // Dot-separated ids of the form <ns>-<name>, where ns is k (data-key),
+  // c (data-color-key), a (data-color-alpha-key) or i (element id). Dot and
+  // dash are the only punctuation URLSearchParams leaves unescaped, which is
+  // why the ids read cleanly in a shared URL.
+  pinnedControls:
+    'k-flowFieldMix.k-duneRidgeAttraction.k-duneRidgeFalloff.k-curlDuneRibbon.c-particles.' +
+    'a-particles.a-fade.i-pulse-curve-canvas.k-curlAngleRangeDeg.k-curlNoiseScale.' +
+    'k-curlDriftSpeed.k-ambientWindStrength.k-microTurbulenceStrength.k-microNoiseScale',
   collisionEjectPadding: 0.02,
   turbulenceStrength: 0.5,
   wakeDragStrength: 0.5,
