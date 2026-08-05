@@ -1865,6 +1865,12 @@ function setupDuneControls() {
     edgeRespawnMixInput.disabled = Boolean(CONFIG.useWeightedEdgeRespawn);
   };
 
+  const constantInkExponentInput = panel.querySelector('[data-key="constantInkExponent"]');
+  const syncConstantInkDisabledState = () => {
+    if (!constantInkExponentInput) return;
+    constantInkExponentInput.disabled = !CONFIG.enableConstantInk;
+  };
+
   // The two curl modes read different controls, and calibration changes which
   // ones again, so which sliders are live is a three-way question. Grey out the
   // ones the active combination ignores rather than leaving them looking
@@ -1982,6 +1988,9 @@ function setupDuneControls() {
       if (def.key === 'useWeightedEdgeRespawn') {
         syncEdgeRespawnMixDisabledState();
       }
+      if (def.key === 'enableConstantInk') {
+        syncConstantInkDisabledState();
+      }
       if (def.key === 'curlDivergenceFree' || def.key === 'curlAngleCalibrated') {
         syncCurlModeDisabledState();
       }
@@ -1994,6 +2003,7 @@ function setupDuneControls() {
   }
   syncEdgeRespawnMixDisabledState();
   syncCurlModeDisabledState();
+  syncConstantInkDisabledState();
 
   bindColorControls(panel);
   bindColorAlphaControls(panel);
@@ -3472,6 +3482,14 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
   const safeDtFrames = max(0, dtFrames);
   const damping = pow(CONFIG.damping, safeDtFrames);
   const boidEnabled = CONFIG.enableBoidFlocking;
+  // Only the particles that actually reach the foreground layer get the
+  // multiplier, so this mirrors renderParticles' isFgLayer test rather than
+  // reading ignoresBoxCollision on its own. Resolved to 1 when it would be a
+  // no-op, which keeps the hot loop down to one multiply and no branch.
+  const fgWindMult = CONFIG.enableForegroundLayer
+    ? max(0, CONFIG.foregroundWindMultiplier)
+    : 1;
+  const fgWindMultActive = fgWindMult !== 1;
   if (boidEnabled) {
     buildBoidGrid();
     applyBoidAccelerations();
@@ -3491,8 +3509,11 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
         frameCache,
         particle.turbulenceBoostMultiplier
       );
-      accX += ambient.x * particle.windBoostMultiplier * particle.forceMult;
-      accY += ambient.y * particle.windBoostMultiplier * particle.forceMult;
+      const windMult = fgWindMultActive && !particle.ignoresBoxCollision
+        ? particle.windBoostMultiplier * fgWindMult
+        : particle.windBoostMultiplier;
+      accX += ambient.x * windMult * particle.forceMult;
+      accY += ambient.y * windMult * particle.forceMult;
       particle.duneAlphaSignal = ambient.duneSignal;
     } else {
       particle.duneAlphaSignal = 0;
@@ -4592,6 +4613,8 @@ function renderParticles(dtFrames = 1) {
   const duneAlphaBoost = max(0, CONFIG.particleDuneAlphaBoost);
   const duneSizeBoost = max(0, CONFIG.particleDuneSizeBoost);
   const widthBoost = max(0, CONFIG.particleSpeedWidthBoost);
+  const constantInk = Boolean(CONFIG.enableConstantInk);
+  const inkExponent = max(0, CONFIG.constantInkExponent);
   const renderFraction = constrain(getQualityValue('particleRenderFraction'), 0.01, 1);
   const tailAlphaWeight = renderFraction;
   const tailWidthWeight = max(0.2, sqrt(renderFraction));
@@ -4718,10 +4741,6 @@ function renderParticles(dtFrames = 1) {
       prevWeight = -1;
       prevTarget = g;
     }
-    // Compute the normal alpha, then multiply by scroll fade factor.
-    const normalAlpha = (isFgLayer ? fgBaseA : baseA) * renderAlphaWeight * minSpeedAlphaRamp * (1 + alphaBoost * (speedFactor - 1)) * duneAlphaFactor + fastAlphaAdd;
-    const alpha = Math.round(constrain(normalAlpha * scrollFadeFactor, 0, 255));
-    const alphaPercent = alpha/255;
     // Quantize weight to nearest 0.25px to reduce unique state transitions.
     const weight = Math.max(
       0.5,
@@ -4733,6 +4752,31 @@ function renderParticles(dtFrames = 1) {
         duneSizeFactor * 4
       ) * 0.25
     );
+    // Constant ink: divide the alpha by however much wider this stroke came out
+    // than a base-size one would have in the same tail slot, so widening a
+    // particle spreads its ink rather than adding more. Measured against the
+    // rendered weight, not the nominal one, so the 0.5px floor and the 0.25px
+    // quantize can't leave the compensation chasing a width nothing drew — at
+    // small Particle Size most strokes sit on the floor and want no correction
+    // at all. renderWidthWeight is in both terms so it cancels, leaving the tail
+    // ramp's own fade intact instead of being compensated away.
+    let inkScale = 1;
+    if (constantInk && inkExponent > 0) {
+      const refWeight = Math.max(0.5, Math.round(CONFIG.particleSize * renderWidthWeight * 4) * 0.25);
+      if (weight !== refWeight) {
+        // Every stroke alpha below is handed to the canvas as `a * alphaPercent`
+        // with alphaPercent = alpha/255, so the ink a segment lays goes as the
+        // square of the number computed here. Halve the exponent so the control
+        // means what it says about deposited ink rather than about this local.
+        inkScale = Math.pow(refWeight / weight, inkExponent * 0.5);
+      }
+    }
+    // Compute the normal alpha, then multiply by scroll fade factor. The flat
+    // boosted-particle add stays outside inkScale: it exists to make those
+    // particles pop, and they run narrow, so normalizing it would blow it out.
+    const normalAlpha = (isFgLayer ? fgBaseA : baseA) * renderAlphaWeight * minSpeedAlphaRamp * (1 + alphaBoost * (speedFactor - 1)) * duneAlphaFactor * inkScale + fastAlphaAdd;
+    const alpha = Math.round(constrain(normalAlpha * scrollFadeFactor, 0, 255));
+    const alphaPercent = alpha/255;
     const segment = clampRenderedSegment(
       p.displayX,
       p.displayY,

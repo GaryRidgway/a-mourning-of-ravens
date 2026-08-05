@@ -219,6 +219,17 @@
             <input type="range" min="0" max="4" step="0.01" data-key="particleSpeedWidthBoost" />
             <output data-value-for="particleSpeedWidthBoost"></output>
           </label>
+
+          <label class="control-row control-toggle">
+            <span>Constant Ink</span>
+            <input type="checkbox" data-key="enableConstantInk" />
+          </label>
+
+          <label class="control-row">
+            <span>Constant Ink Exponent</span>
+            <input type="range" min="0" max="4" step="0.05" data-key="constantInkExponent" />
+            <output data-value-for="constantInkExponent"></output>
+          </label>
         </details>
 
         <details class="control-group control-subgroup">
@@ -697,6 +708,11 @@
           <span>Foreground Alpha</span>
           <input type="range" min="0" max="255" step="1" data-key="foregroundParticleAlpha" />
           <output data-value-for="foregroundParticleAlpha"></output>
+        </label>
+        <label class="control-row">
+          <span>Foreground Wind Mult</span>
+          <input type="range" min="0" max="4" step="0.01" data-key="foregroundWindMultiplier" />
+          <output data-value-for="foregroundWindMultiplier"></output>
         </label>
 
         <details class="control-group control-subgroup">

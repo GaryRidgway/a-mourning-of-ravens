@@ -14,6 +14,7 @@ const CONTROL_PARAM_DEFS = [
   { key: 'inkLayerPhaseOffset', type: 'number', digits: 2 },
   { key: 'foregroundTrailAlpha', type: 'number', digits: 0 },
   { key: 'foregroundParticleAlpha', type: 'number', digits: 0 },
+  { key: 'foregroundWindMultiplier', type: 'number', digits: 2 },
   { key: 'particleRenderMinSpeed', type: 'number', digits: 2 },
   // display: readout format only — the stored value stays the raw coefficient.
   // These four are gains applied as (1 + boost * signal), so the panel shows
@@ -22,6 +23,8 @@ const CONTROL_PARAM_DEFS = [
   { key: 'particleDuneAlphaBoost', type: 'number', digits: 2, display: 'gainPeak' },
   { key: 'particleDuneSizeBoost', type: 'number', digits: 2, display: 'gainPeak' },
   { key: 'particleSpeedWidthBoost', type: 'number', digits: 2, display: 'gainPerSpeed' },
+  { key: 'enableConstantInk', type: 'bool' },
+  { key: 'constantInkExponent', type: 'number', digits: 2 },
   { key: 'particleRenderFraction', type: 'number', digits: 2 },
   { key: 'enableAdaptiveQuality', type: 'bool' },
   { key: 'lockQualityTier', type: 'bool' },

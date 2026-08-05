@@ -14,11 +14,28 @@ const CONFIG = {
   inkLayerPhaseOffset: 0.5,
   foregroundTrailAlpha: 12,
   foregroundParticleAlpha: 91,
+  // Scales the whole flow force on foreground-layer particles — the word
+  // colliders — so the two layers can drift at different speeds. Multiplies the
+  // same sampled vector windBoostMultiplier does, so direction is untouched and
+  // curl, turbulence and ridge pull scale with the wind. Gated on
+  // enableForegroundLayer: with the layer off there is no foreground to single
+  // out, and those particles fall through to the ink canvases. 1 = off.
+  foregroundWindMultiplier: 1,
   particleRenderMinSpeed: 0,
   particleSpeedAlphaBoost: 0,
   particleDuneAlphaBoost: 0,
   particleDuneSizeBoost: 0,
   particleSpeedWidthBoost: 0.5,
+  // Hold each particle's ink deposit constant as the size boosts widen it:
+  // alpha is divided by (rendered width / base width) ^ constantInkExponent, so
+  // a fat stroke spreads the same ink thinner instead of laying proportionally
+  // more. Works both ways — strokes narrower than the base get brighter.
+  enableConstantInk: false,
+  // 2 treats a particle as a disc, which is the strict reading of "same ink":
+  // area goes as r², so alpha goes as 1/r². 1 matches the capsule a stroked
+  // segment actually paints, where area is width × length and alpha goes as
+  // 1/w. Use 2 for the literal answer, 1 for the one the canvas draws.
+  constantInkExponent: 2,
   particleRenderFraction: 1,
   enableAmbientMotion: true,
   enableDuneBands: true,
