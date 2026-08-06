@@ -5,32 +5,32 @@ const CONFIG = {
   particleSize: 0.25,
   particleSizeRandomNegative: 0,
   particleSizeRandomPositive: 0.42,
-  boxCollisionParticipantRatio: 0.35,
+  boxCollisionParticipantRatio: 0.33,
   enableForegroundLayer: true,
   showBackgroundCanvas: true,
   showBackgroundCanvasB: true,
-  showForegroundCanvas: false,
+  showForegroundCanvas: true,
   enableDualInkLayers: true,
   inkLayerPhaseOffset: 0.5,
-  foregroundTrailAlpha: 12,
-  foregroundParticleAlpha: 91,
+  foregroundTrailAlpha: 36,
+  foregroundParticleAlpha: 138,
   // Scales the whole flow force on foreground-layer particles — the word
   // colliders — so the two layers can drift at different speeds. Multiplies the
   // same sampled vector windBoostMultiplier does, so direction is untouched and
   // curl, turbulence and ridge pull scale with the wind. Gated on
   // enableForegroundLayer: with the layer off there is no foreground to single
   // out, and those particles fall through to the ink canvases. 1 = off.
-  foregroundWindMultiplier: 1,
+  foregroundWindMultiplier: 0.08,
   particleRenderMinSpeed: 0,
   particleSpeedAlphaBoost: 0,
-  particleDuneAlphaBoost: 0,
-  particleDuneSizeBoost: 0,
+  particleDuneAlphaBoost: 0.09,
+  particleDuneSizeBoost: 2,
   particleSpeedWidthBoost: 0.5,
   // Hold each particle's ink deposit constant as the size boosts widen it:
   // alpha is divided by (rendered width / base width) ^ constantInkExponent, so
   // a fat stroke spreads the same ink thinner instead of laying proportionally
   // more. Works both ways — strokes narrower than the base get brighter.
-  enableConstantInk: false,
+  enableConstantInk: true,
   // 2 treats a particle as a disc, which is the strict reading of "same ink":
   // area goes as r², so alpha goes as 1/r². 1 matches the capsule a stroked
   // segment actually paints, where area is width × length and alpha goes as
@@ -87,13 +87,13 @@ const CONFIG = {
   respawnRandomizeVelocity: 2,
   perParticleForceMultMax: 1.29,
   perParticleVelMultMax: 3,
-  windBoostParticleRatio: 0.019,
+  windBoostParticleRatio: 0,
   windBoostSizeMultiplier: 0.42,
-  windBoostAlphaMultiplier: 60,
-  windBoostMinMultiplier: 5,
-  windBoostMaxMultiplier: 10,
-  windBoostTurbulenceMinMultiplier: 4,
-  windBoostTurbulenceMaxMultiplier: 8,
+  windBoostAlphaMultiplier: 0,
+  windBoostMinMultiplier: 17.4,
+  windBoostMaxMultiplier: 30,
+  windBoostTurbulenceMinMultiplier: 20,
+  windBoostTurbulenceMaxMultiplier: 30,
   enableBoidFlocking: true,
   boidNeighborRadius: 15,
   boidSeparationRadius: 7,
@@ -105,35 +105,35 @@ const CONFIG = {
   boidMaxGroupSize: 4,
   boidDispersalStrength: 2.13,
   enableWordShadow: false,
-  wordShadowBlur: 10,
-  wordShadowOpacity: 0.85,
+  wordShadowBlur: 9,
+  wordShadowOpacity: 1,
   enableBoxInkErase: false,
   boxInkEraseAlpha: 50,
-  boxInkErasePadding: 3,
-  boxInkEraseSoftness: 10,
+  boxInkErasePadding: 0,
+  boxInkEraseSoftness: 0,
   enableBoxGlow: true,
   boxGlowRadius: 2,
-  boxGlowHaloSize: 1.5,
-  boxGlowHaloAlpha: 25,
-  boxGlowCoreWhite: 1,
-  boxGlowCoreDiameter: 1.4,
-  boxGlowFadeDelayMs: 1000,
-  boxGlowFadeDurationMs: 1000,
+  boxGlowHaloSize: 1,
+  boxGlowHaloAlpha: 44,
+  boxGlowCoreWhite: 0.91,
+  boxGlowCoreDiameter: 1.9,
+  boxGlowFadeDelayMs: 500,
+  boxGlowFadeDurationMs: 990,
   // Ember flicker: modulates the glow with per-particle 1D Perlin so lit
   // particles breathe independently instead of holding a flat value. It drives
   // halo alpha, core alpha and core width — brightness and size — but never the
   // color blend, so an ember dims and narrows without drifting back toward the
   // base particle color mid-flicker. Purely subtractive, so depth 0 is a
   // bit-exact no-op and it can never overshoot the un-flickered look.
-  enableGlowFlicker: false,
+  enableGlowFlicker: true,
   // Fraction of the glow the flicker is allowed to take away at its lowest.
   // 1 lets embers wink fully out at the trough; mean brightness drops as this
   // rises, so expect to raise Core Alpha to compensate.
-  glowFlickerDepth: 0.55,
+  glowFlickerDepth: 0.63,
   // Noise units traversed per second. Perlin features run about one unit wide,
   // so ~1 is a slow breath and ~10 reads as sparks. Deposited ink beads at the
   // high end, since a flickering particle lays a dashed trail, not a smooth one.
-  glowFlickerSpeed: 1.2,
+  glowFlickerSpeed: 2.9,
   glowBlendOklch: true,
   glowBlendChromaFloor: 0.404,
   glowBlendHueShift: 0,
@@ -183,9 +183,10 @@ const CONFIG = {
   // dash are the only punctuation URLSearchParams leaves unescaped, which is
   // why the ids read cleanly in a shared URL.
   pinnedControls:
-    'k-flowFieldMix.k-duneRidgeAttraction.k-duneRidgeFalloff.k-curlDuneRibbon.c-particles.' +
-    'a-particles.a-fade.i-pulse-curve-canvas.k-curlAngleRangeDeg.k-curlNoiseScale.' +
-    'k-curlDriftSpeed.k-ambientWindStrength.k-microTurbulenceStrength.k-microNoiseScale',
+    'k-boxCollisionParticipantRatio.c-boxGlowCore.a-boxGlowCore.k-boxGlowCoreDiameter.' +
+    'k-boxGlowFadeDelayMs.k-boxGlowFadeDurationMs.k-foregroundParticleAlpha.' +
+    'k-foregroundTrailAlpha.k-foregroundWindMultiplier.k-enableGlowFlicker.' +
+    'k-glowFlickerDepth.k-glowFlickerSpeed.k-boxGlowHaloAlpha.k-boxGlowCoreWhite',
   collisionEjectPadding: 0.02,
   turbulenceStrength: 0.5,
   wakeDragStrength: 0.5,

@@ -5,7 +5,7 @@ const RENDER_COLORS = {
   separationZone: [130, 175, 235],
   boxStrokeIdle: [200, 200, 180, 0],
   boxStrokeDragged: [250, 230, 190, 0],
-  boxGlowCore: [209, 0, 0, 70],
+  boxGlowCore: [255, 166, 41, 226],
 };
 
 const RENDER_COLORS_DEFAULTS = {};

@@ -10,7 +10,9 @@
     "sass-prod": "sass --no-source-map --style=compressed ./src/scss/:./dist/css",
     "jsdoc": "./node_modules/.bin/jsdoc",
     "build": "npm run compile:sass & npm run minify:jsf",
-    "watch": "npm run build && node server.js"
+    "watch": "npm run build && node server.js",
+    "build:show": "node tools/build-show.js",
+    "check:show": "node tools/build-show.js --check"
   },
   "repository": {
     "type": "git",
