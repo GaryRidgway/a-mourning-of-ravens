@@ -149,9 +149,6 @@ const CONFIG = {
   separationEveryNFrames: 4,
   maxSeparationPairsPerTick: 70000,
   maxSeparationCandidatesPerCell: 24,
-  enableAdaptiveSeparationCadence: false,
-  adaptiveTargetFrameMs: 16.7,
-  adaptiveCadenceMax: 8,
   separationNearBoxRadius: 20,
   separationMinSpeed: 1,
   staticInfluenceForwardDotMin: 0.22,
@@ -202,11 +199,31 @@ const CONFIG = {
   boxStationarySpeedThreshold: 0.12,
   showBoxes: true,
   enableAdaptiveQuality: true,
-  lockQualityTier: false,
+  lockQualityLevel: false,
   qualityTargetFps: 30,
-  qualityDecisionWindowMs: 1200,
-  qualityCooldownMs: 900,
-  qualityTransitionMs: 700,
+  // How fast the quality level falls when frames overrun the budget, in level
+  // units per second per unit of fractional error — so at 1.2, frames taking
+  // twice their budget (error 1.0) sweep the whole 0..1 range in under a
+  // second, while frames a few percent over barely move at all. The rate being
+  // proportional to the error is what keeps the controller from overshooting
+  // near equilibrium: as it approaches the budget, it slows to a stop.
+  qualityDegradeRate: 1.2,
+  // The same, for climbing back toward full quality. Deliberately several times
+  // slower than the degrade rate — recovery is the direction that re-triggers
+  // the stutter, so it should creep rather than snap back and pump.
+  qualityRecoverRate: 0.2,
+  // Fractional overshoot tolerated before quality starts dropping: 0.06 means
+  // frames may run 6% over budget without provoking a response. Applies to the
+  // degrade direction only. Recovery has no deadband on purpose — a display
+  // pinned by vsync can sit a hair under target forever, and a symmetric
+  // deadband would strand the piece at reduced quality on a machine that has
+  // headroom to spare. Proportional rate already stops recovery at zero error.
+  qualityDeadband: 0.06,
+  // Jitter filter on the effective values, not the source of the motion — the
+  // level itself now moves continuously. Kept short because this is a second
+  // lag inside the control loop, and stacking lags is how a controller starts
+  // to oscillate.
+  qualityTransitionMs: 150,
   qualityHudEnabled: true,
   pauseSimulation: false,
 };

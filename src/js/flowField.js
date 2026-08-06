@@ -272,8 +272,6 @@ let draggedBoxIndex = -1;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
 let controlsBound = false;
-let dynamicSeparationEveryNFrames = CONFIG.separationEveryNFrames;
-let lastDrawTimeMs = 0;
 let manualScrollActive = false;
 let scrollJustEnded = false;
 const separationActiveIndices = [];
@@ -289,7 +287,14 @@ const QUALITY_BASELINE_KEYS = [
   'maxSeparationCandidatesPerCell',
   'separationEveryNFrames',
 ];
-const QUALITY_TIER_SETTINGS = [
+// Interpolation nodes for the quality curve, not discrete states. The
+// controller's level is a float in 0..1 that samples across these, so every
+// point between two nodes is a reachable operating point. That is the whole
+// difference from the old tier system: with only five reachable states, one
+// step changed the workload by more than the controller's own tolerance band,
+// so a machine whose true break-even fell between two of them could never
+// settle and ping-ponged instead, visibly pulsing the particle density.
+const QUALITY_CURVE = [
   { renderFractionMul: 1, minSpeedAdd: 0, pairMul: 1, candidateMul: 1, sepEveryAdd: 0 },
   { renderFractionMul: 0.86, minSpeedAdd: 0.03, pairMul: 0.85, candidateMul: 0.9, sepEveryAdd: 0 },
   { renderFractionMul: 0.7, minSpeedAdd: 0.08, pairMul: 0.68, candidateMul: 0.75, sepEveryAdd: 1 },
@@ -297,12 +302,12 @@ const QUALITY_TIER_SETTINGS = [
   { renderFractionMul: 0.4, minSpeedAdd: 0.18, pairMul: 0.38, candidateMul: 0.48, sepEveryAdd: 3 },
 ];
 const qualityState = {
-  tier: 0,
+  // 0 = full quality, 1 = maximum degradation. This is the integral of the
+  // frame-time error, which is why it converges: once frame time reaches the
+  // budget the error is zero and the level simply stops moving.
+  level: 0,
   avgFrameMs: 16.7,
   lastFrameMs: null,
-  badMsAccum: 0,
-  goodMsAccum: 0,
-  lastTierChangeMs: 0,
   baseline: {},
   target: {},
   effective: {},
@@ -320,7 +325,6 @@ let simLastFrameMs = null;
 let simTimeMs = 0;
 let simStepCount = 0;
 let simRenderAlpha = 1;
-let lastSeparationCadenceAdjustMs = 0;
 
 applyConfigFromUrlParams();
 
@@ -336,7 +340,7 @@ function initQualityManager() {
     const key = QUALITY_BASELINE_KEYS[i];
     qualityState.baseline[key] = CONFIG[key];
   }
-  applyQualityTier(0, true);
+  applyQualityLevel(0, true);
   window.__mournQuality = qualityState;
 }
 
@@ -451,34 +455,47 @@ function updateQualityBaseline(key, value) {
     return;
   }
   qualityState.baseline[key] = value;
-  applyQualityTier(qualityState.tier);
+  applyQualityLevel(qualityState.level);
 }
 
-function applyQualityTier(tier, snap = false) {
-  const clampedTier = constrain(tier, 0, QUALITY_TIER_SETTINGS.length - 1);
-  const settings = QUALITY_TIER_SETTINGS[clampedTier];
+function applyQualityLevel(level, snap = false) {
+  const clamped = constrain(level, 0, 1);
+  qualityState.level = clamped;
+
+  // Sample the curve piecewise-linearly. At level 1 the index lands exactly on
+  // the last node, hence clamping the lower index one short of the end.
+  const span = QUALITY_CURVE.length - 1;
+  const pos = clamped * span;
+  const i0 = min(floor(pos), span - 1);
+  const t = pos - i0;
+  const lo = QUALITY_CURVE[i0];
+  const hi = QUALITY_CURVE[i0 + 1];
+  const at = (key) => lo[key] + (hi[key] - lo[key]) * t;
+
+  // Targets stay fractional. Flooring here would re-quantize the exact thing
+  // the continuous level exists to smooth out; every consumer already floors
+  // at read time, so the rounding happens once, at the point of use.
   const b = qualityState.baseline;
-  qualityState.tier = clampedTier;
   qualityState.target.particleRenderFraction = constrain(
-    b.particleRenderFraction * settings.renderFractionMul,
+    b.particleRenderFraction * at('renderFractionMul'),
     0.01,
     1
   );
   qualityState.target.particleRenderMinSpeed = max(
     0,
-    b.particleRenderMinSpeed + settings.minSpeedAdd
+    b.particleRenderMinSpeed + at('minSpeedAdd')
   );
   qualityState.target.maxSeparationPairsPerTick = max(
     1,
-    floor(b.maxSeparationPairsPerTick * settings.pairMul)
+    b.maxSeparationPairsPerTick * at('pairMul')
   );
   qualityState.target.maxSeparationCandidatesPerCell = max(
     1,
-    floor(b.maxSeparationCandidatesPerCell * settings.candidateMul)
+    b.maxSeparationCandidatesPerCell * at('candidateMul')
   );
   qualityState.target.separationEveryNFrames = max(
     1,
-    floor(b.separationEveryNFrames + settings.sepEveryAdd)
+    b.separationEveryNFrames + at('sepEveryAdd')
   );
   if (snap) {
     qualityState.effective.particleRenderFraction = qualityState.target.particleRenderFraction;
@@ -576,8 +593,6 @@ function applySimulationPauseState() {
     qualityState.lastFrameMs = null;
     simLastFrameMs = null;
     simAccumulatorMs = 0;
-    lastDrawTimeMs = 0;
-    lastSeparationCadenceAdjustMs = millis();
   }
   syncPauseToggleButton();
 }
@@ -601,33 +616,14 @@ function paintQualityHud(nowMs) {
   const currentFadeAlpha = getCurrentBackgroundFadeAlpha();
   const currentParticleAlpha = getCurrentParticleAlpha();
   qualityState.hudEl.innerHTML =
-    `<div>FPS ${fps.toFixed(1)} (Target ${targetFps.toFixed(0)}) | Avg Frame ${qualityState.avgFrameMs.toFixed(2)} ms | Quality Tier ${qualityState.tier}` +
-    `${CONFIG.lockQualityTier ? ' (locked)' : ''}` +
+    `<div>FPS ${fps.toFixed(1)} (Target ${targetFps.toFixed(0)}) | Avg Frame ${qualityState.avgFrameMs.toFixed(2)} ms | Quality ${qualityState.level.toFixed(3)}` +
+    `${CONFIG.lockQualityLevel ? ' (locked)' : ''}` +
     ` | Render Fraction ${rf.toFixed(2)} | Separation Pair Budget ${pairs} | Particles ${particles.length}/${maxParticles}</div>` +
     `<div>Viewport ${viewportW}x${viewportH}px | Render Scale ${currentRenderScale.toFixed(2)}${autoScaleActive ? ' (auto)' : ''} | Internal Canvas ${internalW}x${internalH}px</div>` +
     `<div>Bg A ${currentFadeAlpha.toFixed(2)}${CONFIG.enableDualInkLayers ? ` | Bg B ${getCurrentBackgroundFadeAlphaB().toFixed(2)}` : ''} | P ${currentParticleAlpha.toFixed(2)}</div>`;
 }
 
-function getAdaptiveQualityThresholdsMs() {
-  const targetFps = max(1, CONFIG.qualityTargetFps);
-  const targetFrameMs = 1000 / targetFps;
-  return {
-    degrade: targetFrameMs * 1.08,
-    recover: targetFrameMs * 1.01,
-  };
-}
-
 function tickAdaptiveQuality(nowMs) {
-  if (!CONFIG.enableAdaptiveQuality) {
-    if (qualityState.tier !== 0) {
-      applyQualityTier(0);
-    }
-    smoothQualityEffective(16.7);
-    paintQualityHud(nowMs);
-    qualityState.lastFrameMs = nowMs;
-    return;
-  }
-
   if (qualityState.lastFrameMs === null) {
     qualityState.lastFrameMs = nowMs;
     paintQualityHud(nowMs);
@@ -637,45 +633,33 @@ function tickAdaptiveQuality(nowMs) {
   const dt = constrain(nowMs - qualityState.lastFrameMs, 1, 120);
   qualityState.lastFrameMs = nowMs;
   qualityState.avgFrameMs += (dt - qualityState.avgFrameMs) * 0.08;
+
+  if (!CONFIG.enableAdaptiveQuality) {
+    // Release back to full quality rather than freezing wherever the level
+    // happened to be. Frame time keeps being measured so the HUD stays honest.
+    applyQualityLevel(0);
+  } else if (!CONFIG.lockQualityLevel) {
+    const targetFrameMs = 1000 / max(1, CONFIG.qualityTargetFps);
+    // Fractional overshoot: +0.5 is frames taking half again as long as their
+    // budget. Normalizing by the budget is what lets one pair of rate controls
+    // mean the same thing at any target framerate.
+    const err = (qualityState.avgFrameMs - targetFrameMs) / targetFrameMs;
+    // Deadband guards the degrade direction only. Recovery gets none: a display
+    // pinned by vsync can sit a hair under target indefinitely, and a symmetric
+    // band would strand the piece at reduced quality on a machine with headroom
+    // to spare. Proportional rate stops recovery at zero error by itself.
+    if (err > max(0, CONFIG.qualityDeadband) || err < 0) {
+      const rate = err > 0 ? CONFIG.qualityDegradeRate : CONFIG.qualityRecoverRate;
+      // Error is clamped so one pathological frame can move the level by at
+      // most a rate-second, instead of slamming it to a stop. Near equilibrium
+      // the error is small anyway, so the step shrinks to nothing on its own —
+      // that self-braking is what replaces the old cooldown timer.
+      const step = constrain(err, -1, 1) * max(0, rate) * dt * 0.001;
+      applyQualityLevel(qualityState.level + step);
+    }
+  }
+
   smoothQualityEffective(dt);
-
-  const thresholds = getAdaptiveQualityThresholdsMs();
-  const degradeThresholdMs = thresholds.degrade;
-  const recoverThresholdMs = thresholds.recover;
-
-  if (qualityState.avgFrameMs > degradeThresholdMs) {
-    qualityState.badMsAccum += dt;
-    qualityState.goodMsAccum = max(0, qualityState.goodMsAccum - dt * 0.5);
-  } else if (qualityState.avgFrameMs < recoverThresholdMs) {
-    qualityState.goodMsAccum += dt;
-    qualityState.badMsAccum = max(0, qualityState.badMsAccum - dt * 0.5);
-  } else {
-    qualityState.badMsAccum = max(0, qualityState.badMsAccum - dt * 0.2);
-    qualityState.goodMsAccum = max(0, qualityState.goodMsAccum - dt * 0.2);
-  }
-
-  const cooldownElapsed = nowMs - qualityState.lastTierChangeMs >= CONFIG.qualityCooldownMs;
-  if (CONFIG.lockQualityTier) {
-    paintQualityHud(nowMs);
-    return;
-  }
-
-  if (cooldownElapsed && qualityState.badMsAccum >= CONFIG.qualityDecisionWindowMs) {
-    if (qualityState.tier < QUALITY_TIER_SETTINGS.length - 1) {
-      applyQualityTier(qualityState.tier + 1);
-      qualityState.lastTierChangeMs = nowMs;
-    }
-    qualityState.badMsAccum = 0;
-    qualityState.goodMsAccum = 0;
-  } else if (cooldownElapsed && qualityState.goodMsAccum >= CONFIG.qualityDecisionWindowMs) {
-    if (qualityState.tier > 0) {
-      applyQualityTier(qualityState.tier - 1);
-      qualityState.lastTierChangeMs = nowMs;
-    }
-    qualityState.badMsAccum = 0;
-    qualityState.goodMsAccum = 0;
-  }
-
   paintQualityHud(nowMs);
 }
 
@@ -770,7 +754,6 @@ function setup() {
   simAccumulatorMs = 0;
   simStepCount = 0;
   simRenderAlpha = 1;
-  lastSeparationCadenceAdjustMs = simTimeMs;
 
   for (let i = 0; i < CONFIG.particleCount; i++) {
     const ignoresBoxCollision = i / CONFIG.particleCount >= CONFIG.boxCollisionParticipantRatio;
@@ -935,7 +918,6 @@ function draw() {
   updateActiveBoxes();
   eraseInkUnderBoxes();
   updateParticles(nowMs, simStepCount, true, dtFrames);
-  updateAdaptiveSeparationCadence(nowMs);
   renderParticles(dtFrames);
   renderBoxes();
 }
@@ -3648,48 +3630,11 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
   }
 }
 
-function updateAdaptiveSeparationCadence(nowMs) {
-  const baseCadence = max(1, floor(getQualityValue('separationEveryNFrames')));
-  if (!CONFIG.enableAdaptiveSeparationCadence) {
-    dynamicSeparationEveryNFrames = baseCadence;
-    lastDrawTimeMs = nowMs;
-    lastSeparationCadenceAdjustMs = nowMs;
-    return;
-  }
-
-  if (lastDrawTimeMs <= 0) {
-    dynamicSeparationEveryNFrames = baseCadence;
-    lastDrawTimeMs = nowMs;
-    lastSeparationCadenceAdjustMs = nowMs;
-    return;
-  }
-
-  lastDrawTimeMs = nowMs;
-  const maxCadence = max(baseCadence, floor(CONFIG.adaptiveCadenceMax));
-
-  if (nowMs - lastSeparationCadenceAdjustMs < 240) {
-    return;
-  }
-  lastSeparationCadenceAdjustMs = nowMs;
-
-  const target = max(1, CONFIG.adaptiveTargetFrameMs);
-  const avgFrameMs = qualityState.avgFrameMs;
-  const currentCadence = max(1, Math.round(dynamicSeparationEveryNFrames));
-  let nextCadence = currentCadence;
-
-  if (avgFrameMs > target * 1.1) {
-    nextCadence = min(maxCadence, currentCadence + 1);
-  } else if (avgFrameMs < target * 0.9) {
-    nextCadence = max(baseCadence, currentCadence - 1);
-  }
-  dynamicSeparationEveryNFrames = nextCadence;
-}
-
 function getCurrentSeparationCadence() {
-  if (!CONFIG.enableAdaptiveSeparationCadence) {
-    return max(1, floor(getQualityValue('separationEveryNFrames')));
-  }
-  return max(1, floor(dynamicSeparationEveryNFrames));
+  // The one knob the quality curve cannot move continuously — separation either
+  // runs on a given tick or it does not. Everything else the controller drives
+  // is a genuine float.
+  return max(1, floor(getQualityValue('separationEveryNFrames')));
 }
 
 function getCellKey(cx, cy) {
