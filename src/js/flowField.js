@@ -16,11 +16,94 @@ let fgGraphics = null;
 // somewhere on screen.
 let inkBGraphics = null;
 let mainCanvasElt = null;
-const _mainRenderTarget = {
-  stroke: (r, g, b, a) => stroke(r, g, b, a),
-  strokeWeight: (w) => strokeWeight(w),
-  line: (x1, y1, x2, y2) => line(x1, y1, x2, y2),
-};
+
+// --- Raw-2D stroke targets --------------------------------------------------
+// renderParticles talks to the canvas context directly rather than through p5's
+// stroke()/strokeWeight()/line(). p5.Renderer2D.stroke() builds a fresh p5.Color
+// and a fresh 'rgba(...)' string for every call, and assigns it to strokeStyle,
+// which makes the browser parse a CSS colour. At five thousand particles that is
+// five thousand allocations and five thousand colour parses per frame; it
+// profiled at roughly 14% of all JS time, more than the physics.
+//
+// The fix is to split colour from opacity. The RGB triple takes one of two
+// values across the whole non-glow pass, so strokeStyle is assigned about twice
+// a frame instead of five thousand times, and the per-particle alpha rides on
+// globalAlpha — a float property with nothing to parse. Canvas composites
+// source alpha as strokeStyle-alpha x globalAlpha, so with an opaque strokeStyle
+// the result is identical to the rgba() string p5 was building.
+function makeStrokeTarget() {
+  // rgb is the packed colour currently on strokeStyle, -1 for "unknown".
+  // renderer is the p5.Renderer2D that owns the context, needed only to
+  // invalidate its own strokeStyle cache when we hand the context back.
+  return { ctx: null, renderer: null, rgb: -1, width: -1, alpha: -1 };
+}
+const _strokeTargetMain = makeStrokeTarget();
+const _strokeTargetFg = makeStrokeTarget();
+const _strokeTargetInkB = makeStrokeTarget();
+
+function beginStrokeTarget(target, ctx, renderer) {
+  target.ctx = ctx;
+  target.renderer = renderer || null;
+  target.rgb = -1;
+  target.width = -1;
+  target.alpha = -1;
+  return target;
+}
+
+function endStrokeTarget(target) {
+  const ctx = target.ctx;
+  if (!ctx) return;
+  // Everything downstream — fadeCanvas, eraseInkUnderBoxes, renderBoxes — was
+  // written against globalAlpha 1 and would silently draw faint without this.
+  ctx.globalAlpha = 1;
+  // p5 skips assigning strokeStyle when it matches the value it last set. Ours
+  // is not in that cache, so leaving it would make p5's next stroke() a no-op
+  // on this canvas and paint in whatever colour we finished on.
+  if (target.renderer) {
+    target.renderer._cachedStrokeStyle = undefined;
+  }
+  target.ctx = null;
+  target.renderer = null;
+}
+
+// One stroked segment, with colour, width and alpha all deduplicated against
+// the target's current state.
+//
+// alpha255 is on p5's 0..255 scale, matching what stroke()'s fourth argument
+// took. r/g/b must already be integers — p5 rounded them on the way into
+// p5.Color, so callers that compute a colour round it themselves.
+function strokeSegment(target, r, g, b, alpha255, w, x1, y1, x2, y2) {
+  if (!(alpha255 > 0)) return;
+  const ctx = target.ctx;
+  const rgb = (r << 16) | (g << 8) | b;
+  if (rgb !== target.rgb) {
+    target.rgb = rgb;
+    ctx.strokeStyle = `rgb(${r},${g},${b})`;
+  }
+  // Out-of-range assignments to globalAlpha are ignored rather than clamped, so
+  // a stray value would leave the previous particle's opacity in place instead
+  // of failing visibly. Clamp rather than trust the callers.
+  const a = alpha255 > 255 ? 1 : alpha255 * (1 / 255);
+  if (a !== target.alpha) {
+    target.alpha = a;
+    ctx.globalAlpha = a;
+  }
+  if (w !== target.width) {
+    target.width = w;
+    ctx.lineWidth = w;
+  }
+  // p5's line() nudges the path half a pixel on odd stroke widths so a 1px line
+  // lands on the pixel grid rather than straddling it. Stroke weights here are
+  // quantized to quarter-pixels, so widths of exactly 1 are common and the
+  // nudge is part of the look the piece was tuned against. p5 does it with a
+  // pair of translate() calls per line; offsetting the four coordinates is the
+  // same transform on the path and leaves the matrix alone.
+  const o = w % 2 === 1 ? 0.5 : 0;
+  ctx.beginPath();
+  ctx.moveTo(x1 + o, y1 + o);
+  ctx.lineTo(x2 + o, y2 + o);
+  ctx.stroke();
+}
 let activeBoxes = [];
 let sourceFlowBoxes = [];
 let flowBoxOverlayEl = null;
@@ -30,6 +113,19 @@ const BOX_ACTIVE_MARGIN = 280;
 const boxSpatialGrid = new Map();
 const nearbyBoxesScratch = [];
 let nearbyBoxesQueryId = 0;
+// Resolved once per grid rebuild rather than per query. getNearbyBoxesForPoint
+// runs two to three times per particle per frame — fifteen thousand calls at the
+// default population — and every one of them used to re-derive the cell size
+// through p5's variadic max(), which forwards an arguments object to
+// Math.max.apply. That was most of the function's cost and none of its work.
+let boxGridInvCellSize = 1 / 24;
+// Bounding box of every active box, inflated by the broadphase pad. Most
+// particles are nowhere near the text, so one compare against this rejects them
+// before the nine-cell scan starts.
+let boxGridMinX = 1;
+let boxGridMinY = 1;
+let boxGridMaxX = -1;
+let boxGridMaxY = -1;
 const SIM_FIXED_STEP_MS = 1000 / 60;
 const SIM_MAX_FRAME_DELTA_MS = 250;
 const SIM_MAX_STEPS_PER_FRAME = 4;
@@ -246,6 +342,71 @@ function fastSin(x) {
   return SIN_LUT[i | 0]; // truncate to integer index
 }
 
+// --- Dune shaping lookup tables (replace per-particle Math.pow) -------------
+// Every particle asks the dune sampler for two powers of its ridge value each
+// frame: the contrast curve, and the crest falloff on the ridge pull. Math.pow
+// with a fractional exponent costs ~14 ns; a linearly interpolated 1024-entry
+// table costs ~3 ns and is smooth, which matters here — these feed a force
+// field, and a table read with nearest-neighbour lookup would quantize the
+// force into visible steps across each band.
+//
+// Both curves are functions of ridge01 alone, in 0..1, so one index serves
+// both. They only change when the exponents change, which is a control-panel
+// action, so the rebuild is keyed on the exponents rather than run per frame.
+const DUNE_LUT_SIZE = 1024;
+// Two extra entries, not one. Index DUNE_LUT_SIZE holds the exact value at
+// ridge01 = 1, and the guard slot past it exists so the interpolation can read
+// i+1 unconditionally: at ridge01 exactly 1 the index lands on DUNE_LUT_SIZE,
+// and an out-of-range read on a typed array yields undefined, which would turn
+// the whole force into NaN rather than throwing anywhere near the cause.
+const DUNE_LUT_LEN = DUNE_LUT_SIZE + 2;
+const duneContrastLut = new Float32Array(DUNE_LUT_LEN);
+const duneShapeLut = new Float32Array(DUNE_LUT_LEN);
+const duneFalloffLut = new Float32Array(DUNE_LUT_LEN);
+let duneLutContrast = NaN;
+let duneLutFalloff = NaN;
+let duneLutFalloffNorm = NaN;
+
+function rebuildDuneLuts(contrast, falloff, falloffNorm) {
+  if (contrast === duneLutContrast &&
+      falloff === duneLutFalloff &&
+      falloffNorm === duneLutFalloffNorm) {
+    return;
+  }
+  duneLutContrast = contrast;
+  duneLutFalloff = falloff;
+  duneLutFalloffNorm = falloffNorm;
+  for (let i = 0; i <= DUNE_LUT_SIZE; i++) {
+    const r = i / DUNE_LUT_SIZE;
+    // duneMultiplier's shaping term: ridge01 ^ contrast.
+    const shapedRidge = contrast === 1 ? r : Math.pow(r, contrast);
+    duneContrastLut[i] = shapedRidge;
+    // Ridge-attraction gradient term: ridge01 ^ (contrast - 1), capped because
+    // contrast < 1 sends it to infinity at the trough centres.
+    duneShapeLut[i] = contrast === 1
+      ? 1
+      : Math.min(DUNE_RIDGE_SHAPE_CAP, Math.pow(Math.max(r, 1e-3), contrast - 1));
+    // Crest falloff, folded over the contrast curve so one lookup covers both:
+    // (1 - ridge01 ^ contrast) ^ falloff, normalised.
+    duneFalloffLut[i] = falloff > 0
+      ? Math.pow(Math.max(1 - shapedRidge, 0), falloff) * falloffNorm
+      : 1;
+  }
+  // Guard slot: flat continuation past the end of the curve.
+  duneContrastLut[DUNE_LUT_SIZE + 1] = duneContrastLut[DUNE_LUT_SIZE];
+  duneShapeLut[DUNE_LUT_SIZE + 1] = duneShapeLut[DUNE_LUT_SIZE];
+  duneFalloffLut[DUNE_LUT_SIZE + 1] = duneFalloffLut[DUNE_LUT_SIZE];
+}
+
+// Linear read of a dune table at ridge01 in 0..1. The caller has already
+// clamped — ridge01 comes from (fastSin(w) + 1) * 0.5, which cannot leave range.
+function sampleDuneLut(lut, ridge01) {
+  const t = ridge01 * DUNE_LUT_SIZE;
+  const i = t | 0;
+  const f = t - i;
+  return lut[i] + (lut[i + 1] - lut[i]) * f;
+}
+
 // --- Item 9: Bucket pool (reuses arrays to avoid per-frame GC from grid buckets) ---
 const _bucketPool = [];
 let _bucketPoolPtr = 0;
@@ -282,11 +443,76 @@ const CELL_KEY_OFFSET = 32768;
 const CELL_KEY_STRIDE = 65536;
 const QUALITY_BASELINE_KEYS = [
   'particleRenderFraction',
+  'particleSimFraction',
   'particleRenderMinSpeed',
   'maxSeparationPairsPerTick',
   'maxSeparationCandidatesPerCell',
   'separationEveryNFrames',
 ];
+
+// --- Particle culling -------------------------------------------------------
+// Which particles a fraction keeps. Two properties matter and a naive scheme
+// gets neither.
+//
+// It must be STABLE: the same particle has to make the same decision frame
+// after frame at a given fraction, or particles strobe and — because this piece
+// deposits persistent ink — a strobing particle lays a dashed trail instead of a
+// smooth one. That rules out anything reseeded per frame.
+//
+// It must be MONOTONE: the set kept at 0.7 has to contain the set kept at 0.6,
+// so that a fraction drifting under the controller switches particles on and
+// off one at a time instead of reshuffling which ones are lit. That rules out a
+// plain hash, where a small move in the fraction flips an arbitrary subset in
+// both directions at once.
+//
+// Multiplying the index by the golden ratio conjugate and taking the fractional
+// part gives both. It is a low-discrepancy sequence, so for any fraction the
+// kept indices are spread evenly through the array — which also means each
+// render layer keeps its proportional share without the cull needing to know
+// anything about how the array is divided into layers.
+// Stamped onto each particle at creation rather than recomputed at the three
+// call sites that need it. The float modulo is cheap once and not cheap fifteen
+// thousand times a frame — it profiled at 2.7% of all JS when called inline.
+// Safe to cache because a particle's index never changes: the array only ever
+// grows at the end or is truncated from it, so every surviving particle keeps
+// the index it was created with.
+const GOLDEN_RATIO_CONJUGATE = 0.6180339887498949;
+
+function particleCullRank(index) {
+  return (index * GOLDEN_RATIO_CONJUGATE) % 1;
+}
+
+// Re-stamps every rank. Only needed if something ever reorders the array; the
+// paths that exist today (push at the end, truncate from the end) preserve the
+// stamps, but the cull silently misbehaves rather than throwing if that stops
+// being true, so this is here to be called if it ever does.
+function resyncParticleCullRanks() {
+  for (let i = 0; i < particles.length; i++) {
+    particles[i].cullRank = particleCullRank(i);
+  }
+}
+
+// How much to dim a particle sitting just inside the cut, so that one leaving
+// fades rather than winks.
+//
+// The band is deliberately narrow and absolute rather than proportional. Sized
+// as a share of the range it looked reasonable and was not: at fraction 0.34 a
+// band of 0.35 puts half of everything still alive on the fade, averaging them
+// down by a quarter, and the accumulated wind visibly drained out of the piece.
+// The band only has to cover the handful of particles the fraction will cross
+// in the next second or so of drift — 0.06 of the range is about three hundred
+// particles at the default population, which is far more than enough.
+//
+// It still collapses to zero at fraction 1: every rank is strictly below 1, so
+// the division yields Infinity and everything clamps to full brightness. That
+// is what keeps a machine with headroom identical to one with no culling at
+// all, without a special case that would itself pop the moment the fraction
+// left 1.
+function particleCullFade(rank, fraction) {
+  const band = min(0.06, (1 - fraction) * 0.6);
+  const fade = (fraction - rank) / band;
+  return fade < 1 ? (fade > 0 ? fade : 0) : 1;
+}
 // Interpolation nodes for the quality curve, not discrete states. The
 // controller's level is a float in 0..1 that samples across these, so every
 // point between two nodes is a reachable operating point. That is the whole
@@ -294,13 +520,68 @@ const QUALITY_BASELINE_KEYS = [
 // step changed the workload by more than the controller's own tolerance band,
 // so a machine whose true break-even fell between two of them could never
 // settle and ping-ponged instead, visibly pulsing the particle density.
+// simFractionMul is the one that reaches the physics, and it is deliberately
+// held above renderFractionMul at every node. The two cuts are not the same
+// kind of thing:
+//
+//   render cut — the particle still simulates, it just does not draw. Costs
+//     about a fifth of the frame. Free to undo: the particle is exactly where
+//     it should be, so it starts drawing again mid-flight with nothing to
+//     resynchronise.
+//   sim  cut — the particle does not move either. Costs three quarters of the
+//     frame, which is the only place left with real money in it. Expensive to
+//     undo: it comes back somewhere stale and needs a fade-in.
+//
+// So the controller spends the cheap, reversible cut first and only reaches for
+// the physics once that is exhausted.
+//
+// The ordering here does NOT make it safe to infer "not drawn" from "not
+// simulated" by comparing the two fractions. applyQualityLevel clamps the
+// targets, but the effective values are smoothed by separate filters running at
+// deliberately different rates, so through a whole recovery the sim fraction
+// trails the render fraction and the invariant is inverted. renderParticles
+// tests the particle's own simCulled flag instead.
 const QUALITY_CURVE = [
-  { renderFractionMul: 1, minSpeedAdd: 0, pairMul: 1, candidateMul: 1, sepEveryAdd: 0 },
-  { renderFractionMul: 0.86, minSpeedAdd: 0.03, pairMul: 0.85, candidateMul: 0.9, sepEveryAdd: 0 },
-  { renderFractionMul: 0.7, minSpeedAdd: 0.08, pairMul: 0.68, candidateMul: 0.75, sepEveryAdd: 1 },
-  { renderFractionMul: 0.55, minSpeedAdd: 0.13, pairMul: 0.52, candidateMul: 0.6, sepEveryAdd: 2 },
-  { renderFractionMul: 0.4, minSpeedAdd: 0.18, pairMul: 0.38, candidateMul: 0.48, sepEveryAdd: 3 },
+  { renderFractionMul: 1, simFractionMul: 1, minSpeedAdd: 0, pairMul: 1, candidateMul: 1, sepEveryAdd: 0 },
+  { renderFractionMul: 0.86, simFractionMul: 0.95, minSpeedAdd: 0.03, pairMul: 0.85, candidateMul: 0.9, sepEveryAdd: 0 },
+  { renderFractionMul: 0.7, simFractionMul: 0.82, minSpeedAdd: 0.08, pairMul: 0.68, candidateMul: 0.75, sepEveryAdd: 1 },
+  { renderFractionMul: 0.55, simFractionMul: 0.62, minSpeedAdd: 0.13, pairMul: 0.52, candidateMul: 0.6, sepEveryAdd: 2 },
+  { renderFractionMul: 0.34, simFractionMul: 0.38, minSpeedAdd: 0.18, pairMul: 0.38, candidateMul: 0.48, sepEveryAdd: 3 },
 ];
+// How long the sim fraction takes to climb back after the pressure comes off.
+// Deliberately far slower than qualityTransitionMs, and applied in the recovery
+// direction only. Dropping particles relieves load immediately, so there is no
+// reason to be gentle about it; putting them back is what risks pumping, since
+// each one restored adds load that can push the controller straight back the
+// other way. Asymmetry here mirrors qualityDegradeRate against
+// qualityRecoverRate, one level up in the same loop.
+const QUALITY_SIM_RECOVER_MS = 2500;
+// How far under budget frames must actually be before particles are allowed
+// back into the simulation, as a fraction of the frame budget.
+//
+// Without this the controller limit-cycles wherever the machine's true
+// capability sits: it reaches maximum degradation, frame time lands exactly on
+// budget, the error crosses zero, so it starts recovering — which puts it back
+// over budget, and round again. Measured on an 8x-throttled machine it swung
+// the level between 0.82 and 1.00 and the particle count by 15% on a roughly
+// thirty-second cycle. Slow, but thirty-second breathing of the field is
+// precisely the artifact the continuous quality curve was introduced to kill.
+//
+// Zero error is not evidence of headroom, it is evidence of sitting on the
+// limit. Requiring a real margin turns the limit cycle into a resting point.
+// Deliberately scoped to the sim fraction alone: the level itself keeps its
+// deadband-free recovery, for the reason given at the degrade test — a display
+// pinned by vsync sits a hair under target forever, and the cheap reversible
+// knobs should be free to drift back up in that case. Only the expensive,
+// visible one has to be sure.
+const QUALITY_SIM_RECOVER_HEADROOM = 0.12;
+// And it has to have held that margin for this long. avgFrameMs is an EMA with
+// a short memory, so it dips under any fixed threshold on transients — a scroll
+// pausing, a stanza leaving the viewport — and an instantaneous test lets those
+// dips put particles back that the next second takes away again. Requiring the
+// headroom to persist is the difference between reacting to noise and reacting
+// to the machine.
+const QUALITY_SIM_RECOVER_HOLD_MS = 4000;
 const qualityState = {
   // 0 = full quality, 1 = maximum degradation. This is the integral of the
   // frame-time error, which is why it converges: once frame time reaches the
@@ -308,6 +589,9 @@ const qualityState = {
   level: 0,
   avgFrameMs: 16.7,
   lastFrameMs: null,
+  // How long frames have run under budget by the margin the sim fraction needs
+  // before it will let particles back in. Reset on any tick that misses it.
+  simHeadroomMs: 0,
   baseline: {},
   target: {},
   effective: {},
@@ -366,15 +650,39 @@ function syncFlowBoxOverlay() {
     return;
   }
 
-  const shouldShow = CONFIG.showBoxes && sourceFlowBoxes.length > 0;
-  overlay.style.display = shouldShow ? 'block' : 'none';
+  // The overlay's only visible output is a border in boxStrokeIdle, which ships
+  // with alpha 0 — it is a debugging aid for seeing where the word colliders
+  // sit, and it is off in the sense that matters. It was not off in the sense
+  // that costs: this ran every frame, rebuilding a colour string and writing
+  // five inline styles per visible word, several hundred of them during a
+  // scroll, each one dirtying style on a node that paints nothing. It profiled
+  // at ~2.5% of all JS time and forced a style recalc on top of that. Raise the
+  // alpha on Box Stroke Idle and the whole path comes back.
+  const strokeAlpha = clampColorByte(RENDER_COLORS.boxStrokeIdle?.[3] ?? 255);
+  const shouldShow = CONFIG.showBoxes && strokeAlpha > 0 && sourceFlowBoxes.length > 0;
   if (!shouldShow) {
+    if (overlay.style.display !== 'none') {
+      overlay.style.display = 'none';
+    }
+    // Drop the nodes rather than leaving hundreds of invisible divs parented.
+    // They cost nothing to paint but they are still boxes the style engine
+    // walks, and the overlay can be turned back on at any time.
+    if (flowBoxOverlayNodes.length > 0) {
+      for (let i = 0; i < flowBoxOverlayNodes.length; i++) {
+        flowBoxOverlayNodes[i].remove();
+      }
+      flowBoxOverlayNodes.length = 0;
+    }
     return;
+  }
+  if (overlay.style.display !== 'block') {
+    overlay.style.display = 'block';
   }
 
   while (flowBoxOverlayNodes.length < sourceFlowBoxes.length) {
     const node = document.createElement('div');
     node.className = 'flow-box-overlay__box';
+    node.style.borderWidth = '1.5px';
     overlay.appendChild(node);
     flowBoxOverlayNodes.push(node);
   }
@@ -387,11 +695,55 @@ function syncFlowBoxOverlay() {
   for (let i = 0; i < sourceFlowBoxes.length; i++) {
     const box = sourceFlowBoxes[i];
     const node = flowBoxOverlayNodes[i];
+    // Position moves every frame; size and colour almost never do. Writing them
+    // unconditionally is what made this a per-frame style invalidation on every
+    // node rather than just the ones that actually changed.
     node.style.transform = `translate(${box.x}px, ${box.y}px)`;
-    node.style.width = `${box.w}px`;
-    node.style.height = `${box.h}px`;
-    node.style.borderWidth = '1.5px';
-    node.style.borderColor = idleBorderColor;
+    if (node._lastW !== box.w) {
+      node._lastW = box.w;
+      node.style.width = `${box.w}px`;
+    }
+    if (node._lastH !== box.h) {
+      node._lastH = box.h;
+      node.style.height = `${box.h}px`;
+    }
+    if (node._lastColor !== idleBorderColor) {
+      node._lastColor = idleBorderColor;
+      node.style.borderColor = idleBorderColor;
+    }
+  }
+}
+
+// The device pixel ratio the canvases should render at, after the cap. 0 or a
+// negative cap means "whatever the display says", which is p5's own default.
+function getTargetPixelDensity() {
+  const displayRatio = window.devicePixelRatio || 1;
+  const cap = CONFIG.maxPixelDensity;
+  return cap > 0 ? min(displayRatio, cap) : displayRatio;
+}
+
+// Applies the cap to the main canvas and to both offscreen layers. p5.Graphics
+// copies the parent sketch's _pixelDensity once, at construction, so changing it
+// on the instance alone would leave the two ink layers at the old ratio — the
+// piece would half-fix itself and the layers would stop lining up.
+//
+// Resizing a canvas clears it, so a runtime change wipes the accumulated ink and
+// the trails rebuild over the next few seconds. That is why this is not called
+// from the frame loop; only from setup and from the control that changes it.
+function applyPixelDensity() {
+  const target = getTargetPixelDensity();
+  if (pixelDensity() !== target) {
+    pixelDensity(target);
+  }
+  const w = width;
+  const h = height;
+  if (fgGraphics && fgGraphics._pixelDensity !== target) {
+    fgGraphics._pixelDensity = target;
+    fgGraphics.resizeCanvas(w, h);
+  }
+  if (inkBGraphics && inkBGraphics._pixelDensity !== target) {
+    inkBGraphics._pixelDensity = target;
+    inkBGraphics.resizeCanvas(w, h);
   }
 }
 
@@ -476,11 +828,21 @@ function applyQualityLevel(level, snap = false) {
   // the continuous level exists to smooth out; every consumer already floors
   // at read time, so the rounding happens once, at the point of use.
   const b = qualityState.baseline;
-  qualityState.target.particleRenderFraction = constrain(
+  const renderFraction = constrain(
     b.particleRenderFraction * at('renderFractionMul'),
     0.01,
     1
   );
+  // Never draw a particle the sim has stopped moving: it would lay a stationary
+  // dot rather than a trail. The curve is authored so this never binds, but the
+  // baselines behind it are panel controls and a URL can set them to anything.
+  const simFraction = constrain(
+    b.particleSimFraction * at('simFractionMul'),
+    renderFraction,
+    1
+  );
+  qualityState.target.particleRenderFraction = renderFraction;
+  qualityState.target.particleSimFraction = simFraction;
   qualityState.target.particleRenderMinSpeed = max(
     0,
     b.particleRenderMinSpeed + at('minSpeedAdd')
@@ -499,6 +861,7 @@ function applyQualityLevel(level, snap = false) {
   );
   if (snap) {
     qualityState.effective.particleRenderFraction = qualityState.target.particleRenderFraction;
+    qualityState.effective.particleSimFraction = qualityState.target.particleSimFraction;
     qualityState.effective.particleRenderMinSpeed = qualityState.target.particleRenderMinSpeed;
     qualityState.effective.maxSeparationPairsPerTick = qualityState.target.maxSeparationPairsPerTick;
     qualityState.effective.maxSeparationCandidatesPerCell = qualityState.target.maxSeparationCandidatesPerCell;
@@ -518,6 +881,34 @@ function smoothQualityEffective(dt) {
     qualityState.effective.particleRenderFraction,
     qualityState.target.particleRenderFraction
   );
+  // The sim fraction is the one exception to the shared transition. Shedding
+  // particles is allowed to happen at the same speed as everything else,
+  // because it relieves load the instant it lands and cannot overshoot into
+  // trouble. Restoring them is throttled hard: every particle put back adds
+  // work, so a fast recovery feeds the error that provoked the cut and the
+  // controller pumps — which reads as the field visibly breathing in and out.
+  {
+    // Accounted every tick, not only while recovering, so the timer reflects
+    // how long the machine has actually been comfortable rather than how long
+    // it has been comfortable and also wanting more particles.
+    const budgetMs = 1000 / max(1, CONFIG.qualityTargetFps);
+    if (qualityState.avgFrameMs < budgetMs * (1 - QUALITY_SIM_RECOVER_HEADROOM)) {
+      qualityState.simHeadroomMs += dt;
+    } else {
+      qualityState.simHeadroomMs = 0;
+    }
+
+    const current = qualityState.effective.particleSimFraction;
+    const target = qualityState.target.particleSimFraction;
+    if (!Number.isFinite(current)) {
+      qualityState.effective.particleSimFraction = target;
+    } else if (target < current) {
+      qualityState.effective.particleSimFraction = current + (target - current) * alpha;
+    } else if (target > current && qualityState.simHeadroomMs >= QUALITY_SIM_RECOVER_HOLD_MS) {
+      const a = 1 - Math.exp(-dt / QUALITY_SIM_RECOVER_MS);
+      qualityState.effective.particleSimFraction = current + (target - current) * a;
+    }
+  }
   qualityState.effective.particleRenderMinSpeed = lerpNum(
     qualityState.effective.particleRenderMinSpeed,
     qualityState.target.particleRenderMinSpeed
@@ -606,20 +997,36 @@ function paintQualityHud(nowMs) {
   const fps = qualityState.avgFrameMs > 0.01 ? 1000 / qualityState.avgFrameMs : 0;
   const targetFps = max(1, CONFIG.qualityTargetFps);
   const rf = getQualityValue('particleRenderFraction');
+  const sf = getQualityValue('particleSimFraction');
   const pairs = getQualityValue('maxSeparationPairsPerTick');
   const maxParticles = max(1, floor(CONFIG.particleCount));
+  // Derived from the fractions rather than counted, so reading the HUD does not
+  // cost a pass over 5000 particles every 180 ms. The cull is a low-discrepancy
+  // sequence, so the fraction and the true count agree to within one particle.
+  const simCount = round(particles.length * constrain(sf, 0, 1));
+  const drawnCount = round(particles.length * constrain(rf, 0, 1));
   const viewportW = max(1, window.innerWidth || 0);
   const viewportH = max(1, window.innerHeight || 0);
   const internalW = max(1, width || 0);
   const internalH = max(1, height || 0);
   const autoScaleActive = CONFIG.enableAutoRenderScale && currentRenderScale < 0.999;
+  // What the GPU is actually being asked to fill: the backing-store size of one
+  // canvas, times three because all three are cleared and repainted per frame.
+  const density = pixelDensity();
+  const densityCapped = CONFIG.maxPixelDensity > 0 &&
+    density < (window.devicePixelRatio || 1) - 1e-6;
+  const bufferW = round(internalW * density);
+  const bufferH = round(internalH * density);
   const currentFadeAlpha = getCurrentBackgroundFadeAlpha();
   const currentParticleAlpha = getCurrentParticleAlpha();
   qualityState.hudEl.innerHTML =
     `<div>FPS ${fps.toFixed(1)} (Target ${targetFps.toFixed(0)}) | Avg Frame ${qualityState.avgFrameMs.toFixed(2)} ms | Quality ${qualityState.level.toFixed(3)}` +
     `${CONFIG.lockQualityLevel ? ' (locked)' : ''}` +
-    ` | Render Fraction ${rf.toFixed(2)} | Separation Pair Budget ${pairs} | Particles ${particles.length}/${maxParticles}</div>` +
-    `<div>Viewport ${viewportW}x${viewportH}px | Render Scale ${currentRenderScale.toFixed(2)}${autoScaleActive ? ' (auto)' : ''} | Internal Canvas ${internalW}x${internalH}px</div>` +
+    ` | Separation Pair Budget ${pairs} | Particles ${particles.length}/${maxParticles}</div>` +
+    `<div>Sim ${simCount} (${sf.toFixed(2)}) | Drawn ${drawnCount} (${rf.toFixed(2)})` +
+    ` | Min Speed ${getQualityValue('particleRenderMinSpeed').toFixed(3)}</div>` +
+    `<div>Viewport ${viewportW}x${viewportH}px | Render Scale ${currentRenderScale.toFixed(2)}${autoScaleActive ? ' (auto)' : ''} | Internal Canvas ${internalW}x${internalH}px` +
+    ` | Density ${density.toFixed(2)}${densityCapped ? ' (capped)' : ''} | Buffer ${bufferW}x${bufferH} x3</div>` +
     `<div>Bg A ${currentFadeAlpha.toFixed(2)}${CONFIG.enableDualInkLayers ? ` | Bg B ${getCurrentBackgroundFadeAlphaB().toFixed(2)}` : ''} | P ${currentParticleAlpha.toFixed(2)}</div>`;
 }
 
@@ -667,7 +1074,11 @@ function addParticles(count) {
   const n = max(0, floor(count));
   for (let i = 0; i < n; i++) {
     const ignoresBoxCollision = random() >= CONFIG.boxCollisionParticipantRatio;
-    particles.push(createParticle(random(width), random(height), ignoresBoxCollision));
+    const particle = createParticle(random(width), random(height), ignoresBoxCollision);
+    // Stamped from the index it is about to occupy, so the cull order stays
+    // consistent with the particles already in the array.
+    particle.cullRank = particleCullRank(particles.length);
+    particles.push(particle);
   }
 }
 
@@ -721,9 +1132,17 @@ function setup() {
   if (mount) {
     canvas.parent(mount);
   }
-  canvas.style('width', '100%');
-  canvas.style('height', '100%');
+  // Written straight onto the element rather than through p5.Element.style().
+  // That method lives in p5.dom, and these two calls were the only thing in the
+  // project reaching for it — everything else builds DOM with plain
+  // document.createElement. Dropping the library takes 21 KB off the load.
   mainCanvasElt = canvas.elt;
+  mainCanvasElt.style.width = '100%';
+  mainCanvasElt.style.height = '100%';
+  // Before the two offscreen layers exist: p5.Graphics reads the parent's
+  // _pixelDensity at construction, so setting the cap first is what makes all
+  // three canvases agree without a resize.
+  applyPixelDensity();
   ensureInkLayerB();
   ensureForegroundLayer();
   applyCanvasLayerVisibility();
@@ -757,7 +1176,9 @@ function setup() {
 
   for (let i = 0; i < CONFIG.particleCount; i++) {
     const ignoresBoxCollision = i / CONFIG.particleCount >= CONFIG.boxCollisionParticipantRatio;
-    particles.push(createParticle(random(width), random(height), ignoresBoxCollision));
+    const particle = createParticle(random(width), random(height), ignoresBoxCollision);
+    particle.cullRank = particleCullRank(i);
+    particles.push(particle);
   }
 
   // Expose API for external apps (poem) to drive box positions.
@@ -1956,6 +2377,9 @@ function setupDuneControls() {
         def.key === 'autoRenderScaleThresholdPx'
       ) {
         applyRenderScale(getActiveRenderScale());
+      }
+      if (def.key === 'maxPixelDensity') {
+        applyPixelDensity();
       }
       if (
         def.key === 'enableWordShadow' ||
@@ -3320,6 +3744,13 @@ function createParticle(x, y, ignoresBoxCollision = false) {
     scrollUnfrozeAtMs: 0,
     scrollFadeProgress: 0,
     scrollCollisionDisabled: false,
+    // Dropped from the simulation by the quality controller. Declared here so
+    // every particle shares one hidden class — adding the property later, on
+    // the subset that happens to get culled, would split the shape and
+    // deoptimise every read in the hot loops.
+    simCulled: false,
+    // Position in the cull order, stamped by the caller from the array index.
+    cullRank: 0,
     forceMult: rollParticleMult(CONFIG.perParticleForceMultMax),
     velMult: rollParticleMult(CONFIG.perParticleVelMultMax),
   };
@@ -3360,6 +3791,44 @@ function clampRenderedSegment(fromX, fromY, toX, toY, maxLen = MAX_RENDER_SEGMEN
     _segmentResult.toY = fromY + dy * scale;
   }
   return _segmentResult;
+}
+
+// Bring a sim-culled particle back into the simulation. Three things have gone
+// stale while it sat out, and all three are visible if left alone.
+//
+// Its display position is wherever it last drew, which may be many seconds of
+// flow away — drawing from there would streak a line across the canvas.
+// syncDisplayState collapses that to a point, and the segment clamp would not
+// have saved it: a clamped streak is still a streak, just a shorter one.
+//
+// The word colliders have kept scrolling past it, so it may now be sitting
+// inside one. Reviving it there would have the containment solver eject it at
+// speed. This is the same situation a particle is in when a manual scroll ends
+// on top of it, and it takes the same answer: turn its collision off and let it
+// drift out, re-enabled when it next wraps at an edge.
+//
+// And it has no trail any more — the ink it laid has faded. Coming back at full
+// brightness would read as a particle appearing from nothing, so it fades in on
+// the same timer the scroll-freeze recovery uses.
+function reviveCulledParticle(particle, nowMs) {
+  particle.simCulled = false;
+  syncParticleDisplayState(particle);
+  if (!particle.ignoresBoxCollision && !particle.scrollCollisionDisabled) {
+    const nearbyBoxes = getNearbyBoxesForPoint(particle.pos.x, particle.pos.y);
+    for (let i = 0; i < nearbyBoxes.length; i++) {
+      if (isParticleInsideBox(particle.pos.x, particle.pos.y, nearbyBoxes[i])) {
+        particle.scrollCollisionDisabled = true;
+        break;
+      }
+    }
+  }
+  // -1 is the sentinel renderParticleAt reads as "start the fade on the next
+  // render frame". Left alone if a fade is already running, so a particle that
+  // flickers across the cull threshold does not restart its fade each time and
+  // end up permanently dim.
+  if (particle.scrollUnfrozeAtMs === 0) {
+    particle.scrollUnfrozeAtMs = -1;
+  }
 }
 
 function updateBoxes(dtFrames = 1) {
@@ -3422,18 +3891,35 @@ function rebuildActiveBoxSpatialGrid() {
   boxSpatialGrid.clear();
   const cellSize = getBoxSpatialCellSize();
   const inverseCellSize = 1 / cellSize;
+  boxGridInvCellSize = inverseCellSize;
   const broadphasePad = max(
     CONFIG.separationNearBoxRadius,
     CONFIG.boxForceMaxRadius,
     CONFIG.surfaceSlideBand * CONFIG.particleSize
   );
 
+  // Inverted extents, so an empty grid rejects every point without a special
+  // case in the query.
+  let bMinX = Infinity;
+  let bMinY = Infinity;
+  let bMaxX = -Infinity;
+  let bMaxY = -Infinity;
+
   for (let i = 0; i < activeBoxes.length; i++) {
     const box = activeBoxes[i];
-    const minCellX = floor((box.x - broadphasePad) * inverseCellSize);
-    const maxCellX = floor((box.x + box.w + broadphasePad) * inverseCellSize);
-    const minCellY = floor((box.y - broadphasePad) * inverseCellSize);
-    const maxCellY = floor((box.y + box.h + broadphasePad) * inverseCellSize);
+    const loX = box.x - broadphasePad;
+    const hiX = box.x + box.w + broadphasePad;
+    const loY = box.y - broadphasePad;
+    const hiY = box.y + box.h + broadphasePad;
+    if (loX < bMinX) bMinX = loX;
+    if (hiX > bMaxX) bMaxX = hiX;
+    if (loY < bMinY) bMinY = loY;
+    if (hiY > bMaxY) bMaxY = hiY;
+
+    const minCellX = floor(loX * inverseCellSize);
+    const maxCellX = floor(hiX * inverseCellSize);
+    const minCellY = floor(loY * inverseCellSize);
+    const maxCellY = floor(hiY * inverseCellSize);
 
     for (let cy = minCellY; cy <= maxCellY; cy++) {
       for (let cx = minCellX; cx <= maxCellX; cx++) {
@@ -3447,6 +3933,14 @@ function rebuildActiveBoxSpatialGrid() {
       }
     }
   }
+
+  // Widened by a cell on each side because the query scans the ring of cells
+  // around the point, so a point just outside the padded extents can still land
+  // in a cell that holds a box. Rejecting on the un-widened box would drop those.
+  boxGridMinX = bMinX - cellSize;
+  boxGridMinY = bMinY - cellSize;
+  boxGridMaxX = bMaxX + cellSize;
+  boxGridMaxY = bMaxY + cellSize;
 }
 
 function getNearbyBoxesForPoint(px, py) {
@@ -3454,9 +3948,11 @@ function getNearbyBoxesForPoint(px, py) {
   if (activeBoxes.length === 0) {
     return nearbyBoxesScratch;
   }
+  if (px < boxGridMinX || px > boxGridMaxX || py < boxGridMinY || py > boxGridMaxY) {
+    return nearbyBoxesScratch;
+  }
 
-  const cellSize = getBoxSpatialCellSize();
-  const inverseCellSize = 1 / cellSize;
+  const inverseCellSize = boxGridInvCellSize;
   const cx = floor(px * inverseCellSize);
   const cy = floor(py * inverseCellSize);
   nearbyBoxesQueryId += 1;
@@ -3491,6 +3987,10 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
     ? max(0, CONFIG.foregroundWindMultiplier)
     : 1;
   const fgWindMultActive = fgWindMult !== 1;
+  // Resolved to 1 when nothing is culled, so the common case is one compare
+  // against a rank that is never reached rather than a branch per particle.
+  const simFraction = constrain(getQualityValue('particleSimFraction'), 0.01, 1);
+  const simCullActive = simFraction < 0.999;
   if (boidEnabled) {
     buildBoidGrid();
     applyBoidAccelerations();
@@ -3498,6 +3998,15 @@ function updateParticles(nowMs = millis(), tickIndex = simStepCount, allowSepara
   for (let i = 0; i < particles.length; i++) {
     const particle = particles[i];
     if (particle.scrollFrozen) continue;
+    if (simCullActive && particle.cullRank >= simFraction) {
+      if (!particle.simCulled) {
+        particle.simCulled = true;
+      }
+      continue;
+    }
+    if (particle.simCulled) {
+      reviveCulledParticle(particle, nowMs);
+    }
     particle.prevX = particle.pos.x;
     particle.prevY = particle.pos.y;
     let accX = 0;
@@ -3766,6 +4275,9 @@ function resolveParticleSeparation(nowMs, tickIndex = simStepCount) {
 
 function isParticleSeparationActive(particle, nowMs) {
   if (particle.scrollFrozen) return false;
+  // Not being simulated: it cannot be pushing into anything, and letting it
+  // hold a slot would spend the pair budget on a pair that never resolves.
+  if (particle.simCulled) return false;
   if (particle.ignoresBoxCollision) return false;
   if (isParticleRecentlyInteracted(particle, nowMs)) return true;
   const speedSq = particle.vel.x * particle.vel.x + particle.vel.y * particle.vel.y;
@@ -3802,7 +4314,7 @@ function buildBoidGrid() {
   const inv = 1 / cellSize;
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
-    if (!p.isBoosted) continue;
+    if (!p.isBoosted || p.simCulled) continue;
     const cx = floor(p.pos.x * inv);
     const cy = floor(p.pos.y * inv);
     boidActiveIndices.push(i);
@@ -4005,6 +4517,9 @@ function buildFrameCache(nowMs) {
   } else {
     fc.ridgeFalloffNorm = 1;
   }
+  // Refresh the shaping tables the per-particle sampler reads instead of
+  // calling pow. No-ops unless a control moved one of the exponents.
+  rebuildDuneLuts(CONFIG.duneContrast, ridgeFalloff, fc.ridgeFalloffNorm);
   return fc;
 }
 
@@ -4030,7 +4545,7 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
   const warpedAcross = duneWarpedAcross(along, across);
   const ridge01 = (fastSin(warpedAcross) + 1) * 0.5;
   const duneMultiplier = CONFIG.enableDuneBands
-    ? 0.25 + 0.95 * pow(ridge01, CONFIG.duneContrast)
+    ? 0.25 + 0.95 * sampleDuneLut(duneContrastLut, ridge01)
     : 1;
   const windAmp = CONFIG.ambientWindStrength * duneMultiplier;
 
@@ -4127,9 +4642,7 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
     // ridge01^(contrast-1) to infinity — an unbounded pull at trough centres.
     // The cap bounds that; it is inactive for contrast >= 1, where the peak
     // gradient is 0.47-0.84 either way.
-    const shaped = contrast === 1
-      ? 1
-      : min(DUNE_RIDGE_SHAPE_CAP, pow(max(ridge01, 1e-3), contrast - 1));
+    const shaped = contrast === 1 ? 1 : sampleDuneLut(duneShapeLut, ridge01);
     const dMult = 0.95 * contrast * shaped * 0.5 * fastSin(warpedAcross + HALF_PI);
     // Crest falloff. The raw gradient still pulls at ~60% of peak where the
     // field reads 0.9 white, which packs particles into the ridge centre;
@@ -4137,11 +4650,11 @@ function sampleDuneWindForceXY(px, py, frameCache, turbulenceMultiplier = 1) {
     // they ease onto the flank instead. Normalised so k only reshapes the
     // profile — without it, sharpening the falloff would also quietly weaken
     // the whole force and force a re-tune of Ridge Attraction.
-    let falloff = 1;
-    if (frameCache.ridgeFalloff > 0) {
-      const signal = contrast === 1 ? ridge01 : pow(ridge01, contrast);
-      falloff = pow(max(1 - signal, 0), frameCache.ridgeFalloff) * frameCache.ridgeFalloffNorm;
-    }
+    // The table already folds the contrast curve, the (1 - signal) flip, the
+    // exponent and the normalisation into one read.
+    const falloff = frameCache.ridgeFalloff > 0
+      ? sampleDuneLut(duneFalloffLut, ridge01)
+      : 1;
     const pull = ridgePull * CONFIG.ambientWindStrength * DUNE_RIDGE_ATTRACTION_GAIN * falloff;
     fx += frameCache.dunePerpX * dMult * pull;
     fy += frameCache.dunePerpY * dMult * pull;
@@ -4389,7 +4902,7 @@ function resolveParticleBoxContainment(particle, box) {
 
 function enforceAllParticleBoxContainment() {
   for (let i = 0; i < particles.length; i++) {
-    if (particles[i].scrollFrozen) continue;
+    if (particles[i].scrollFrozen || particles[i].simCulled) continue;
     if (particles[i].ignoresBoxCollision || particles[i].scrollCollisionDisabled) continue;
     const nearbyBoxes = getNearbyBoxesForPoint(particles[i].pos.x, particles[i].pos.y);
     for (let j = 0; j < nearbyBoxes.length; j++) {
@@ -4580,8 +5093,16 @@ function renderParticles(dtFrames = 1) {
   const constantInk = Boolean(CONFIG.enableConstantInk);
   const inkExponent = max(0, CONFIG.constantInkExponent);
   const renderFraction = constrain(getQualityValue('particleRenderFraction'), 0.01, 1);
-  const tailAlphaWeight = renderFraction;
-  const tailWidthWeight = max(0.2, sqrt(renderFraction));
+  // Render Fraction now removes particles rather than only thinning them. It
+  // used to feed the tail ramp alone — dimming and narrowing the high-index end
+  // — which meant that at maximum degradation the renderer was still issuing
+  // every stroke it ever had, just fainter ones. That is most of the cost with
+  // none of the relief.
+  //
+  // The ramp stays: it is what the layers were balanced against, and it now
+  // does the job it is suited to, which is making the particles nearest the cut
+  // the faintest ones so their removal is the least visible.
+  const renderCullActive = renderFraction < 0.999;
   const particleCount = particles.length;
   // Scale segment clamp with dt so longer frames don't truncate trails.
   const maxSegLen = MAX_RENDER_SEGMENT_LENGTH_PX * max(1, dtFrames);
@@ -4627,14 +5148,28 @@ function renderParticles(dtFrames = 1) {
   const baseOklch = _oklchCache.base;
   const boostedOklch = _oklchCache.boosted;
   const glowCoreOklch = _oklchCache.glowCore;
-  // Track previous stroke state to skip redundant canvas state changes.
-  let prevStrokeR = -1;
-  let prevStrokeG = -1;
-  let prevStrokeB = -1;
-  let prevStrokeA = -1;
-  let prevWeight = -1;
-  let prevTarget = null;
   const renderParticleAt = (p, i) => {
+    // Culled by Render Fraction. The display position still has to advance, or
+    // the particle would draw a streak from wherever it stopped the moment it
+    // came back — the same reason the minimum-speed skip below writes it too.
+    //
+    // A sim-culled particle also lands here, because the sim fraction is never
+    // allowed below the render fraction. Its position is not moving, so the
+    // write is a no-op, and reviveCulledParticle resyncs on the way back in.
+    let cullFade = 1;
+    if (renderCullActive) {
+      const rank = p.cullRank;
+      if (rank >= renderFraction) {
+        // Still simulating, just not drawing, so the display position has to
+        // keep up or the particle streaks the moment it comes back. Sim-culled
+        // particles never reach here — the loops below filter them out.
+        getInterpolatedParticlePosition(p);
+        p.displayX = _interpolatedPos.x;
+        p.displayY = _interpolatedPos.y;
+        return;
+      }
+      cullFade = particleCullFade(rank, renderFraction);
+    }
     const speed = sqrt(p.vel.x * p.vel.x + p.vel.y * p.vel.y);
     // Read interpolated position into locals before the scratch object is reused.
     getInterpolatedParticlePosition(p);
@@ -4677,63 +5212,48 @@ function renderParticles(dtFrames = 1) {
     const isFgLayer = fgActive && !p.ignoresBoxCollision;
     let g;
     if (isFgLayer) {
-      g = fgGraphics;
+      g = _strokeTargetFg;
     } else if (dualInkActive && i >= inkSplitIndex) {
-      g = inkBGraphics;
+      g = _strokeTargetInkB;
     } else {
-      g = _mainRenderTarget;
+      g = _strokeTargetMain;
     }
-    // Tail ramp, normalized within the target layer's own index range rather
-    // than the whole array. Ramping across the array would hand whichever
-    // layer owns the high indices (ink B) the entire dim, thin end of the
-    // ramp while A kept the bright end — the layers would drift apart in
-    // weight whenever adaptive quality pushed renderFraction below 1.
-    let rampStart;
-    let rampEnd;
-    if (isFgLayer) {
-      rampStart = 0;
-      rampEnd = collidersEndIndex;
-    } else if (g === inkBGraphics) {
-      rampStart = inkSplitIndex;
-      rampEnd = particleCount;
-    } else {
-      rampStart = inkStartIndex;
-      rampEnd = inkSplitIndex;
-    }
-    // Boosted particles are colliders wherever they sit in the array, so a
-    // boosted index can fall outside its layer's block — clamp rather than
-    // let the ramp run past its ends.
-    const rampSpan = rampEnd - rampStart;
-    const t = rampSpan > 1 ? constrain((i - rampStart) / (rampSpan - 1), 0, 1) : 0;
-    const renderAlphaWeight = lerp(1, tailAlphaWeight, t);
-    const renderWidthWeight = lerp(1, tailWidthWeight, t);
-    if (g !== prevTarget) {
-      prevStrokeR = prevStrokeG = prevStrokeB = prevStrokeA = -1;
-      prevWeight = -1;
-      prevTarget = g;
-    }
+    // The tail ramp that used to live here is gone. It faded and narrowed
+    // particles toward the high-index end of each layer block, with a depth of
+    // exactly renderFraction — which is to say it WAS renderFraction, the only
+    // way that control did anything. At renderFraction 1 it evaluated to
+    // lerp(1, 1, t), a pure identity, so it never touched the default look.
+    //
+    // Now that renderFraction removes particles, keeping the ramp would apply
+    // the same control twice: 40% of the particles drawing, each of them also
+    // dimmed toward 40%. Measured, that came out near black — far darker than
+    // the old code at the same setting, and the wind stopped reading as wind.
+    // The cull alone lands within about 20% of the old ink total while issuing
+    // 60% fewer strokes, which is the entire point.
+    //
+    // Its other job is covered too. The ramp was normalised per layer block so
+    // the layers could not drift apart in weight; the cull is a low-discrepancy
+    // sequence over the index, so every block loses the same proportion without
+    // anything needing to know where the blocks are.
     // Quantize weight to nearest 0.25px to reduce unique state transitions.
     const weight = Math.max(
       0.5,
       Math.round(
         CONFIG.particleSize *
         p.sizeMultiplier *
-        renderWidthWeight *
         (1 + widthBoost * (speedFactor - 1)) *
         duneSizeFactor * 4
       ) * 0.25
     );
     // Constant ink: divide the alpha by however much wider this stroke came out
-    // than a base-size one would have in the same tail slot, so widening a
-    // particle spreads its ink rather than adding more. Measured against the
-    // rendered weight, not the nominal one, so the 0.5px floor and the 0.25px
-    // quantize can't leave the compensation chasing a width nothing drew — at
-    // small Particle Size most strokes sit on the floor and want no correction
-    // at all. renderWidthWeight is in both terms so it cancels, leaving the tail
-    // ramp's own fade intact instead of being compensated away.
+    // than a base-size one would have, so widening a particle spreads its ink
+    // rather than adding more. Measured against the rendered weight, not the
+    // nominal one, so the 0.5px floor and the 0.25px quantize can't leave the
+    // compensation chasing a width nothing drew — at small Particle Size most
+    // strokes sit on the floor and want no correction at all.
     let inkScale = 1;
     if (constantInk && inkExponent > 0) {
-      const refWeight = Math.max(0.5, Math.round(CONFIG.particleSize * renderWidthWeight * 4) * 0.25);
+      const refWeight = Math.max(0.5, Math.round(CONFIG.particleSize * 4) * 0.25);
       if (weight !== refWeight) {
         // Every stroke alpha below is handed to the canvas as `a * alphaPercent`
         // with alphaPercent = alpha/255, so the ink a segment lays goes as the
@@ -4745,8 +5265,11 @@ function renderParticles(dtFrames = 1) {
     // Compute the normal alpha, then multiply by scroll fade factor. The flat
     // boosted-particle add stays outside inkScale: it exists to make those
     // particles pop, and they run narrow, so normalizing it would blow it out.
-    const normalAlpha = (isFgLayer ? fgBaseA : baseA) * renderAlphaWeight * minSpeedAlphaRamp * (1 + alphaBoost * (speedFactor - 1)) * duneAlphaFactor * inkScale + fastAlphaAdd;
-    const alpha = Math.round(constrain(normalAlpha * scrollFadeFactor, 0, 255));
+    const normalAlpha = (isFgLayer ? fgBaseA : baseA) * minSpeedAlphaRamp * (1 + alphaBoost * (speedFactor - 1)) * duneAlphaFactor * inkScale + fastAlphaAdd;
+    // cullFade rides alongside scrollFadeFactor rather than inside normalAlpha,
+    // for the same reason: the glow core lerps toward its own alpha and should
+    // dim with the particle, not be normalised against it.
+    const alpha = Math.round(constrain(normalAlpha * scrollFadeFactor * cullFade, 0, 255));
     const alphaPercent = alpha/255;
     const segment = clampRenderedSegment(
       p.displayX,
@@ -4755,7 +5278,7 @@ function renderParticles(dtFrames = 1) {
       interpY,
       maxSegLen
     );
-    const glow = glowEnabled ? p.boxGlowIntensity * scrollFadeFactor : 0;
+    const glow = glowEnabled ? p.boxGlowIntensity * scrollFadeFactor * cullFade : 0;
     if (glow > 0) {
       // Ember flicker, deliberately kept off `blend` below. blend is how far the
       // core has travelled toward the core color, so modulating it would drag the
@@ -4777,9 +5300,8 @@ function renderParticles(dtFrames = 1) {
       // Halo pass: wider stroke, base color, low alpha scaled by intensity.
       const haloA = Math.round(glowHaloAlpha * glow * flicker);
       const haloW = Math.max(0.5, weight * glowHaloSize);
-      g.stroke(colorR, colorG, colorB, haloA * alphaPercent);
-      g.strokeWeight(haloW);
-      g.line(segment.fromX, segment.fromY, segment.toX, segment.toY);
+      strokeSegment(g, colorR, colorG, colorB, haloA * alphaPercent, haloW,
+        segment.fromX, segment.fromY, segment.toX, segment.toY);
       // Core pass: lerp toward core color.
       const blend = glow * glowCoreBlend;
       let coreR, coreG, coreB;
@@ -4808,44 +5330,57 @@ function renderParticles(dtFrames = 1) {
       // it into the target instead means the flicker vanishes with blend.
       const coreA = Math.round(constrain((normalAlpha + (glowCoreA * flicker - normalAlpha) * blend), 0, 255));
       const coreW = weight + (glowCoreDiameter - weight) * glow * flicker;
-      g.stroke(coreR, coreG, coreB, coreA * alphaPercent);
-      g.strokeWeight(coreW);
-      g.line(segment.fromX, segment.fromY, segment.toX, segment.toY);
-      // Invalidate tracking since glow changed state unpredictably.
-      prevStrokeR = coreR; prevStrokeG = coreG; prevStrokeB = coreB; prevStrokeA = coreA;
-      prevWeight = coreW;
+      // p5 rounded these on the way into p5.Color; the OkLCh path can hand back
+      // fractional channels, and a fractional r/g/b would break the packed-int
+      // colour compare in strokeSegment as well as change the string.
+      strokeSegment(g, Math.round(coreR), Math.round(coreG), Math.round(coreB),
+        coreA * alphaPercent, coreW,
+        segment.fromX, segment.fromY, segment.toX, segment.toY);
     } else {
-      // Normal non-glow path with redundancy elimination.
-      if (colorR !== prevStrokeR || colorG !== prevStrokeG || colorB !== prevStrokeB || alpha !== prevStrokeA) {
-        g.stroke(colorR, colorG, colorB, alpha * alphaPercent);
-        prevStrokeR = colorR;
-        prevStrokeG = colorG;
-        prevStrokeB = colorB;
-        prevStrokeA = alpha;
-      }
-      if (weight !== prevWeight) {
-        g.strokeWeight(weight);
-        prevWeight = weight;
-      }
-      g.line(segment.fromX, segment.fromY, segment.toX, segment.toY);
+      // Normal non-glow path. State deduplication now lives in strokeSegment,
+      // which tracks it per target rather than across the whole pass — the old
+      // single set of prev* locals went stale every time the layer changed.
+      strokeSegment(g, colorR, colorG, colorB, alpha * alphaPercent, weight,
+        segment.fromX, segment.fromY, segment.toX, segment.toY);
     }
     p.displayX = segment.toX;
     p.displayY = segment.toY;
   };
   noFill();
   strokeCap(ROUND);
+  // Bind the raw contexts for the length of the two passes. p5 sets lineCap to
+  // ROUND on every Renderer2D it builds, including createGraphics ones, so the
+  // offscreen layers already match the main canvas and there is nothing to set
+  // here beyond what strokeCap(ROUND) above does for p5's own bookkeeping.
+  beginStrokeTarget(_strokeTargetMain, drawingContext, _renderer);
+  if (fgActive) {
+    beginStrokeTarget(_strokeTargetFg, fgGraphics.drawingContext, fgGraphics._renderer);
+  }
+  if (dualInkActive) {
+    beginStrokeTarget(_strokeTargetInkB, inkBGraphics.drawingContext, inkBGraphics._renderer);
+  }
+  // simCulled sits alongside scrollFrozen because it means the same thing here:
+  // the particle is not moving, so drawing it would stamp a zero-length segment
+  // — a dot under the round cap — in the same place every frame until it moves
+  // again. Tested rather than inferred from the fractions: the render and sim
+  // fractions are smoothed by separate filters at deliberately different rates,
+  // so although the targets are clamped so sim never trails render, the
+  // effective values invert for the whole of a recovery. Measured on an
+  // 8x-throttled run, the sim fraction sat at 0.38 while render had already
+  // climbed to 0.73 — a third of the population frozen and drawing.
   for (let i = 0; i < particleCount; i++) {
     const p = particles[i];
-    if (p.isBoosted || p.scrollFrozen) continue;
+    if (p.isBoosted || p.scrollFrozen || p.simCulled) continue;
     renderParticleAt(p, i);
   }
-  // Reset tracking before the boosted pass (different base color).
-  prevStrokeR = -1; prevStrokeG = -1; prevStrokeB = -1; prevStrokeA = -1; prevWeight = -1;
   for (let i = 0; i < particleCount; i++) {
     const p = particles[i];
-    if (!p.isBoosted || p.scrollFrozen) continue;
+    if (!p.isBoosted || p.scrollFrozen || p.simCulled) continue;
     renderParticleAt(p, i);
   }
+  endStrokeTarget(_strokeTargetMain);
+  endStrokeTarget(_strokeTargetFg);
+  endStrokeTarget(_strokeTargetInkB);
   noStroke();
 }
 
@@ -4857,16 +5392,23 @@ function renderBoxes() {
   }
   syncFlowBoxOverlay();
 
+  // separationZoneAlpha ships at 0, so this loop was filling a rounded rect per
+  // active box per frame — a few hundred of them during a scroll — in a colour
+  // with no opacity. Invisible, but the canvas still built and rasterised every
+  // path. The alpha test in front costs one compare and gives the zone back the
+  // moment the slider leaves zero.
+  const zoneAlpha = clampColorByte(CONFIG.separationZoneAlpha);
+  if (!CONFIG.enableParticleSeparation || !CONFIG.showSeparationZone || zoneAlpha <= 0) {
+    return;
+  }
+
+  const r = CONFIG.separationNearBoxRadius;
+  noStroke();
+  fill(...RENDER_COLORS.separationZone, zoneAlpha);
   for (let i = 0; i < activeBoxes.length; i++) {
     const box = activeBoxes[i];
     const displayBox = getInterpolatedBoxPosition(box);
-
-    if (CONFIG.enableParticleSeparation && CONFIG.showSeparationZone) {
-      const r = CONFIG.separationNearBoxRadius;
-      noStroke();
-      fill(...RENDER_COLORS.separationZone, CONFIG.separationZoneAlpha);
-      rect(displayBox.x - r, displayBox.y - r, box.w + r * 2, box.h + r * 2, 6);
-    }
+    rect(displayBox.x - r, displayBox.y - r, box.w + r * 2, box.h + r * 2, 6);
   }
 }
 

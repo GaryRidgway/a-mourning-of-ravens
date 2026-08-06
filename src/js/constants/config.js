@@ -2,6 +2,23 @@ const CONFIG = {
   particleCount: 5000,
   enableAutoRenderScale: false,
   autoRenderScaleThresholdPx: 1080,
+  // Ceiling on the device pixel ratio the three canvases render at. 0 leaves
+  // the display's own ratio alone, which is what p5 does by default and what
+  // this piece has always done.
+  //
+  // This is the fill-rate control, and on a Retina panel it is the largest one
+  // there is: at ratio 2 every canvas has four times the pixels of its CSS box,
+  // and there are three of them, each fully cleared and repainted every frame.
+  // Capping at 1 quarters that. It costs sharpness on the particle trails,
+  // which are thin, so it is a real trade rather than a free win — but on an
+  // integrated GPU it is the difference between compositing being free and
+  // compositing being the bottleneck. Try 1 first on a machine that struggles;
+  // the sim itself will not get any faster, so if the frame time does not move,
+  // the bottleneck was never fill rate and this should go back to 0.
+  //
+  // Distinct from Auto Render Scale, which shrinks the canvas in CSS pixels and
+  // lets the browser upscale. The two multiply.
+  maxPixelDensity: 0,
   particleSize: 0.25,
   particleSizeRandomNegative: 0,
   particleSizeRandomPositive: 0.42,
@@ -36,7 +53,20 @@ const CONFIG = {
   // segment actually paints, where area is width × length and alpha goes as
   // 1/w. Use 2 for the literal answer, 1 for the one the canvas draws.
   constantInkExponent: 2,
+  // Fraction of particles that are drawn. Below 1 the rest are skipped outright
+  // rather than dimmed — the tail ramp still fades whatever sits nearest the cut,
+  // so what disappears is always the faintest thing on screen.
   particleRenderFraction: 1,
+  // Fraction of particles that are simulated. Held at or above Render Fraction,
+  // because a particle that has stopped moving must not keep drawing — it would
+  // burn a stationary dot into the ink instead of laying a trail.
+  //
+  // This is the expensive one and the one worth reaching for last. Physics is
+  // about three quarters of frame time, so this is where a genuinely slow
+  // machine finds its headroom; but a particle dropped from the sim freezes
+  // where it stands and needs a fade-in on the way back, which is why the
+  // quality controller spends the render cut first and recovers this one slowly.
+  particleSimFraction: 1,
   enableAmbientMotion: true,
   enableDuneBands: true,
   // Greyscale picture of the dune signal over the whole scene, for finding the

@@ -9,11 +9,22 @@ const CONTROL_TOOLTIPS = {
   particleSpeedWidthBoost: 'Multiplies stroke weight by speed. The readout is the factor at 1px/frame, so 2.17×/px means a particle moving 1px/frame draws 2.17× as thick. Unbounded like Speed Alpha Boost. 1.00×/px = off. Final weight snaps to the nearest 0.25px, so small changes may not show.',
   enableConstantInk: 'Makes stroke weight cost-neutral: whatever the size boosts do to a particle\'s width, its alpha is scaled the other way so it lays the same total ink. A stroke twice as wide covers twice the area, so it goes half as dark (or a quarter, at exponent 2). It works in both directions, so strokes thinner than Particle Size get brighter — Boosted Particles are 0.42× width by default and will noticeably brighten. Compares against the rendered weight after the 0.5px floor and 0.25px quantize, so particles pinned at the floor are left alone. The flat alpha add on boosted particles is not scaled.',
   constantInkExponent: 'How ink scales with width, when Constant Ink is on. 2 treats a particle as a disc — area goes as r², so tripling the radius drops alpha to a ninth, which is the strict "same ink" answer. 1 matches what actually gets painted: a stroked segment is a capsule, so its area is width × length and tripling the width only needs a third the alpha. 0 = off. Values above 2 over-correct and make big particles vanish.',
-  particleRenderFraction: 'Global streak density scaler. Lower values reduce accumulated ink while preserving continuity.',
+  particleRenderFraction:
+    'Fraction of particles drawn. Below 1 the rest are skipped, not just dimmed — the tail ramp fades '
+    + 'whatever sits nearest the cut, so what goes is always the faintest thing on screen. Instantly reversible: '
+    + 'the skipped particles keep simulating.',
+  particleSimFraction:
+    'Fraction of particles simulated. Physics is about three quarters of frame time, so this is where a slow '
+    + 'machine finds real headroom — but a dropped particle freezes where it stands and fades back in when it '
+    + 'returns. Never goes below Render Fraction. Reach for this after Render Fraction, not before.',
   particleCount: 'Maximum particle budget used by the simulation and adaptive particle count system.',
   boxCollisionParticipantRatio: 'Fraction of particles that participate in poem collider box interactions.',
   enableAutoRenderScale: 'Automatically caps the internal canvas size on very large screens, then CSS stretches it to fill the viewport.',
   autoRenderScaleThresholdPx: 'Maximum internal canvas size before auto render scaling caps it.',
+  maxPixelDensity:
+    'Ceiling on the device pixel ratio all three canvases render at. 0 uses the display\'s own ratio. ' +
+    'The main fill-rate control: on a Retina display, 1 quarters the pixels drawn each frame at the ' +
+    'cost of sharpness in the trails. Changing it clears the accumulated ink.',
   edgeRespawnWeightBase: 'Base chance weight for edge respawn bins before dune influence is applied.',
   edgeRespawnWeightStrength: 'How strongly dune sampling biases random edge respawn locations.',
   edgeRespawnWeightExponent: 'Contrast of edge respawn weighting. Higher values favor high-weight bins more aggressively.',

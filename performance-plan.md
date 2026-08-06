@@ -66,9 +66,70 @@ These target the per-particle, per-frame work in `flowField.js`. Unlike Phase 2 
 
 ---
 
-## Phase 3 — Larger Investment (future, lower priority)
+## Phase 3 — Show Pass ✅ Complete
 
-Post-2B profiling shows ~40 FPS at full Tier 0 quality with 33% headroom above the 30 FPS target. Items 11 and 12 are unlikely to be needed unless particle count or feature complexity increases significantly.
+Full write-up in `reports/final-show-pass.md`. Measured against CPU-throttled
+Chrome rather than the tuning machine, and by CPU time inside `draw()` rather
+than by frame deltas, which are vsync-paced and report the display.
+
+13. ✅ **Bypass p5's `stroke()` in the particle loop** — `flowField.js`
+    - `p5.Renderer2D.stroke()` allocates a `p5.Color` and parses a CSS colour string per call; ~14% of all JS at 5000 particles
+    - Colour now on `strokeStyle` (assigned twice a frame), alpha on `globalAlpha`
+    - `renderParticles` at 6x throttle: 9.21 ms → 2.98 ms
+
+14. ✅ **Cache the box-grid cell size and add a bounds early-out** — `flowField.js`
+    - Was 9–10%, entirely from re-deriving a constant through p5's variadic `max()` 15,000 times a frame
+    - Now absent from the profile
+
+15. ✅ **Lookup tables for the dune sampler's `Math.pow` calls** — `flowField.js`
+
+16. ✅ **Skip the flow-box overlay and separation zone when their alpha is 0** — `flowField.js`
+    - Both ship at alpha 0 and were drawing nothing at full price, ~3.5%
+
+17. ✅ **Drop `p5.dom.min.js`** — 21 KB, used only for two `canvas.style()` calls
+
+18. ✅ **New `maxPixelDensity` control** — the fill-rate lever; default 0 (uncapped) so nothing changes without an explicit choice
+
+**Outcome:** ~40% less CPU per frame at every throttle level, worth roughly 1.7x
+the machine. At 6x throttle the adaptive controller went from pinned at maximum
+degradation and still missing target, to sitting mid-range. Verified pixel-identical
+by deterministic screenshot (max channel delta 5/255 on 0.09% of pixels, from
+lookup-table float drift).
+
+---
+
+## Phase 3B — Giving the controller something to cut ✅ Complete
+
+Phase 3 ended on a caveat: the adaptive quality system had almost no authority
+over `updateParticles`, so a pinned quality level meant "out of ideas" rather
+than "protecting the piece". Fixed.
+
+19. ✅ **Render Fraction culls particles instead of dimming them** — `flowField.js`
+    - The tail ramp it used to drive *was* the control, and at fraction 1 it was a pure identity
+    - Measured: the old control at 0.4 produced the same field luminance as at 1.0 — it did nothing
+    - Ramp removed rather than stacked; keeping both applied the same control twice and drained the wind
+
+20. ✅ **New `particleSimFraction`, on the quality curve** — reaches `updateParticles`
+    - Particles are deactivated, not deleted — the array length never changes, so layer assignment and indices stay put
+    - Cull order is index x golden ratio conjugate: stable (no strobing dashed trails) and monotone (no reshuffling as the fraction drifts)
+    - Held at or above Render Fraction: a frozen particle must never draw
+
+21. ✅ **Two gates to stop the controller hunting** — `flowField.js`
+    - Particles return only when frames run 12% under budget, and only after that has held 4 seconds
+    - Without them the level swung 0.82–1.00 and the particle count 15% on a ~30s cycle — the density pulsing the continuous curve exists to prevent
+    - Measured after: particle count peak-to-peak 0.000, frame time dead on budget, full recovery ~25 s after load lifts
+
+**Outcome:** the throttle at which the piece holds 30 fps moved from ~5x to ~8x.
+At 8x, `draw()` fell 19.35 ms → 9.58 ms. At maximum degradation the field keeps
+81% of its brightness for 34% of the strokes.
+
+**The wall is no longer JavaScript.** At 10x throttle `draw()` is 11 ms of a
+38 ms frame; 63% of profiled time is native rasterisation and compositing of
+three full-screen canvases. Further particle cuts will not help. See the report.
+
+---
+
+## Phase 4 — Larger Investment (future, lower priority)
 
 10. **Bundle + minify with Vite or esbuild**
     - ~792 KB of unminified JS across 13 files → likely under 200 KB bundled
@@ -87,7 +148,10 @@ Post-2B profiling shows ~40 FPS at full Tier 0 quality with 33% headroom above t
 
 ## What's Already Good (don't touch)
 
-- Adaptive quality system — tiered quality with cooldowns is the right approach
+- Adaptive quality system — now genuinely load-bearing. As of Phase 3B it can
+  reach the physics via `particleSimFraction`, and it settles rather than hunting.
+  A pinned quality level with frame time still over budget now means fill rate,
+  not JavaScript.
 - Map-based spatial grids — separation, boid, and box grids avoid O(n²) pair checks
 - JS heap usage — ~28 MB used / ~96 MB allocated is healthy for a live particle system
 - Separation pair budget — 70,000-pair cap prevents runaway CPU cost

@@ -896,6 +896,12 @@
         </label>
 
         <label class="control-row">
+          <span>Max Pixel Density</span>
+          <input type="range" min="0" max="3" step="0.25" data-key="maxPixelDensity" />
+          <output data-value-for="maxPixelDensity"></output>
+        </label>
+
+        <label class="control-row">
           <span>Degrade Rate</span>
           <input type="range" min="0.05" max="4" step="0.05" data-key="qualityDegradeRate" />
           <output data-value-for="qualityDegradeRate"></output>
@@ -934,6 +940,12 @@
           <span>Render Fraction</span>
           <input type="range" min="0.05" max="1" step="0.01" data-key="particleRenderFraction" />
           <output data-value-for="particleRenderFraction"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Sim Fraction</span>
+          <input type="range" min="0.05" max="1" step="0.01" data-key="particleSimFraction" />
+          <output data-value-for="particleSimFraction"></output>
         </label>
 
         <details class="control-group control-subgroup">
@@ -1009,7 +1021,6 @@
 
   <!-- vvv Add scripts here from dist folder vvv -->
   <script src="./src/vendor/p5/p5.min.js" defer></script>
-  <script src="./src/vendor/p5/p5.dom.min.js" defer></script>
   <script src="./src/js/constants/config.js" defer></script>
   <script src="./src/js/constants/renderColors.js" defer></script>
   <script src="./src/js/constants/controlParamDefs.js" defer></script>
