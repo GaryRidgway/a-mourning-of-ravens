@@ -1871,6 +1871,17 @@ function setupDuneControls() {
     constantInkExponentInput.disabled = !CONFIG.enableConstantInk;
   };
 
+  // Both flicker sliders are inert unless the glow itself is drawing, so they
+  // grey out on either the flicker toggle or Box Glow being off.
+  const glowFlickerInputs = ['glowFlickerDepth', 'glowFlickerSpeed']
+    .map((key) => panel.querySelector(`[data-key="${key}"]`));
+  const syncGlowFlickerDisabledState = () => {
+    const off = !CONFIG.enableGlowFlicker || !CONFIG.enableBoxGlow;
+    for (const input of glowFlickerInputs) {
+      if (input) input.disabled = off;
+    }
+  };
+
   // The two curl modes read different controls, and calibration changes which
   // ones again, so which sliders are live is a three-way question. Grey out the
   // ones the active combination ignores rather than leaving them looking
@@ -1991,6 +2002,9 @@ function setupDuneControls() {
       if (def.key === 'enableConstantInk') {
         syncConstantInkDisabledState();
       }
+      if (def.key === 'enableGlowFlicker' || def.key === 'enableBoxGlow') {
+        syncGlowFlickerDisabledState();
+      }
       if (def.key === 'curlDivergenceFree' || def.key === 'curlAngleCalibrated') {
         syncCurlModeDisabledState();
       }
@@ -2004,6 +2018,7 @@ function setupDuneControls() {
   syncEdgeRespawnMixDisabledState();
   syncCurlModeDisabledState();
   syncConstantInkDisabledState();
+  syncGlowFlickerDisabledState();
 
   bindColorControls(panel);
   bindColorAlphaControls(panel);
@@ -3315,6 +3330,10 @@ function createParticle(x, y, ignoresBoxCollision = false) {
     boxGlowIntensity: 0,
     boxGlowPeakIntensity: 0,
     boxGlowPeakMs: 0,
+    // Fixed offset into the 1D noise field for ember flicker. Spread wide so
+    // neighbouring particles sample decorrelated regions — a shared or narrowly
+    // spaced phase makes every lit particle dip together and reads as a strobe.
+    flickerPhase: random(10000),
     scrollFrozen: false,
     scrollUnfrozeAtMs: 0,
     scrollFadeProgress: 0,
@@ -4637,6 +4656,13 @@ function renderParticles(dtFrames = 1) {
   const glowCoreG = RENDER_COLORS.boxGlowCore[1];
   const glowCoreB = RENDER_COLORS.boxGlowCore[2];
   const glowCoreA = RENDER_COLORS.boxGlowCore.length > 3 ? RENDER_COLORS.boxGlowCore[3] : 255;
+  // Ember flicker. Resolved to a depth of 0 when it would be a no-op so the
+  // per-particle test is one already-loaded compare, and advanced on render
+  // time rather than frame count so the breathing rate is independent of FPS.
+  const flickerDepth = CONFIG.enableGlowFlicker
+    ? constrain(CONFIG.glowFlickerDepth, 0, 1)
+    : 0;
+  const flickerT = renderNowMs * 0.001 * max(0, CONFIG.glowFlickerSpeed);
   // OkLCh conversions — only recomputed when colors actually change.
   if (_oklchCache.dirty ||
       baseR !== _oklchCache.baseR || baseG !== _oklchCache.baseG || baseB !== _oklchCache.baseB ||
@@ -4786,8 +4812,25 @@ function renderParticles(dtFrames = 1) {
     );
     const glow = glowEnabled ? p.boxGlowIntensity * scrollFadeFactor : 0;
     if (glow > 0) {
+      // Ember flicker, deliberately kept off `blend` below. blend is how far the
+      // core has travelled toward the core color, so modulating it would drag the
+      // hue back toward the base particle color on every dip and the ember would
+      // change color as it breathes. The flicker is a level, not a color: it dims
+      // and narrows something that stays fully core-colored. The envelope still
+      // drives blend, so a glow that is genuinely fading does cool back to the
+      // base color — that part is the fade, not the flicker.
+      let flicker = 1;
+      if (flickerDepth > 0) {
+        // p5's noise() clusters hard around 0.5 and spends almost no time near
+        // its endpoints, so raw output would make Depth do roughly half what it
+        // says. Expand around the midpoint before using it.
+        const n = constrain((noise(p.flickerPhase + flickerT) - 0.5) * 2.2 + 0.5, 0, 1);
+        // Subtractive: spans 1-depth .. 1, so the un-flickered look is the
+        // ceiling and nothing downstream can overshoot its range.
+        flicker = 1 - flickerDepth + flickerDepth * n;
+      }
       // Halo pass: wider stroke, base color, low alpha scaled by intensity.
-      const haloA = Math.round(glowHaloAlpha * glow);
+      const haloA = Math.round(glowHaloAlpha * glow * flicker);
       const haloW = Math.max(0.5, weight * glowHaloSize);
       g.stroke(colorR, colorG, colorB, haloA * alphaPercent);
       g.strokeWeight(haloW);
@@ -4814,8 +4857,12 @@ function renderParticles(dtFrames = 1) {
         coreG = Math.round(colorG + (glowCoreG - colorG) * blend);
         coreB = Math.round(colorB + (glowCoreB - colorB) * blend);
       }
-      const coreA = Math.round(constrain((normalAlpha + (glowCoreA - normalAlpha) * blend), 0, 255));
-      const coreW = weight + (glowCoreDiameter - weight) * glow;
+      // Flicker dims the core's own alpha, not the lerp: scaling the whole
+      // result would fade the particle underneath it too, so a barely-glowing
+      // particle would flicker even though it has almost no ember left. Folding
+      // it into the target instead means the flicker vanishes with blend.
+      const coreA = Math.round(constrain((normalAlpha + (glowCoreA * flicker - normalAlpha) * blend), 0, 255));
+      const coreW = weight + (glowCoreDiameter - weight) * glow * flicker;
       g.stroke(coreR, coreG, coreB, coreA * alphaPercent);
       g.strokeWeight(coreW);
       g.line(segment.fromX, segment.fromY, segment.toX, segment.toY);

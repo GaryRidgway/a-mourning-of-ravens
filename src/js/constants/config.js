@@ -119,6 +119,21 @@ const CONFIG = {
   boxGlowCoreDiameter: 1.4,
   boxGlowFadeDelayMs: 1000,
   boxGlowFadeDurationMs: 1000,
+  // Ember flicker: modulates the glow with per-particle 1D Perlin so lit
+  // particles breathe independently instead of holding a flat value. It drives
+  // halo alpha, core alpha and core width — brightness and size — but never the
+  // color blend, so an ember dims and narrows without drifting back toward the
+  // base particle color mid-flicker. Purely subtractive, so depth 0 is a
+  // bit-exact no-op and it can never overshoot the un-flickered look.
+  enableGlowFlicker: false,
+  // Fraction of the glow the flicker is allowed to take away at its lowest.
+  // 1 lets embers wink fully out at the trough; mean brightness drops as this
+  // rises, so expect to raise Core Alpha to compensate.
+  glowFlickerDepth: 0.55,
+  // Noise units traversed per second. Perlin features run about one unit wide,
+  // so ~1 is a slow breath and ~10 reads as sparks. Deposited ink beads at the
+  // high end, since a flickering particle lays a dashed trail, not a smooth one.
+  glowFlickerSpeed: 1.2,
   glowBlendOklch: true,
   glowBlendChromaFloor: 0.404,
   glowBlendHueShift: 0,
