@@ -3,6 +3,7 @@ const CONTROL_PARAM_DEFS = [
   { key: 'enableAutoRenderScale', type: 'bool' },
   { key: 'autoRenderScaleThresholdPx', type: 'number', digits: 0 },
   { key: 'maxPixelDensity', type: 'number', digits: 2 },
+  { key: 'enableAutoPixelDensity', type: 'bool' },
   { key: 'particleSize', type: 'number', digits: 2 },
   { key: 'particleSizeRandomNegative', type: 'number', digits: 2 },
   { key: 'particleSizeRandomPositive', type: 'number', digits: 2 },

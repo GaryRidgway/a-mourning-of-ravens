@@ -42,7 +42,8 @@ await new Promise((r) => server.listen(PORT, '127.0.0.1', r));
 const dir = mkdtempSync(join(tmpdir(), 'mourn-settle-'));
 const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${DEBUG_PORT}`,
   `--user-data-dir=${dir}`, '--window-size=1600,900', '--no-first-run', '--hide-scrollbars',
-  '--enable-gpu-rasterization', '--use-angle=metal', 'about:blank'], { stdio: 'ignore' });
+  ...(argv.nogpu ? ['--disable-gpu'] : ['--enable-gpu-rasterization', '--use-angle=metal']),
+  'about:blank'], { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let page;
 for (let i = 0; i < 60 && !page; i++) {
@@ -81,7 +82,9 @@ await evaluate(`(() => {
     const q = window.__mournQuality;
     if (!q) return;
     window.__trace.push([performance.now(), q.level, q.effective.particleSimFraction,
-                         q.effective.particleRenderFraction, q.avgFrameMs]);
+                         q.effective.particleRenderFraction, q.avgFrameMs,
+                         typeof autoPixelDensityStep === 'number' ? autoPixelDensityStep : -1,
+                         typeof pixelDensity === 'function' ? pixelDensity() : -1]);
   }, 250);
   return true; })()`);
 // --release: run throttled for the first half, then lift the throttle. Checks
@@ -97,7 +100,7 @@ if (argv.release) {
 
 const trace = JSON.parse(await evaluate('JSON.stringify(window.__trace)'));
 const t0 = trace[0][0];
-const rel = trace.map(([t, lvl, sf, rf, ms]) => ({ t: (t - t0) / 1000, lvl, sf, rf, ms }));
+const rel = trace.map(([t, lvl, sf, rf, ms, step, dens]) => ({ t: (t - t0) / 1000, lvl, sf, rf, ms, step, dens }));
 const half = rel.filter((r) => r.t > SECS / 2);
 const lvls = half.map((r) => r.lvl);
 const sfs = half.map((r) => r.sf);
@@ -106,15 +109,17 @@ const firstQ = lvls.slice(0, Math.floor(lvls.length / 2));
 const lastQ = lvls.slice(Math.floor(lvls.length / 2));
 
 console.log(`\nthrottle ${RATE}x, ${SECS}s\n`);
-console.log('  t(s)   level   simFrac  rendFrac  avgFrameMs');
+console.log('  t(s)   level   simFrac  rendFrac  avgFrameMs  densStep  density');
 for (let i = 0; i < rel.length; i += Math.max(1, Math.floor(rel.length / 18))) {
   const r = rel[i];
-  console.log(`  ${r.t.toFixed(0).padStart(4)}   ${r.lvl.toFixed(3)}   ${r.sf.toFixed(3)}    ${r.rf.toFixed(3)}     ${r.ms.toFixed(1)}`);
+  console.log(`  ${r.t.toFixed(0).padStart(4)}   ${r.lvl.toFixed(3)}   ${r.sf.toFixed(3)}    ${r.rf.toFixed(3)}     ${r.ms.toFixed(1).padStart(5)}       ${r.step}       ${r.dens.toFixed(2)}`);
 }
 console.log(`\nsecond half:  level mean ${mean(lvls).toFixed(3)}  min ${Math.min(...lvls).toFixed(3)}  max ${Math.max(...lvls).toFixed(3)}  peak-to-peak ${(Math.max(...lvls) - Math.min(...lvls)).toFixed(3)}`);
 console.log(`              simFrac mean ${mean(sfs).toFixed(3)}  peak-to-peak ${(Math.max(...sfs) - Math.min(...sfs)).toFixed(3)}`);
 console.log(`              drift (last quarter mean - third quarter mean): ${(mean(lastQ) - mean(firstQ)).toFixed(4)}`);
 console.log(`              avg frame ms mean ${mean(half.map((r) => r.ms)).toFixed(2)} (target ${(1000 / 30).toFixed(2)})`);
+const stepVals = half.map((r) => r.step);
+console.log(`              density step: mean ${mean(stepVals).toFixed(2)}  min ${Math.min(...stepVals)}  max ${Math.max(...stepVals)}  changes ${rel.filter((r, i) => i > 0 && r.step !== rel[i-1].step).length}`);
 
 ws.close(); chrome.kill(); server.close();
 try { rmSync(dir, { recursive: true, force: true }); } catch {}

@@ -714,36 +714,181 @@ function syncFlowBoxOverlay() {
   }
 }
 
-// The device pixel ratio the canvases should render at, after the cap. 0 or a
+// The manual ceiling, before the automatic controller has its say. 0 or a
 // negative cap means "whatever the display says", which is p5's own default.
-function getTargetPixelDensity() {
+function getBasePixelDensity() {
   const displayRatio = window.devicePixelRatio || 1;
   const cap = CONFIG.maxPixelDensity;
   return cap > 0 ? min(displayRatio, cap) : displayRatio;
 }
 
-// Applies the cap to the main canvas and to both offscreen layers. p5.Graphics
-// copies the parent sketch's _pixelDensity once, at construction, so changing it
-// on the instance alone would leave the two ink layers at the old ratio — the
-// piece would half-fix itself and the layers would stop lining up.
+// The ratio actually in force, base times whatever step the auto controller has
+// climbed down to. Densities below 1 are legal and useful: the buffer shrinks
+// while the drawing coordinate system stays in CSS pixels, so nothing in the
+// simulation moves. That is the whole reason this is the resolution lever and
+// Auto Render Scale is not — see the comment on autoPixelDensityStep.
+function getTargetPixelDensity() {
+  return getBasePixelDensity() * AUTO_DENSITY_LADDER[autoPixelDensityStep];
+}
+
+// Copies a canvas's current contents so they can be painted back after a resize.
+// Resizing a canvas element clears it unconditionally; without this the whole
+// accumulated ink field would blink out and take several seconds to rebuild,
+// every time the controller changed its mind.
+function snapshotCanvasPixels(el) {
+  if (!el || !el.width || !el.height) return null;
+  const tmp = document.createElement('canvas');
+  tmp.width = el.width;
+  tmp.height = el.height;
+  tmp.getContext('2d').drawImage(el, 0, 0);
+  return tmp;
+}
+
+// Paints a snapshot back, rescaled to the canvas's CSS size. p5 leaves a
+// scale(density, density) on the context after a resize, so these coordinates
+// are CSS units and the browser resamples the old buffer into the new one.
+function restoreCanvasPixels(ctx, snap, w, h) {
+  if (!snap) return;
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(snap, 0, 0, w, h);
+  ctx.restore();
+  // Let the backing store go now rather than at the next GC; at a 2x ratio each
+  // of these is around twenty megabytes.
+  snap.width = 0;
+  snap.height = 0;
+}
+
+// Applies the density to the main canvas and to both offscreen layers.
+// p5.Graphics copies the parent sketch's _pixelDensity once, at construction, so
+// changing it on the instance alone would leave the two ink layers at the old
+// ratio — the piece would half-fix itself and the layers would stop lining up.
 //
-// Resizing a canvas clears it, so a runtime change wipes the accumulated ink and
-// the trails rebuild over the next few seconds. That is why this is not called
-// from the frame loop; only from setup and from the control that changes it.
-function applyPixelDensity() {
+// preserveInk carries the accumulated trails across the change. Not free: three
+// full-size snapshots and three rescaled blits, which is why the controller that
+// drives this has a long cooldown and only steps when it must.
+function applyPixelDensity(preserveInk = false) {
   const target = getTargetPixelDensity();
+  if (pixelDensity() === target &&
+      (!fgGraphics || fgGraphics._pixelDensity === target) &&
+      (!inkBGraphics || inkBGraphics._pixelDensity === target)) {
+    return false;
+  }
+
+  const w = width;
+  const h = height;
+  const snapMain = preserveInk && mainCanvasElt ? snapshotCanvasPixels(mainCanvasElt) : null;
+  const snapFg = preserveInk && fgGraphics ? snapshotCanvasPixels(fgGraphics.canvas) : null;
+  const snapInkB = preserveInk && inkBGraphics ? snapshotCanvasPixels(inkBGraphics.canvas) : null;
+
   if (pixelDensity() !== target) {
     pixelDensity(target);
   }
-  const w = width;
-  const h = height;
   if (fgGraphics && fgGraphics._pixelDensity !== target) {
     fgGraphics._pixelDensity = target;
-    fgGraphics.resizeCanvas(w, h);
+    fgGraphics.resizeCanvas(w, h, true);
   }
   if (inkBGraphics && inkBGraphics._pixelDensity !== target) {
     inkBGraphics._pixelDensity = target;
-    inkBGraphics.resizeCanvas(w, h);
+    inkBGraphics.resizeCanvas(w, h, true);
+  }
+
+  restoreCanvasPixels(drawingContext, snapMain, w, h);
+  if (fgGraphics) restoreCanvasPixels(fgGraphics.drawingContext, snapFg, w, h);
+  if (inkBGraphics) restoreCanvasPixels(inkBGraphics.drawingContext, snapInkB, w, h);
+  return true;
+}
+
+// --- Automatic resolution -----------------------------------------------
+// Steps as a fraction of the density the display and the manual cap allow, so
+// the ladder means the same thing on a Retina panel and on a 1x projector.
+// The last rung draws a quarter of the pixels of the first.
+const AUTO_DENSITY_LADDER = [1, 0.75, 0.6, 0.5];
+let autoPixelDensityStep = 0;
+// A quality level this high means the controller is already paying in particles.
+// That, not just a missed frame, is what makes it worth spending sharpness.
+//
+// The first version of this waited for the curve to saturate — resolution last,
+// on the reasoning that softening everything is blunter than thinning the field.
+// Measured against a software rasteriser, which is what a machine with weak
+// graphics actually behaves like, that gate never fired once: the piece held its
+// 33 ms budget at 31 ms by shedding HALF its particles, so from the inside it
+// looked like success and the trigger never came. Capping density instead would
+// have run it at 20 ms with every particle intact.
+//
+// So the priority is inverted, and deliberately: the particles are the piece,
+// and a soft smoke field has very little sharpness to lose. Spend resolution to
+// keep the field whole, not the other way round.
+const AUTO_DENSITY_QUALITY_TRIGGER = 0.5;
+// Both directions need the condition to hold for a stretch, and both then sit
+// out a cooldown. Each step costs three snapshots and three rescaled blits, and
+// a controller that changes its mind quickly would spend more time moving
+// between resolutions than rendering at any of them.
+const AUTO_DENSITY_DEGRADE_HOLD_MS = 6000;
+const AUTO_DENSITY_RECOVER_HOLD_MS = 15000;
+const AUTO_DENSITY_COOLDOWN_MS = 8000;
+// Climbing a rung multiplies the pixel count by 1/0.75^2, near enough 1.78. The
+// recovery test assumes the worst case — that the entire frame scales with pixel
+// count — and demands the frame would still fit inside the budget afterwards:
+// 1 / 1.78 is 0.56, so 0.55 with a little margin. Anything looser oscillates,
+// and not hypothetically. At 0.75 the software-rasteriser run climbed back up,
+// broke its own budget, and came straight back down on a twenty-second cycle.
+const AUTO_DENSITY_RECOVER_FRACTION = 0.55;
+const autoDensityState = { pressureMs: 0, underMs: 0, cooldownMs: 0 };
+
+function tickAutoPixelDensity(dt) {
+  if (!CONFIG.enableAutoPixelDensity) {
+    // Release back to the manual setting rather than leaving the piece stuck at
+    // whatever the controller last chose, which would outlive the toggle.
+    if (autoPixelDensityStep !== 0) {
+      autoPixelDensityStep = 0;
+      applyPixelDensity(true);
+    }
+    autoDensityState.pressureMs = 0;
+    autoDensityState.underMs = 0;
+    return;
+  }
+
+  if (autoDensityState.cooldownMs > 0) {
+    autoDensityState.cooldownMs -= dt;
+    return;
+  }
+
+  const budgetMs = 1000 / max(1, CONFIG.qualityTargetFps);
+  // Two kinds of pressure, and the second is the one that matters. Missing the
+  // budget outright is obvious. Meeting it only because the quality controller
+  // is deep into culling is the case that looks fine from inside the loop and
+  // is not: the frame time is on target and the field is half gone.
+  const pressure =
+    qualityState.avgFrameMs > budgetMs * (1 + max(0, CONFIG.qualityDeadband)) ||
+    qualityState.level >= AUTO_DENSITY_QUALITY_TRIGGER;
+  const under = qualityState.avgFrameMs < budgetMs * AUTO_DENSITY_RECOVER_FRACTION;
+  autoDensityState.pressureMs = pressure ? autoDensityState.pressureMs + dt : 0;
+  autoDensityState.underMs = under ? autoDensityState.underMs + dt : 0;
+
+  if (autoPixelDensityStep < AUTO_DENSITY_LADDER.length - 1 &&
+      autoDensityState.pressureMs >= AUTO_DENSITY_DEGRADE_HOLD_MS) {
+    autoPixelDensityStep++;
+    autoDensityState.pressureMs = 0;
+    autoDensityState.underMs = 0;
+    autoDensityState.cooldownMs = AUTO_DENSITY_COOLDOWN_MS;
+    applyPixelDensity(true);
+    return;
+  }
+
+  // Up: enough headroom to survive the step, and the particles already back.
+  // Testing the quality level here is what keeps the two controllers in order —
+  // without it this would restore resolution while particles were still culled,
+  // then force them straight back out.
+  if (autoPixelDensityStep > 0 &&
+      autoDensityState.underMs >= AUTO_DENSITY_RECOVER_HOLD_MS &&
+      qualityState.level <= 0.2) {
+    autoPixelDensityStep--;
+    autoDensityState.pressureMs = 0;
+    autoDensityState.underMs = 0;
+    autoDensityState.cooldownMs = AUTO_DENSITY_COOLDOWN_MS;
+    applyPixelDensity(true);
   }
 }
 
@@ -1013,8 +1158,10 @@ function paintQualityHud(nowMs) {
   // What the GPU is actually being asked to fill: the backing-store size of one
   // canvas, times three because all three are cleared and repainted per frame.
   const density = pixelDensity();
-  const densityCapped = CONFIG.maxPixelDensity > 0 &&
-    density < (window.devicePixelRatio || 1) - 1e-6;
+  const densityNote = autoPixelDensityStep > 0
+    ? ` (auto ${autoPixelDensityStep}/${AUTO_DENSITY_LADDER.length - 1})`
+    : (CONFIG.maxPixelDensity > 0 && density < (window.devicePixelRatio || 1) - 1e-6
+      ? ' (capped)' : '');
   const bufferW = round(internalW * density);
   const bufferH = round(internalH * density);
   const currentFadeAlpha = getCurrentBackgroundFadeAlpha();
@@ -1026,7 +1173,7 @@ function paintQualityHud(nowMs) {
     `<div>Sim ${simCount} (${sf.toFixed(2)}) | Drawn ${drawnCount} (${rf.toFixed(2)})` +
     ` | Min Speed ${getQualityValue('particleRenderMinSpeed').toFixed(3)}</div>` +
     `<div>Viewport ${viewportW}x${viewportH}px | Render Scale ${currentRenderScale.toFixed(2)}${autoScaleActive ? ' (auto)' : ''} | Internal Canvas ${internalW}x${internalH}px` +
-    ` | Density ${density.toFixed(2)}${densityCapped ? ' (capped)' : ''} | Buffer ${bufferW}x${bufferH} x3</div>` +
+    ` | Density ${density.toFixed(2)}${densityNote} | Buffer ${bufferW}x${bufferH} x3</div>` +
     `<div>Bg A ${currentFadeAlpha.toFixed(2)}${CONFIG.enableDualInkLayers ? ` | Bg B ${getCurrentBackgroundFadeAlphaB().toFixed(2)}` : ''} | P ${currentParticleAlpha.toFixed(2)}</div>`;
 }
 
@@ -1067,6 +1214,11 @@ function tickAdaptiveQuality(nowMs) {
   }
 
   smoothQualityEffective(dt);
+  // After the quality curve, because stepping resolution is gated on the curve
+  // having already run out of room. Safe to resize from here: this runs at the
+  // top of draw(), before fadeCanvas touches a context and before
+  // renderParticles binds the raw ones.
+  tickAutoPixelDensity(dt);
   paintQualityHud(nowMs);
 }
 
@@ -2378,8 +2530,10 @@ function setupDuneControls() {
       ) {
         applyRenderScale(getActiveRenderScale());
       }
-      if (def.key === 'maxPixelDensity') {
-        applyPixelDensity();
+      if (def.key === 'maxPixelDensity' || def.key === 'enableAutoPixelDensity') {
+        // Ink preserved here as well — a slider drag would otherwise wipe the
+        // field on every intermediate value it passes through.
+        applyPixelDensity(true);
       }
       if (
         def.key === 'enableWordShadow' ||

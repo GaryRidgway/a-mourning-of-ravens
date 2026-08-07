@@ -63,10 +63,15 @@ const chrome = spawn(CHROME, [
   '--no-first-run',
   '--disable-extensions',
   '--hide-scrollbars',
-  // Real GPU compositing matters here: the piece is fill-rate heavy and a
-  // software rasteriser would measure the wrong thing entirely.
-  '--enable-gpu-rasterization',
-  '--use-angle=metal',
+  // Real GPU compositing is the default: the piece is fill-rate heavy and a
+  // software rasteriser measures a different machine.
+  //
+  // --nogpu asks for that different machine on purpose. Headless Chrome hides
+  // fill cost off the main thread, so a resolution change looks free here even
+  // when it is the only thing that would help. Forcing software rasterisation
+  // puts that cost somewhere measurable, and stands in for a venue machine with
+  // weak or absent graphics acceleration.
+  ...(argv.nogpu ? ['--disable-gpu'] : ['--enable-gpu-rasterization', '--use-angle=metal']),
   'about:blank',
 ], { stdio: 'ignore' });
 

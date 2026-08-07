@@ -1,6 +1,6 @@
 # Performance harness
 
-Five scratch tools that drive real Chrome over the DevTools protocol. They exist
+Nine tools that drive real Chrome over the DevTools protocol. They exist
 so a performance claim about this piece can be checked rather than argued about,
 and so the show machine can be measured the same way the tuning machine was.
 
@@ -71,7 +71,15 @@ over a long window and reports the peak-to-peak swing once settled.
 ```
 node --experimental-websocket tools/perf/settle.mjs --throttle=8 --secs=100
 node --experimental-websocket tools/perf/settle.mjs --throttle=8 --secs=120 --release
+node --experimental-websocket tools/perf/settle.mjs --throttle=2 --nogpu "--page=/index.html?debug&enableAutoPixelDensity=1"
 ```
+
+`--nogpu` forces software rasterisation. Headless Chrome hides fill cost off the
+main thread, so a resolution change looks free even when it is the only thing
+that would help; software rasterisation puts that cost somewhere measurable and
+stands in for a venue machine with weak graphics. `bench.mjs` takes the same
+flag. The trace includes the density step, so you can see the auto controller
+work.
 
 What good looks like: `simFrac peak-to-peak` at or near 0.000, and mean frame
 time within a millisecond of the budget. The level itself is allowed to wobble —
@@ -108,6 +116,22 @@ so sim never trails render, but only on the *target*; the effective values run
 through separate smoothing filters at different rates, and on an 8x-throttled
 recovery the sim fraction sat at 0.38 while render had already climbed to 0.73.
 Do not re-derive "is it drawn" from the fractions — test the particle's flag.
+
+## inkcarry.mjs — does the ink survive a resolution change
+
+Changing pixel density resizes all three canvases, and resizing a canvas clears
+it. `applyPixelDensity(true)` snapshots, resizes and repaints. This checks it
+worked, against a control with preservation switched off.
+
+```
+node --experimental-websocket tools/perf/inkcarry.mjs
+```
+
+Both measurements happen inside a single evaluation with no frames in between —
+the foreground layer fades at 36/255 per frame and is empty inside a second, so
+anything that lets the loop run measures that fade instead of the resize. For
+the same reason a layer with no ink in it to begin with is skipped rather than
+counted as a failure.
 
 ## smoke.mjs — does it still load
 

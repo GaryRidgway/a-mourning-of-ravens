@@ -15,7 +15,13 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 // Repo root, derived from this file's location (tools/perf/x.mjs).
-const ROOT = fileURLToPath(new URL('../..', import.meta.url));
+// --root lets the shot be taken against a git worktree of another commit, so a
+// before/after comparison is anchored to an explicit ref instead of to whatever
+// the working tree happens to be. Stashing cannot do that safely — a commit
+// landing mid-run silently changes what "before" means.
+const ROOT = process.argv.find((a) => a.startsWith('--root='))
+  ? process.argv.find((a) => a.startsWith('--root=')).slice(7)
+  : fileURLToPath(new URL('../..', import.meta.url));
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PORT = 8793;
 const DEBUG_PORT = 9335;

@@ -21,6 +21,11 @@ const CONTROL_TOOLTIPS = {
   boxCollisionParticipantRatio: 'Fraction of particles that participate in poem collider box interactions.',
   enableAutoRenderScale: 'Automatically caps the internal canvas size on very large screens, then CSS stretches it to fill the viewport.',
   autoRenderScaleThresholdPx: 'Maximum internal canvas size before auto render scaling caps it.',
+  enableAutoPixelDensity:
+    'Lets the piece lower its own resolution when it cannot hold the target frame rate, and raise it again '
+    + 'when it can. Steps in once the quality controller is already paying in particles \u2014 the particles are '
+    + 'the piece, and a soft field has less sharpness to lose than it has smoke. Accumulated ink is carried '
+    + 'across the change, and on a machine with headroom it never steps at all.',
   maxPixelDensity:
     'Ceiling on the device pixel ratio all three canvases render at. 0 uses the display\'s own ratio. ' +
     'The main fill-rate control: on a Retina display, 1 quarters the pixels drawn each frame at the ' +

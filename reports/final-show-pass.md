@@ -316,6 +316,111 @@ real GPU. At 10x throttle capping density to 1 moved the frame from 38.7 ms to
 rasterisation, expect substantially more. On a machine that is purely CPU-poor
 but has a competent GPU, expect nothing — and that is the test.
 
+---
+
+# Part 3 — Automatic resolution
+
+Part 2 ended with the bottleneck being fill rate. This is the lever for it.
+
+## Auto Render Scale is the wrong tool — measured
+
+The obvious move was to switch the existing `enableAutoRenderScale` back on. It
+makes things worse. Measured at 10x throttle:
+
+| Setting | Pixels in the buffer | `draw()` | Whole frame |
+|---|---|---|---|
+| Neither | 5.76 M | 11.1 ms | 37.9 ms |
+| Max Pixel Density 1 | **1.44 M** | **10.6 ms** | **35.6 ms** |
+| Auto Render Scale 0.7 | 2.82 M | 15.1 ms | 49.6 ms |
+
+Render scale shrinks the canvas's whole **coordinate system**, so the same 5000
+particles end up in 49% of the area — twice the crowding. The collision and
+word-interaction radii are config constants in canvas pixels and do not shrink
+with it, so everything interacts far more than it should and the physics gets
+36% more expensive. Overdraw rises too, so the fill saving does not arrive
+either.
+
+Pixel density shrinks only the **buffer**. The coordinate system is untouched,
+nothing moves, and it cuts more pixels. Densities below 1 are legal, so it
+covers the entire range render scale did, without the side effect.
+
+`enableAutoRenderScale` should stay off.
+
+## What was built
+
+`enableAutoPixelDensity` steps the density down a ladder — 1x, 0.75x, 0.6x, 0.5x
+of whatever the display and the manual cap allow — and back up when there is room.
+
+**On by default.** That needs justifying, since it changes how the piece looks
+without being asked. Three things earn it:
+
+- The piece already auto-degrades. `enableAdaptiveQuality` has always shipped on
+  and already thins the particle field to hold the frame rate. This does not
+  introduce automatic degradation; it gives the system that was already doing it
+  a better option than throwing particles away.
+- It is measurably inert unless the piece is in trouble. Traced from cold load on
+  a capable machine: quality level never leaves 0.000, zero steps in 45 seconds.
+- On a machine that needs it the trade is lopsided in its favour — 34 ms at half
+  the particles becomes 20 ms with all of them, for a quarter of the linear
+  resolution on a field that is mostly soft edges anyway.
+
+Verified in the show build too, where `show.js` freezes `CONFIG` after the second
+frame: it still stepped correctly and settled at full particle count.
+
+**Ink is carried across each change.** Resizing a canvas clears it, which would
+blink the whole field out for several seconds. Each step snapshots all three
+canvases, resizes, and repaints the snapshots rescaled. Verified: 100% retention
+on all three layers, against a control with preservation off that measures 0%.
+
+## Getting the priority right, which took two attempts
+
+The first version ordered resolution **last** — only stepping once particle
+culling had bottomed out, on the reasoning that softening the whole image is
+blunter than thinning the field.
+
+Against a software rasteriser, which is what a machine with weak graphics
+actually behaves like, **that gate never fired once in 120 seconds.** The piece
+was holding its 33 ms budget at 31 ms — by shedding **half its particles**. From
+inside the control loop that looks like success, so no trigger ever came.
+
+| | Density | Particles simulated | Frame time |
+|---|---|---|---|
+| Resolution last (first attempt) | 2.0 | **47%** | 31 ms |
+| Resolution earlier (shipped) | 1.5 | **100%** | 27 ms |
+
+So the priority is inverted on purpose. The particles are the piece; a soft smoke
+field has very little sharpness to lose. A step now happens when the quality
+controller has had to engage past 0.5 — meaning it is already paying in particles
+— not only when it has run out.
+
+The shipped version made **one** density step in 140 seconds and then held.
+
+## Why the recovery threshold is 0.55 and not something rounder
+
+Climbing a rung multiplies the pixel count by 1/0.75², about 1.78. At a looser
+threshold the software-rasteriser run climbed back up, broke its own budget, and
+came straight back down on a twenty-second cycle. The test now assumes the worst
+case — that the whole frame scales with pixel count — and requires the frame to
+fit inside the budget *after* the step: 1/1.78 = 0.56, so 0.55 with margin.
+
+## What it is worth
+
+Software rasterisation at 2x throttle, standing in for a fill-rate-bound machine:
+
+| Density | Frame time | Frame rate | Quality controller |
+|---|---|---|---|
+| 2.0 | 34.0 ms | 29 fps | 0.50 — shedding particles |
+| 1.0 | **20.0 ms** | **50 fps** | 0.00 — full particle count |
+
+On the GPU path the same cap is worth about 8%, because there the bottleneck is
+throttled main-thread browser work rather than rasterisation. That difference is
+the point: the feature is worth a great deal on a machine with weak graphics and
+very little on one that is merely CPU-poor, and it costs nothing to leave on,
+since it does not step at all unless the piece is under real pressure.
+
+Verified inert with the toggle off: **bit-identical** output, max channel delta 0.
+Verified it never steps on a capable machine: 0 changes in 80 s at full speed.
+
 ## Still deferred, still probably unnecessary
 
 Structure-of-arrays particle layout and Web Worker + OffscreenCanvas, both
@@ -336,16 +441,20 @@ it is wanted.
    than hunting, but settling takes a while by design — the sim fraction will
    not move until frames have been comfortably under budget for four seconds.
 3. If Quality settles near 0, there is nothing to do.
-4. If Quality settles high but Avg Frame is at target, the piece is doing its
-   job: it has traded density for smoothness and will hold there. Check that the
-   thinner field still looks right to you — that is an aesthetic call, not a
-   technical one.
-5. If Quality is pinned at 1.0 **and** Avg Frame is still over budget, the
-   controller is out of room. Compare `draw` time against the frame time: if
-   most of the frame is not `draw`, you are fill-rate bound, so try **Max Pixel
-   Density 1**. If it is mostly `draw`, lower **particleCount**.
-6. Bake the chosen values into `src/js/constants/config.js` and re-run
+4. If Quality settles above ~0.4, **Auto Pixel Density** should already be
+   handling it — it is on by default. Watch for the HUD marking the density
+   `(auto 1/3)` and Sim climbing back toward the full count. It waits for six
+   seconds of sustained pressure before acting, so give it a minute.
+5. If Quality still settles high after that, the machine is CPU-poor rather than
+   graphics-poor, and resolution will not save it. Lower **particleCount** until
+   Quality settles near 0.
+6. If Quality is pinned at 1.0 and Avg Frame is still over budget, you are out of
+   automatic options — lower particleCount, and consider a smaller window.
+7. Bake the chosen values into `src/js/constants/config.js` and re-run
    `npm run build:show` — the show build discards URL params by design.
+
+Leave **Auto Render Scale** off. It is the older, cruder version of Auto Pixel
+Density and it measures slower — see Part 3.
 
 To measure rather than eyeball, `tools/perf/settle.mjs` reports whether the
 controller converges at a given throttle, and `--release` checks that it

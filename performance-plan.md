@@ -129,6 +129,25 @@ three full-screen canvases. Further particle cuts will not help. See the report.
 
 ---
 
+## Phase 3C — Automatic resolution ✅ Complete
+
+22. ✅ **`enableAutoPixelDensity`** — steps the pixel buffer down 1x / 0.75x / 0.6x / 0.5x and back, **on by default**
+    - Defaulted on because the piece already auto-degrades via enableAdaptiveQuality; this gives that system a better option than shedding particles. Traced from cold load: zero steps and quality 0.000 on a capable machine
+    - Accumulated ink is snapshotted, resized and repainted, so a step does not blink the field out — 100% retention verified against a 0% control
+    - Priority deliberately inverted after measurement: resolution goes *before* heavy particle culling, because the particles are the piece
+    - First attempt ordered resolution last and the gate never fired — the piece held its budget by shedding half its particles, which looks like success from inside the loop
+    - Recovery threshold 0.55 of budget, derived from the 1.78x pixel increase a step up costs; looser values oscillated on a 20s cycle
+
+23. ✅ **Measured that `enableAutoRenderScale` is the wrong lever — leave it off**
+    - It shrinks the coordinate system, not just the buffer, so particles crowd 2x and the fixed interaction radii make the physics 36% more expensive
+    - At 10x throttle: render scale 0.7 → 49.6 ms/frame; max pixel density 1 → 35.6 ms, and draws half as many pixels
+
+**Outcome:** on a fill-rate-bound machine (software rasteriser, 2x throttle) the
+density cap takes the frame from 34.0 ms at 47% particles to 20.0 ms at full
+particle count. On the GPU path it is worth ~8%, which is the honest range.
+
+---
+
 ## Phase 4 — Larger Investment (future, lower priority)
 
 10. **Bundle + minify with Vite or esbuild**
