@@ -1000,3 +1000,48 @@ quarter-viewport from each wall. On a 393px-wide phone that is 71 px of headroom
 per gesture — an 80 px flick reads as 71. Symmetric now rather than lopsided,
 but still a ceiling. Enlarging the buffer would raise it and costs nothing to
 paint; not done here because it was not what was reported.
+
+## Part 7b — The jumpiness Part 7a introduced
+
+Reported straight after 7a: the scroll felt jumpy, sometimes. It was, and 7a
+caused it.
+
+7a added a re-centre of the scroll box to the resize handler, to break the
+deadlock where a rotation pins an axis and a gesture into the wall fires no
+event. That re-centre writes `scrollLeft`/`scrollTop`. Writing those makes the
+browser fire a scroll event — and that event is indistinguishable from the
+reader's, so every re-centre came back around as a gesture the code had not
+made.
+
+Measured on an emulated phone: six viewport-height changes, the size a URL bar
+shows and hides by, with **no scroll input at all**.
+
+| | Before 7b | After 7b |
+|---|---|---|
+| `scrollTick` ran | 6 times | 6 times (returns immediately) |
+| Manual-scroll fade in / out | 6 times | **0** |
+| Auto-scroll paused / resumed | 12 times | **0** |
+| Poem moved | −39.02 px | −44.65 px, against a −43.79 px undisturbed control |
+
+The poem figure needs the control to read. Before, it moved *less* than an
+undisturbed 3.3 seconds, because the auto-scroll kept being paused; after, it
+moves what an undisturbed 3.3 seconds moves, to within 0.9 px. The teleport and
+the pause churn are both gone.
+
+A phone's URL bar shows and hides while you swipe, so this fired continuously
+during exactly the gesture it corrupted. On a desktop, dragging a window edge
+does the same.
+
+The two are easy to tell apart once stated: a real gesture **is** the box having
+moved off where it was parked — that is the whole input mechanism. So
+`setScrollZone` now reads back where the box actually came to rest (not where it
+was sent, since the browser clamps) and `scrollTick` returns immediately if the
+box is still sitting exactly there. That also covers the same echo at startup,
+which had been firing unnoticed since before any of this.
+
+Two things ruled out first, both measured, neither guilty:
+
+| Suspect | Verdict |
+|---|---|
+| Measuring the rest point live now forces a layout flush every scroll event | 0.036 ms vs 0.009 ms cached — real but negligible |
+| Centring the rest point changed how evenly the poem steps | 17.7% unevenness in both arms, identical to three decimal places |

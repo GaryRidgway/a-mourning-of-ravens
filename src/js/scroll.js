@@ -750,6 +750,23 @@ function scrollTick(timestamp = null) {
         dbp('scrollTick()')
     }
 
+    // Writing scrollLeft/scrollTop makes the browser fire a scroll event, and
+    // that event is indistinguishable from the reader's — so every re-centre
+    // this code performs comes back around as a gesture it did not make. Left
+    // unhandled that is expensive: measured, six viewport-height changes with
+    // no input at all ran this function six times, faded the manual-scroll
+    // state in and out six times, paused and resumed the auto-scroll twelve
+    // times, and teleported the poem 39 px. A phone's URL bar shows and hides
+    // while you swipe, so this fires constantly and reads as jumpiness.
+    //
+    // They are easy to tell apart. A real gesture IS the box having moved off
+    // where it was parked — that is the entire input mechanism. Still sitting
+    // exactly where it was put means this event is our own echo.
+    if (mourn.scrollZoneData.el.scrollLeft === mourn.scrollZoneData.parkedX &&
+        mourn.scrollZoneData.el.scrollTop === mourn.scrollZoneData.parkedY) {
+        return;
+    }
+
     perfRecordFrame(timestamp, 'manual');
 
     // Reset the scroll zone and track the distance scrolled. Measured fresh
@@ -802,6 +819,13 @@ function setScrollZone(x, y, addToTotal = true) {
     mourn.scrollZoneData.prevY = mourn.scrollZoneData.el.scrollTop;
     mourn.scrollZoneData.el.scrollLeft = x;
     mourn.scrollZoneData.el.scrollTop = y;
+
+    // Where the box actually came to rest, which is not always where it was
+    // sent — the browser clamps to the scrollable range. Read back rather than
+    // assumed, because this is what scrollTick compares against to tell the
+    // reader's gesture from the echo of this very write.
+    mourn.scrollZoneData.parkedX = mourn.scrollZoneData.el.scrollLeft;
+    mourn.scrollZoneData.parkedY = mourn.scrollZoneData.el.scrollTop;
 
     // If we want to track the total scrolling...
     if (addToTotal) {
