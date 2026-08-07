@@ -2620,6 +2620,9 @@ function setupDuneControls() {
         if (def.key === 'enableResolutionParticleScale') {
           syncParticleCountToTarget();
         }
+        if (def.key === 'enableMobilePoemScale') {
+          applyPoemFontScale();
+        }
       } else {
         const parsed = Number(input.value);
         if (!Number.isFinite(parsed)) return;
@@ -2646,6 +2649,12 @@ function setupDuneControls() {
             def.key === 'particleScaleReferenceMpx' ||
             def.key === 'particleScaleMin') {
           syncParticleCountToTarget();
+        }
+        // Moves the type immediately so the size can be judged by eye. The
+        // stanza widths and collider boxes were measured at the old size and
+        // stay that way until a reload — said plainly in the tooltip.
+        if (def.key === 'mobilePoemScaleMaxWidthPx' || def.key === 'mobilePoemScale') {
+          applyPoemFontScale();
         }
         if (def.key === 'boxCollisionParticipantRatio') {
           syncParticleBoxCollisionParticipation();

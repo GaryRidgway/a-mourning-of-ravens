@@ -11,6 +11,26 @@
        1512x738 desktop. The screen only has 2.33 of those megapixels to show,
        so four fifths of that work was being downscaled away unseen. -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <!-- Getting rid of the browser chrome on a phone.
+       There is no way for a page to hide Safari's URL bar on an iPhone: iOS has
+       no Fullscreen API outside of video, and the bar only ever collapses in
+       response to the DOCUMENT scrolling, which this piece never does — it reads
+       a hidden scroll box and moves the poem itself. So the bar sits there.
+       Installing the page is the only route, and these three lines are what make
+       that install open chrome-free: Share -> Add to Home Screen, then launch
+       from the icon. Android honours the manifest's display mode the same way,
+       and additionally allows requestFullscreen() on a tap — see
+       CONFIG.fullscreenOnFirstTap, which is what handles that case.
+       No icons declared: none exist in the repo, and Android will decline to
+       show an install prompt without one. Add a 192px and a 512px PNG here when
+       there is artwork worth using. -->
+  <link rel="manifest" href="./src/manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#000000">
+
   <title>A Mourning of Ravens</title>
 
   <!-- Fonts. -->
@@ -231,6 +251,28 @@
             <span>Particle Scale Floor</span>
             <input type="range" min="0.05" max="1" step="0.05" data-key="particleScaleMin" />
             <output data-value-for="particleScaleMin"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Shrink Poem On Narrow Screens</span>
+            <input type="checkbox" data-key="enableMobilePoemScale" />
+          </label>
+
+          <label class="control-row">
+            <span>Narrow Screen Below (px)</span>
+            <input type="range" min="320" max="1200" step="10" data-key="mobilePoemScaleMaxWidthPx" />
+            <output data-value-for="mobilePoemScaleMaxWidthPx"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Poem Scale When Narrow</span>
+            <input type="range" min="0.25" max="1" step="0.05" data-key="mobilePoemScale" />
+            <output data-value-for="mobilePoemScale"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Fullscreen On First Tap</span>
+            <input type="checkbox" data-key="fullscreenOnFirstTap" />
           </label>
 
           <label class="control-row">

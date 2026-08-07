@@ -1,0 +1,12 @@
+{
+  "name": "A Mourning of Ravens",
+  "short_name": "Ravens",
+  "description": "A poem carried on a flow field.",
+  "start_url": "../index.html",
+  "scope": "../",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#000000"
+}

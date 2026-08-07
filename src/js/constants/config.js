@@ -26,6 +26,36 @@ const CONFIG = {
   // documented as a maximum, and a large monitor is not an invitation to spend
   // more than was asked for.
   particleScaleMin: 0.2,
+  // Shrink the poem's type on a phone.
+  //
+  // The type size is not responsive at all otherwise: --base-font-size is a
+  // flat 32 and the stanza widths are measured from it once, at load. On a
+  // 393px-wide phone that is enormous — a couple of words fill the screen and
+  // the drift they are supposed to sit inside has nowhere to happen.
+  //
+  // Applied by writing --base-font-size and --line-font-size before staging
+  // runs, because every measurement downstream of addStanzasToStaging depends
+  // on them: stanza widths, the ring geometry, the collider boxes. Changing it
+  // after the fact resizes the glyphs and leaves all of that pointing at where
+  // the words used to be. The panel control therefore moves the type live but
+  // needs a reload to re-measure — see the tooltip.
+  enableMobilePoemScale: true,
+  // Viewport width at or below which the poem is scaled. 700 sits above every
+  // phone in portrait and above a phone in landscape (a 6.7" screen is 932
+  // CSS px on the long edge, but rotating it puts 430 on the short edge and
+  // that is what width reports), while staying clear of a small laptop window.
+  mobilePoemScaleMaxWidthPx: 700,
+  // The multiplier. 0.5 takes the base 32 to 16 and the line size 24 to 12.
+  mobilePoemScale: 0.5,
+  // Ask for real fullscreen on the reader's first tap. Android Chrome grants
+  // this and it is the only way to lose the URL bar there without installing
+  // the page. iOS has no Fullscreen API outside video, so this silently does
+  // nothing on an iPhone — Add to Home Screen is the only route there.
+  //
+  // Restricted to touch-primary devices at the call site: a desktop or the
+  // gallery projector taking itself fullscreen on the first click would be a
+  // surprise, and the show build has its own ideas about presentation.
+  fullscreenOnFirstTap: true,
   enableAutoRenderScale: false,
   autoRenderScaleThresholdPx: 1080,
   // Ceiling on the device pixel ratio the three canvases render at. 0 leaves

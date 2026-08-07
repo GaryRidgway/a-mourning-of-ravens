@@ -1045,3 +1045,67 @@ Two things ruled out first, both measured, neither guilty:
 |---|---|
 | Measuring the rest point live now forces a layout flush every scroll event | 0.036 ms vs 0.009 ms cached — real but negligible |
 | Centring the rest point changed how evenly the poem steps | 17.7% unevenness in both arms, identical to three decimal places |
+
+# Part 8 — The URL bar, and type that fits a phone
+
+## The URL bar
+
+There is no way for a page to hide Safari's URL bar on an iPhone. iOS exposes no
+Fullscreen API outside of video, and the bar only collapses in response to the
+*document* scrolling — which this piece never does. It reads a hidden scroll box
+and moves the poem itself, so the document is always at offset zero and the bar
+has no reason to go anywhere. That is not a bug to fix; it is the input design.
+
+What is available:
+
+| Route | iPhone | Android |
+|---|---|---|
+| `requestFullscreen()` on a tap | no API | works |
+| Installed web app, `display: fullscreen` | Add to Home Screen | install prompt |
+| Scrolling the document to collapse the bar | n/a here | n/a here |
+
+Both of the workable ones now ship. `src/manifest.webmanifest` declares
+`display: fullscreen`, and the `apple-mobile-web-app-capable` meta makes an
+iOS Add-to-Home-Screen launch open chrome-free. `CONFIG.fullscreenOnFirstTap`
+requests real fullscreen on the first `pointerdown`, gated on
+`(pointer: coarse)` so a desktop or the gallery projector never takes itself
+fullscreen on a click, and registered `{ once: true }` so a reader who leaves
+fullscreen is not dragged back in.
+
+No icons are declared — none exist in the repo, and Android will not offer an
+install prompt without one. A 192px and a 512px PNG is all that is missing.
+
+**Known wrinkle.** One manifest serves both pages, and `start_url` resolves
+against the manifest, not the document. Installing from `/show/index.html`
+would therefore launch the tuning page. Harmless for a projector, which has no
+URL bar to lose, but worth knowing before anyone installs the show build.
+
+## Type on a phone
+
+`--base-font-size` was a flat 32 with no responsive rule anywhere, so a 393px
+phone got desktop-sized type: two or three words filling the screen, with no
+room for the drift they are meant to sit inside.
+
+`enableMobilePoemScale` halves it below `mobilePoemScaleMaxWidthPx` (700 —
+above every phone in either orientation, clear of a small laptop window).
+Measured:
+
+| Viewport | `--base-font-size` | Tracking | Line box height |
+|---|---|---|---|
+| 1512x738 | 32 | 1.689px | 42.4px |
+| 393x659 | **16** | 0.659px | 23.2px |
+| 659x393 rotated | **16** | 0.647px | 23.2px |
+
+Letter spacing had to be scaled by hand: it is set in px from a character count,
+so half-size type would otherwise have kept full-size gaps between its letters.
+
+The per-line figures above are indicative rather than exact halves — the poem
+starts on a random stanza, so the sampled line differs between runs. The
+deterministic number is `--base-font-size`, which is exactly halved, and
+everything in the stylesheet derives from it.
+
+Applied before `addStanzasToStaging`, because every measurement downstream reads
+the type size — stanza widths, ring geometry, collider boxes. The panel control
+moves the type live so the size can be judged by eye, but the layout was
+measured at the old size and needs a reload to agree. Said plainly in the
+tooltip rather than left to be discovered.

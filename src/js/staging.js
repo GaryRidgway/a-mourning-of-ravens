@@ -1,3 +1,37 @@
+// Scale the poem's type down on a narrow screen. See the note on
+// CONFIG.enableMobilePoemScale for why this has to run before staging.
+//
+// The SCSS stays the source of truth for the sizes themselves: they are read
+// off :root and multiplied, rather than restated here where they would quietly
+// drift out of step with poem.scss. Written back as plain numbers because both
+// the stylesheet and flowField read these with parseFloat — a calc() left in an
+// unregistered custom property comes back as the literal string.
+// The stylesheet's own sizes, captured before anything is written over them.
+// Without this a second call would read its own output and compound the scale.
+let poemFontSizeBase = null;
+
+function getPoemFontScale() {
+    const narrow = (window.innerWidth || 0) <= CONFIG.mobilePoemScaleMaxWidthPx;
+    return (CONFIG.enableMobilePoemScale && narrow) ? CONFIG.mobilePoemScale : 1;
+}
+
+function applyPoemFontScale() {
+    const root = document.documentElement;
+    if (poemFontSizeBase === null) {
+        const rootStyle = getComputedStyle(root);
+        const base = parseFloat(rootStyle.getPropertyValue('--base-font-size'));
+        const line = parseFloat(rootStyle.getPropertyValue('--line-font-size'));
+        if (!Number.isFinite(base) || !Number.isFinite(line)) {
+            return;
+        }
+        poemFontSizeBase = { base, line };
+    }
+
+    const scale = getPoemFontScale();
+    root.style.setProperty('--base-font-size', String(poemFontSizeBase.base * scale));
+    root.style.setProperty('--line-font-size', String(poemFontSizeBase.line * scale));
+}
+
 function pairSpaceAndScale() {
     const allLines = mourn.config.poemStaging.querySelectorAll('.stanza .line');
     const numAllLines = allLines.length;
@@ -32,7 +66,9 @@ function pairSpaceAndScale() {
                 1,
                 10
             ));
-        line.style.setProperty('--char-spacing', spacing + 'px')
+        // Tracking is in px and the type size is not, so it has to be scaled
+        // by hand or half-size type keeps full-size gaps between its letters.
+        line.style.setProperty('--char-spacing', (spacing * getPoemFontScale()) + 'px')
 
 
         const scaling = charRangeCollapsed
