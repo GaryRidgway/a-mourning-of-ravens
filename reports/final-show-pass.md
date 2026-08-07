@@ -879,3 +879,124 @@ elapsed time entirely has perfectly uniform steps, scores **CV 0.0%**, and runs
 at half speed. Evenness cannot see that; distance-from-correct can. The tool now
 ranks on position error, prints CV alongside, and carries the trap written down
 next to the code that would otherwise fall into it again.
+
+# Part 7 — Mobile: one missing tag, and a particle count that was really a density
+
+Reported as two problems — the scroll lagged on a phone, and could particles
+scale with resolution — which turned out to share a root cause.
+
+## The tag
+
+`index.html` shipped without `<meta name="viewport">`. A phone browser with no
+such tag falls back to a 980px layout viewport and scales the whole page down to
+fit the screen. Measured directly rather than assumed: emulating an iPhone, the
+canvas reported `980x1644`; injecting the tag at document start dropped it to
+`393x659`.
+
+What that costs, in pixels actually rasterised per frame across all three
+canvases:
+
+| | Canvas CSS size | Device ratio | Pixels per frame |
+|---|---|---|---|
+| Desktop the piece was tuned on | 1512x738 | 2 | 13.4 M |
+| Phone, without the tag | 980x1644 | 3 | **43.5 M** |
+| Phone, with the tag | 393x659 | 3 | 7.0 M |
+
+The phone was doing 3.25x the desktop's pixel work on phone silicon — and the
+screen only has 2.33 M pixels, so four fifths of it was downscaled away before
+anyone saw it.
+
+A second, quieter symptom said the same thing: the `@media (max-width: 900px)`
+block in `poem.scss` could never fire on a phone, because the layout width was
+always 980.
+
+## Particle count is a density in disguise
+
+5000 particles in a 1512x738 window is one particle per 223 CSS pixels. That
+number, not 5000, is what was dialled in. Carried onto a phone unchanged, the
+same 5000 cover a quarter of the area at four times the density.
+
+The proposed rule — scale particles by viewport area — was right, but could not
+land before the tag, because without it the phone's *layout* area is 1.61 MPx
+against the desktop's 1.12. The rule would have handed a phone **7222**
+particles. More, not fewer. The two fixes are ordered, not independent.
+
+`enableResolutionParticleScale` treats `particleCount` as the budget for
+`particleScaleReferenceMpx` (1.12 MPx = 1512x738) and scales linearly below it,
+floored at `particleScaleMin` (0.2) and never above 1 — `particleCount` is
+documented as a maximum and a big monitor is not licence to exceed it.
+
+Deliberately CSS pixels, not device pixels. `maxPixelDensity` is already the
+device-pixel lever; chasing device pixels here too would put two controllers on
+the same symptom from opposite ends.
+
+## Measured, emulated phone at 4x CPU throttle
+
+| | Canvas | Particles | Pixel density held | Time in draw() | Frame interval | Heap |
+|---|---|---|---|---|---|---|
+| Before both fixes | 980x1644 | 5000 | 2.25 (cut) | 8.80 ms | 30.7 ms | 26.7 MB |
+| Tag only | 393x659 | 5000 | 2.25 (cut) | 5.80 ms | 27.3 ms | 14.5 MB |
+| **Both, as shipped** | 393x659 | **1156** | **3.00 (full)** | **3.90 ms** | **25.0 ms** | 15.8 MB |
+
+The headline is the pixel-density column, not the milliseconds. Before, the
+adaptive quality controller was forced to cut resolution to 2.25 to keep up, so
+the piece ran soft on a phone. It now holds full density and the quality level
+sits at 0.007 — effectively no degradation at all. Fewer particles bought back
+sharpness.
+
+**Stated limit.** Headless Chrome on an M-series Mac cannot reproduce a phone
+GPU, so every number above is the CPU half only. The fill-rate saving is
+arithmetic — the pixel table — and not measured. On real phone hardware, where
+fill is the actual constraint, the tag should be worth considerably more than
+these figures show.
+
+**Stated consequence.** The tag changes what the poem looks like on a phone. It
+was rendering at 980px wide and being squeezed to 40%; it now renders at native
+size, so the text is much larger relative to the screen. That is a look change
+accepted on purpose, not a side effect that went unnoticed.
+
+## Part 7a — The stuck scroll axis
+
+Reported after Part 7 landed: no scrolling up on a rotated phone, none left on a
+desktop monitor. One bug, and not one of Part 7's — it reproduces on a plain
+desktop window with no phone, no viewport tag and no particle scaling involved.
+
+The poem is driven by how far the scroll box *travels*, so the box is re-centred
+after every event. The rest point it returns to was `0.16` of a `scrollWidth` /
+`scrollHeight` measured **once**, in `createScrollZone`, and never again. Shrink
+the viewport on either axis afterwards and that cached number now points past
+the end of the shorter range, so the browser pins the box to the wall. A gesture
+into the wall moves nothing, fires no scroll event, and the poem does not budge.
+
+Measured, driving real scroll events in each direction:
+
+| Case | Axis | Rest position | Blocked direction |
+|---|---|---|---|
+| Desktop, never resized | y | 177 of 0..314 | none |
+| Desktop, opened 1920x1080 then shrunk to 1280x720 | y | 259 of 0..305 | down, truncated to 46 of 80 px |
+| Phone, loaded portrait then rotated | y | **142 of 0..142** | **down, dead — 0 px of 80** |
+
+Rotating is just the fastest way to shrink an axis, which is why the phone hit
+it hardest and the desktop only sometimes.
+
+Two things were wrong, and the second was hiding behind the first: `0.16` of the
+buffer is roughly 72% of the way along the usable range even when the cached
+measurement is current, so the two directions never had equal room. The rest
+point is now measured live and placed at the centre of the range. On a 1512x738
+desktop that moves it 363 -> 350, which is nothing; on a rotated phone it moves
+it off the wall.
+
+Re-centring on scroll alone would have deadlocked: a rotation leaves the box
+pinned, and a gesture into the wall produces no event, so the handler that frees
+it never runs. The resize listener now re-centres too, with the total-tracking
+flag off so putting the box back does not read as the reader scrolling.
+
+After: all four directions live in all five cases — desktop unresized, desktop
+shrunk, phone portrait, phone rotated to landscape, phone rotated back.
+
+**Known limit, unchanged and pre-existing.** The buffer is `150dvw` x `150dvh`,
+so the usable range is half a viewport per axis and the rest point sits a
+quarter-viewport from each wall. On a 393px-wide phone that is 71 px of headroom
+per gesture — an 80 px flick reads as 71. Symmetric now rather than lopsided,
+but still a ceiling. Enlarging the buffer would raise it and costs nothing to
+paint; not done here because it was not what was reported.

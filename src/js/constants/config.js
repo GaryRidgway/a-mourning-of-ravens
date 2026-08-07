@@ -1,5 +1,31 @@
 const CONFIG = {
   particleCount: 5000,
+  // Treat particleCount as the budget for a reference-sized window and hand a
+  // smaller window a proportionally smaller share.
+  //
+  // The piece was dialled in at 1512x738, and 5000 particles in that window is
+  // a density, not a count — roughly one particle per 223 CSS pixels. Carry the
+  // raw count onto a phone and the same 5000 have to cover a quarter of the
+  // area, which is four times the density and reads as soup rather than drift.
+  //
+  // Measured on an emulated phone at 4x CPU throttle: at 5000 the adaptive
+  // quality controller was forced to cut pixel density to 2.25 to keep up, so
+  // the piece ran soft. At the scaled 1160 it held full density 3.0. The saving
+  // that matters here is sharpness, not the 1.9 ms of frame time.
+  //
+  // Deliberately CSS pixels and not device pixels. maxPixelDensity is already
+  // the device-pixel lever; if this chased device pixels too, two controllers
+  // would be fighting over the same symptom from opposite ends.
+  enableResolutionParticleScale: true,
+  // Window area, in millions of CSS pixels, at which the full particleCount is
+  // spent. 1.12 is 1512x738 — the window the piece was actually tuned in.
+  particleScaleReferenceMpx: 1.12,
+  // Floor on that scale. Without it a phone in landscape, or a window dragged
+  // small, empties the field out entirely — and the piece stops being itself
+  // long before it stops being cheap. Never scales above 1: particleCount is
+  // documented as a maximum, and a large monitor is not an invitation to spend
+  // more than was asked for.
+  particleScaleMin: 0.2,
   enableAutoRenderScale: false,
   autoRenderScaleThresholdPx: 1080,
   // Ceiling on the device pixel ratio the three canvases render at. 0 leaves

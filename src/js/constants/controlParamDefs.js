@@ -1,5 +1,8 @@
 const CONTROL_PARAM_DEFS = [
   { key: 'particleCount', type: 'number', digits: 0 },
+  { key: 'enableResolutionParticleScale', type: 'bool' },
+  { key: 'particleScaleReferenceMpx', type: 'number', digits: 2 },
+  { key: 'particleScaleMin', type: 'number', digits: 2 },
   { key: 'enableAutoRenderScale', type: 'bool' },
   { key: 'autoRenderScaleThresholdPx', type: 'number', digits: 0 },
   { key: 'maxPixelDensity', type: 'number', digits: 2 },

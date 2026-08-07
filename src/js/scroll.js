@@ -675,8 +675,44 @@ function scrollInit() {
         // Re-cache after ring metrics refresh gives layout time to settle.
         requestAnimationFrame(() => {
             cacheColliderPositions();
+            // Re-centre the scroll box against the new geometry. Doing this only
+            // inside scrollTick would deadlock: a rotation that shrinks an axis
+            // leaves the box pinned to that axis's wall, and a gesture into the
+            // wall produces no scroll event at all — so the handler that would
+            // free it never runs. false because putting the box back is not the
+            // reader scrolling, and counting it would jump the poem on rotate.
+            const rest = getScrollZoneRestPosition();
+            setScrollZone(rest.x, rest.y, false);
         });
     });
+}
+
+// Where the scroll zone parks between gestures.
+//
+// The poem is driven by the DISTANCE the box travels, not by where it ends up,
+// so the box has to be re-centred after every event or it runs out of room.
+// That makes the rest point the whole ballgame: whatever headroom it leaves on
+// each side is how far a single gesture can be read before the browser clamps
+// and the delta silently comes back short.
+//
+// This used to be 0.16 of a scrollWidth/scrollHeight measured ONCE at startup.
+// Two things were wrong with it. The cached measurement went stale the moment
+// the viewport changed — rotate a phone and the rest point is still computed
+// from the portrait geometry, which lands it past the end of the shorter axis,
+// where the browser pins it to the wall and one scroll direction stops working
+// outright. And 0.16 of the buffer is about 72% of the way along the usable
+// range even when the measurement IS current, so the two directions never had
+// equal room to begin with.
+//
+// Measured live and centred fixes both. On a 1512x738 desktop this moves the
+// rest point 363 -> 350, which is nothing; on a rotated phone it moves it off
+// the wall, which is everything.
+function getScrollZoneRestPosition() {
+    const el = mourn.scrollZoneData.el;
+    return {
+        x: (el.scrollWidth - el.clientWidth) / 2,
+        y: (el.scrollHeight - el.clientHeight) / 2,
+    };
 }
 
 // Create the scrollable area that the user can interact with.
@@ -700,20 +736,9 @@ function createScrollZone() {
     mourn.scrollZoneData.buffer.id = 'scroll-zone-buffer';
     mourn.scrollZoneData.el.append(mourn.scrollZoneData.buffer);
 
-    // Get and store the scroll zone's dimensions for later use.
-    mourn.scrollZoneData.dims = {
-        x: mourn.scrollZoneData.el.scrollWidth,
-        y: mourn.scrollZoneData.el.scrollHeight
-    }
-
     // Set the scroll zone's position, but don't track the initial movement as a scroll.
-    setScrollZone(
-        
-        // Multiply by 0.16 to put it in the center.
-        mourn.scrollZoneData.dims.x * 0.16,
-        mourn.scrollZoneData.dims.y * 0.16,
-        false
-    );
+    const rest = getScrollZoneRestPosition();
+    setScrollZone(rest.x, rest.y, false);
 
     // Add the scroll listener to the scroll zone.
     mourn.scrollZoneData.el.onscroll = queueScrollTick;
@@ -727,13 +752,11 @@ function scrollTick(timestamp = null) {
 
     perfRecordFrame(timestamp, 'manual');
 
-    // Reset the scroll zone and track the distance scrolled.
-    setScrollZone(
-
-        // Multiply by 0.16 to put it in the center.
-        mourn.scrollZoneData.dims.x * 0.16,
-        mourn.scrollZoneData.dims.y * 0.16
-    );
+    // Reset the scroll zone and track the distance scrolled. Measured fresh
+    // rather than cached: this runs after the viewport may have changed, and a
+    // stale rest point is what pinned an axis to the wall.
+    const rest = getScrollZoneRestPosition();
+    setScrollZone(rest.x, rest.y);
 
     // Check to see if we have changed stanzas.
     const stanzaChanged = checkStanzaScroll();

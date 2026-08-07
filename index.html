@@ -3,6 +3,14 @@
 
 <head>
   <meta charset="utf-8">
+  <!-- Without this a phone browser falls back to a 980px layout viewport and
+       scales the whole page down to fit. Measured on an emulated iPhone: the
+       canvas came up 980x1644 CSS px at a device ratio of 3, which is a
+       2940x4932 backing store, times three canvases, all cleared and repainted
+       every frame — 43.5 megapixels against the 13.4 this piece paints on a
+       1512x738 desktop. The screen only has 2.33 of those megapixels to show,
+       so four fifths of that work was being downscaled away unseen. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>A Mourning of Ravens</title>
 
   <!-- Fonts. -->
@@ -203,6 +211,26 @@
                  does not need the control ruined for daily use. -->
             <input type="range" min="200" max="20000" step="100" data-key="particleCount" />
             <output data-value-for="particleCount"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Scale Particles By Window</span>
+            <input type="checkbox" data-key="enableResolutionParticleScale" />
+          </label>
+
+          <label class="control-row">
+            <span>Particle Reference Area (MPx)</span>
+            <!-- Down to 0.1 because that is phone territory, and up to 4 because
+                 a 4K window is 8.3 — anything past 4 is asking every screen to
+                 run thinned out, which is what the Max Particles slider is for. -->
+            <input type="range" min="0.1" max="4" step="0.02" data-key="particleScaleReferenceMpx" />
+            <output data-value-for="particleScaleReferenceMpx"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Particle Scale Floor</span>
+            <input type="range" min="0.05" max="1" step="0.05" data-key="particleScaleMin" />
+            <output data-value-for="particleScaleMin"></output>
           </label>
 
           <label class="control-row">

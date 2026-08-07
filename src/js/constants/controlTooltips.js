@@ -17,7 +17,10 @@ const CONTROL_TOOLTIPS = {
     'Fraction of particles simulated. Physics is about three quarters of frame time, so this is where a slow '
     + 'machine finds real headroom — but a dropped particle freezes where it stands and fades back in when it '
     + 'returns. Never goes below Render Fraction. Reach for this after Render Fraction, not before.',
-  particleCount: 'Maximum particle budget used by the simulation and adaptive particle count system.',
+  particleCount: 'Maximum particle budget used by the simulation and adaptive particle count system. Spent in full only at the reference window size when Scale Particles By Window is on.',
+  enableResolutionParticleScale: 'Treats Max Particles as a density rather than a count: a smaller window gets proportionally fewer particles, so a phone reads like the desktop instead of like soup. Never scales above Max Particles.',
+  particleScaleReferenceMpx: 'Window area, in millions of CSS pixels, that earns the full Max Particles. 1.12 is 1512x738, the window the piece was tuned in. Raise it to thin every screen out; lower it to spend the full budget sooner.',
+  particleScaleMin: 'Floor on the scale, so a very small window still keeps a field. 0.2 means a phone never drops below a fifth of Max Particles however small it gets.',
   boxCollisionParticipantRatio: 'Fraction of particles that participate in poem collider box interactions.',
   enableAutoRenderScale: 'Automatically caps the internal canvas size on very large screens, then CSS stretches it to fill the viewport.',
   autoRenderScaleThresholdPx: 'Maximum internal canvas size before auto render scaling caps it.',

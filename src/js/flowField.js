@@ -1144,7 +1144,9 @@ function paintQualityHud(nowMs) {
   const rf = getQualityValue('particleRenderFraction');
   const sf = getQualityValue('particleSimFraction');
   const pairs = getQualityValue('maxSeparationPairsPerTick');
-  const maxParticles = max(1, floor(CONFIG.particleCount));
+  // The scaled ceiling, not CONFIG.particleCount — otherwise the HUD reads
+  // "1160/5000" on a phone and looks like the piece is failing to fill up.
+  const maxParticles = getEffectiveParticleCount();
   // Derived from the fractions rather than counted, so reading the HUD does not
   // cost a pass over 5000 particles every 180 ms. The cull is a low-discrepancy
   // sequence, so the fraction and the true count agree to within one particle.
@@ -1220,6 +1222,39 @@ function tickAdaptiveQuality(nowMs) {
   // renderParticles binds the raw ones.
   tickAutoPixelDensity(dt);
   paintQualityHud(nowMs);
+}
+
+// The share of particleCount this window has earned. See the note on
+// CONFIG.enableResolutionParticleScale for why this is CSS pixels.
+function getResolutionParticleScale() {
+  if (!CONFIG.enableResolutionParticleScale) return 1;
+  const referencePx = max(1, CONFIG.particleScaleReferenceMpx * 1e6);
+  // window.innerWidth rather than the canvas: at startup the canvas may not
+  // exist yet, and once it does, render scale has already been applied to it —
+  // that is a separate lever and folding it in here would double-count.
+  const areaPx = max(1, (window.innerWidth || 0) * (window.innerHeight || 0));
+  return constrain(areaPx / referencePx, constrain(CONFIG.particleScaleMin, 0, 1), 1);
+}
+
+// The count everything downstream should treat as the ceiling. The unscaled
+// CONFIG.particleCount is only ever the budget for a reference-sized window.
+function getEffectiveParticleCount() {
+  return max(1, floor(CONFIG.particleCount * getResolutionParticleScale()));
+}
+
+// Brings the live array to whatever the current window has earned. Cheap enough
+// to call on every resize: it is a subtraction and, in the common case where
+// nothing changed, no work at all.
+function syncParticleCountToTarget() {
+  const target = getEffectiveParticleCount();
+  if (particles.length < target) {
+    addParticles(target - particles.length);
+  } else if (particles.length > target) {
+    removeParticles(particles.length - target);
+  } else {
+    return;
+  }
+  syncParticleBoxCollisionParticipation();
 }
 
 function addParticles(count) {
@@ -1327,8 +1362,9 @@ function setup() {
   simStepCount = 0;
   simRenderAlpha = 1;
 
-  for (let i = 0; i < CONFIG.particleCount; i++) {
-    const ignoresBoxCollision = i / CONFIG.particleCount >= CONFIG.boxCollisionParticipantRatio;
+  const initialParticleCount = getEffectiveParticleCount();
+  for (let i = 0; i < initialParticleCount; i++) {
+    const ignoresBoxCollision = i / initialParticleCount >= CONFIG.boxCollisionParticipantRatio;
     const particle = createParticle(random(width), random(height), ignoresBoxCollision);
     particle.cullRank = particleCullRank(i);
     particles.push(particle);
@@ -1498,6 +1534,9 @@ function draw() {
 
 function windowResized() {
   applyRenderScale(getActiveRenderScale());
+  // Rotating a phone or dragging a window changes what the field has earned.
+  // A no-op when the scale is off or the area did not cross a whole particle.
+  syncParticleCountToTarget();
 }
 
 // Show/hide each canvas independently (visibility, not display, so it
@@ -2578,6 +2617,9 @@ function setupDuneControls() {
     input.addEventListener('input', () => {
       if (def.type === 'bool') {
         CONFIG[def.key] = input.checked;
+        if (def.key === 'enableResolutionParticleScale') {
+          syncParticleCountToTarget();
+        }
       } else {
         const parsed = Number(input.value);
         if (!Number.isFinite(parsed)) return;
@@ -2600,14 +2642,10 @@ function setupDuneControls() {
         }
         CONFIG[def.key] = nextValue;
         updateControlOutput(def.key, nextValue, def.digits, def.display);
-        if (def.key === 'particleCount') {
-          const target = max(1, floor(CONFIG.particleCount));
-          if (particles.length < target) {
-            addParticles(target - particles.length);
-          } else if (particles.length > target) {
-            removeParticles(particles.length - target);
-          }
-          syncParticleBoxCollisionParticipation();
+        if (def.key === 'particleCount' ||
+            def.key === 'particleScaleReferenceMpx' ||
+            def.key === 'particleScaleMin') {
+          syncParticleCountToTarget();
         }
         if (def.key === 'boxCollisionParticipantRatio') {
           syncParticleBoxCollisionParticipation();
