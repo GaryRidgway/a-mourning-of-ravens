@@ -1299,6 +1299,7 @@ function setup() {
   ensureForegroundLayer();
   applyCanvasLayerVisibility();
   applyWordShadowStyle();
+  applyBackgroundToneStyle();
   noStroke();
   const showDebugUI = new URLSearchParams(window.location.search).has('debug');
   if (showDebugUI) {
@@ -1806,6 +1807,94 @@ function applyWordShadowStyle() {
     '--word-shadow',
     `drop-shadow(0 0 ${blur}px ${c}) drop-shadow(0 0 ${blur * 2.5}px ${c})`
   );
+}
+
+// 33 entries, not the 9 or 17 that would also "work". tableValues is linearly
+// interpolated between entries, so a coarse table is a run of straight segments
+// meeting at angles, and angles in a tone curve are exactly what the eye reads
+// as banding on a smooth dark gradient — which is most of this piece.
+const BG_TONE_TABLE_STEPS = 33;
+
+let bgToneFuncs = null;
+let bgToneAlphaFunc = null;
+let bgToneLastTable = '';
+let bgToneLastAlphaTable = '';
+
+function getBackgroundToneFuncs() {
+  if (bgToneFuncs) return bgToneFuncs;
+  const filter = document.getElementById('bg-tone');
+  if (!filter) return null;
+  const funcs = filter.querySelectorAll('feFuncR, feFuncG, feFuncB');
+  if (funcs.length !== 3) return null;
+  bgToneFuncs = funcs;
+  bgToneAlphaFunc = filter.querySelector('feFuncA');
+  return bgToneFuncs;
+}
+
+// out = gain * ((x - blackPoint) / (1 - blackPoint)) ^ gamma, floored at 0.
+//
+// Everything below blackPoint lands on 0, which is the contrast crush; the
+// exponent does the mid lift that brightness() cannot do without also dragging
+// the top past 1. At gain 1 the curve reaches white only where the input was
+// already white, so it cannot clip.
+function buildToneTable(blackPoint, gamma, gain) {
+  const bp = constrain(blackPoint, 0, 0.95);
+  const g = max(0.05, gamma);
+  const k = max(0, gain);
+  const span = 1 - bp;
+  const values = [];
+  for (let i = 0; i < BG_TONE_TABLE_STEPS; i++) {
+    const x = i / (BG_TONE_TABLE_STEPS - 1);
+    const u = x <= bp ? 0 : (x - bp) / span;
+    values.push(constrain(pow(u, g) * k, 0, 1).toFixed(4));
+  }
+  return values.join(' ');
+}
+
+function applyBackgroundToneStyle() {
+  const mount = document.getElementById('poem-bg');
+  if (!mount) return;
+  const root = document.documentElement.style;
+  const funcs = getBackgroundToneFuncs();
+
+  // Off means no filter at all, not a different filter. The point of the toggle
+  // is to see what the grade is doing, and that only works against the ungraded
+  // picture. Same if the filter definition is missing from the document: better
+  // to show plainly that nothing is being applied than to substitute something
+  // else and leave the toggle looking broken.
+  if (CONFIG.enableBackgroundTone && funcs) {
+    const table = buildToneTable(
+      CONFIG.backgroundToneBlackPoint,
+      CONFIG.backgroundToneGamma,
+      CONFIG.backgroundToneGain
+    );
+    if (table !== bgToneLastTable) {
+      bgToneLastTable = table;
+      for (let i = 0; i < funcs.length; i++) {
+        funcs[i].setAttribute('tableValues', table);
+      }
+    }
+    if (bgToneAlphaFunc) {
+      // Gain is deliberately not exposed on alpha. Scaling alpha up pushes the
+      // dense drifts to fully opaque, and once they are opaque they are one flat
+      // shape — the same detail loss the RGB curve exists to avoid, arriving
+      // through the channel that actually carries the picture.
+      const alphaTable = buildToneTable(
+        CONFIG.backgroundToneAlphaBlackPoint,
+        CONFIG.backgroundToneAlphaGamma,
+        1
+      );
+      if (alphaTable !== bgToneLastAlphaTable) {
+        bgToneLastAlphaTable = alphaTable;
+        bgToneAlphaFunc.setAttribute('tableValues', alphaTable);
+      }
+    }
+    root.setProperty('--bg-filter', 'url(#bg-tone)');
+  } else {
+    root.setProperty('--bg-filter', 'none');
+  }
+
+  mount.classList.toggle('bg-filter-wrapper', Boolean(CONFIG.backgroundFilterOnWrapper));
 }
 
 function ensureForegroundLayer() {
@@ -2541,6 +2630,17 @@ function setupDuneControls() {
         def.key === 'wordShadowOpacity'
       ) {
         applyWordShadowStyle();
+      }
+      if (
+        def.key === 'enableBackgroundTone' ||
+        def.key === 'backgroundToneBlackPoint' ||
+        def.key === 'backgroundToneGamma' ||
+        def.key === 'backgroundToneGain' ||
+        def.key === 'backgroundToneAlphaBlackPoint' ||
+        def.key === 'backgroundToneAlphaGamma' ||
+        def.key === 'backgroundFilterOnWrapper'
+      ) {
+        applyBackgroundToneStyle();
       }
       if (
         def.key === 'showBackgroundCanvas' ||

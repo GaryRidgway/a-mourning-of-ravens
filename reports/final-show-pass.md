@@ -459,3 +459,423 @@ Density and it measures slower — see Part 3.
 To measure rather than eyeball, `tools/perf/settle.mjs` reports whether the
 controller converges at a given throttle, and `--release` checks that it
 recovers when the load comes off.
+
+---
+
+# Part 4 — The background grade
+
+Prompted by a question about ordering CSS filter functions, which turned into
+finding the largest single cost in the piece.
+
+## The filter was being paid three times
+
+`poem.scss` graded the background with `filter: contrast(1.5) brightness(2)` on
+the selector `#poem-bg canvas`. Three canvases live in that wrapper — main, ink
+B, and foreground — so the chain ran three times a frame on three fullscreen
+surfaces.
+
+Measured with `tools/perf/gammaspike.mjs`, which swaps the filter between arms
+without reloading so every arm sees the same particle population, and forces
+adaptive quality off so the workload cannot absorb the difference:
+
+| Where the grade is applied | Frame time, software raster, 3200x1800 |
+|---|---|
+| Nowhere (no filter at all) | 17.8 ms |
+| Once per canvas — what shipped | 30.3 ms |
+| Once, on the wrapper | 18.1 ms |
+
+On a real GPU every arm was identical within 0.04 ms. This is a
+weak-graphics-machine problem exclusively, and on such a machine it was costing
+more than everything Parts 1 to 3 recovered.
+
+The trade is that it is not pixel-identical. Grading three layers and then
+compositing is not the same as compositing and then grading, because the
+transfer is non-linear. Measured at max 14/255 on the worst pixel, 0.08 mean,
+confined to where the layers overlap. That is a look change, small but real, so
+it is `backgroundFilterOnWrapper` and it is **off** by default. Turn it on for a
+venue machine without graphics acceleration.
+
+## Cost tracks passes, not functions
+
+Worth writing down because it is not obvious and it decided the design:
+
+| Filter chain | Frame time | Passes |
+|---|---|---|
+| `contrast(1.5) brightness(2)` | 30.3 ms | 1 |
+| `url(#gamma)` | 30.6 ms | 1 |
+| `contrast(1.5) url(#gamma)` | 36.8 ms | 2 |
+| `contrast() brightness() saturate() url(#gamma)` | 50.0 ms | 2+ |
+
+Consecutive shorthand functions fold into one pass. A `url()` filter is always
+its own. So adding an SVG filter *alongside* the existing chain doubles the
+bill, while replacing the whole chain with a single `feComponentTransfer` is
+free — and a table transfer can express far more than contrast and brightness
+can between them.
+
+## What the RGB curve is actually worth here: not much
+
+The tone curve was originally justified on the grounds that
+`contrast(1.5) brightness(2)` clips the bright cores to flat white, and that a
+curve could roll the highlights off instead.
+
+That justification was wrong, and measuring it is what found the real answer.
+`tools/perf/lum.mjs` reports the share of clipped pixels: it is **0.000% in
+every variant, including the original, even after 1400 frames of accumulation.**
+
+The reason is that all three canvases are transparent and stack over the page.
+A CSS filter runs on un-premultiplied colour *before* alpha compositing, and
+`contrast`/`brightness`/`saturate` do not touch alpha. So the filter only ever
+regraded the handful of hues the ink is drawn in. What varies across this
+picture — dense drift against faint wash — is accumulated **alpha**, and no RGB
+filter can reach it. That is why adjusting these values never delivered much.
+
+## feFuncA is the control that matters
+
+`feComponentTransfer` has a fourth function for the alpha channel, in the same
+primitive and therefore the same pass, at no additional cost.
+
+Measured at 1400 frames, RGB curve held neutral so alpha is isolated:
+
+| Setting | Mean luminance | Lit pixels | Mean luminance of lit pixels |
+|---|---|---|---|
+| Original chain | 4.856 | 11.24% | 37.82 |
+| Alpha gamma 0.6, no cutoff | 5.855 | 22.59% | 22.73 |
+| Alpha cutoff 0.08, gamma 0.6 | 4.259 | 8.02% | 50.00 |
+| Alpha cutoff 0.12, gamma 0.45 | 4.083 | 7.84% | 51.08 |
+
+The third row is the shape usually wanted: the visible picture is 32% brighter
+(37.8 to 50.0) while *fewer* pixels are lit (11.2% to 8.0%). Brighter trails,
+less fog between them. The second row is the counter-example — lifting alpha
+without a cutoff doubles the lit area and halves its brightness, which is more
+haze, not more picture.
+
+So the two alpha controls map onto the two things usually being asked for:
+
+- **Haze Cutoff** (`backgroundToneAlphaBlackPoint`) — separation.
+- **Trail Lift** (`backgroundToneAlphaGamma`) — brightness.
+
+Gain is deliberately not exposed on alpha: scaling alpha up drives dense drifts
+to fully opaque, and an opaque region is one flat shape.
+
+## Defaults changed nothing — at first
+
+> Superseded by Part 5. The values described in this section shipped so the
+> mechanism could land without changing the look; Alan has since dialled the
+> grade and those chosen values are the defaults now. The reasoning below is
+> kept because it is what made the change safe to make.
+
+`enableBackgroundTone` is on, but its defaults are chosen so that switching it on
+is a no-op. With black point 0.1667 and gamma 1, a gain of 2.5 reduces to
+`out = 3x - 0.5`, which is algebraically identical to `contrast(1.5)
+brightness(2)`. The alpha curve defaults to identity.
+
+Verified rather than asserted: the shipped defaults against the pre-change build
+at 1400 frames give **max channel delta 2, mean 0.0041, 0% of pixels differing by
+more than 1** — the residual is table quantisation at the two knees. Switching
+`enableBackgroundTone` off reverts to the original CSS and measures **max channel
+delta 0** against a worktree at the previous commit.
+
+What was added is the mechanism, not a look. The look is Alan's to dial.
+
+## Delivered cost, real build, software rasteriser
+
+| Configuration | Frame time |
+|---|---|
+| Old chain | 30.3 ms |
+| Tone curve at defaults | 30.7 ms |
+| Tone curve + Grade Background Once | 19.9 ms |
+
+## A harness caveat found the hard way
+
+The first screenshot taken against a freshly created `git worktree` differed
+from the second by max 110 — a cold-cache font race, not a real difference. Warm
+it, or discard the first shot. Both worktree shots being 110 apart *from each
+other* is what gave it away; the noise floor has to be measured before a diff
+means anything.
+
+# Part 5 — The word shadow, and the defaults Alan chose
+
+## What the word shadow costs
+
+`enableWordShadow` puts two stacked `drop-shadow()` filters on every poem span,
+the second at 2.5x the radius of the first. Three things made it worth measuring
+rather than reasoning about: Gaussian blur cost scales with radius; the filter is
+per span and the scroll ring seeds **905 spans** into the DOM; and it is not a
+static filter that rasterises once, because `scroll.js` rewrites the stanza
+offsets as the poem moves, so the blur is redone while it scrolls. Measured on a
+parked poem it reports zero and the answer is wrong.
+
+`tools/perf/shadowspike.mjs`, adaptive quality off so nothing absorbs the cost,
+auto-scroll running, rAF delta as the metric and `draw()` carried as a control:
+
+| Arm | GPU raster | Software raster |
+|---|---|---|
+| off | 8.40 ms | 30.70 ms |
+| pair, blur 9 (as it shipped) | 8.39 ms | +2.38 ms |
+| one shadow, blur 9 | 8.35 ms | +1.05 ms |
+| one shadow, blur 22.5 | 8.45 ms | +1.56 ms |
+| pair, blur 4 | 8.43 ms | +0.79 ms |
+| pair, blur 16 | 8.42 ms | +3.25 ms |
+| filter moved to `.stanza` | 8.38 ms | +2.63 ms |
+
+Noise floor 0.27 ms, `draw()` spread 0.10 ms across all arms — so the software
+column is real and it is raster cost, not JS.
+
+Two findings worth keeping. **Radius is the whole story**: blur 4 costs a third
+of blur 9. And **element count is not the cost** — moving the filter from 905
+spans to 50 stanzas measured very slightly *worse*, because only ~51 spans are on
+screen at a time and what is being paid for is blurred area, not element count.
+That kills the obvious optimisation before anyone spends a day on it.
+
+Caveat on the GPU column: that run sat at 119 fps with headroom to spare, so it
+shows *no measurable cost*, not *provably zero*. The software column is the
+honest weak-hardware number.
+
+## The defaults Alan dialled
+
+Nine keys changed. Everything else in the URL he settled on already matched the
+shipped defaults — 139 of 148 keys identical, which is the useful thing to know:
+the tuning was concentrated entirely in the two features this pass added.
+
+| Key | Was | Now |
+|---|---|---|
+| `backgroundToneBlackPoint` | 0.1667 | 0.165 |
+| `backgroundToneGamma` | 1 | 0.55 |
+| `backgroundToneGain` | 2.5 | 1.2 |
+| `backgroundToneAlphaBlackPoint` | 0 | 0.06 |
+| `backgroundToneAlphaGamma` | 1 | 0.6 |
+| `backgroundFilterOnWrapper` | false | **true** |
+| `enableWordShadow` | false | **true** |
+| `wordShadowBlur` | 9 | 4 |
+| `wordShadowOpacity` | 1 | 0.87 |
+
+The RGB three are the answer to the colour collapse: gamma 0.55 lifts the mid
+tones and gain drops from 2.5 to 1.2, so the lifting happens through the curve
+instead of by scaling the whole range. Scaling the range is what pushed the reds
+together — a curve leaves the top alone.
+
+The alpha two are the pair that does what the CSS filters were being asked for
+and structurally could not deliver: a 0.06 cutoff clears the faint wash between
+drifts while a 0.6 gamma lifts the trails, so separation and brightness move in
+*opposite* directions instead of together.
+
+`backgroundFilterOnWrapper` going on is a real trade accepted knowingly: 12 ms a
+frame on a software rasteriser, against a picture that is not pixel-identical
+(max 14/255 on the worst pixel, 0.08 mean, only where layers overlap) because
+grading three layers then compositing is not the same as compositing then
+grading under a non-linear curve.
+
+Verified by loading `index.html` with **no query string at all**, letting it
+settle, and having the page serialise its own state back out: 157 params emitted,
+every one matching the target. The single apparent mismatch, `qualityHudEnabled`,
+is `setup()` forcing it false outside debug mode — correct behaviour, not drift.
+Smoke clean at 61.7 fps, quality 0.000, no console errors.
+
+---
+
+# Part 6 — The scroll, and why the words felt like they were strobing
+
+Alan, watching on a lower-end machine: *"the words were jumpy and almost
+strobing."* Not a bug report — a description of a feeling, which is the right
+thing to hand over and the wrong thing to act on directly. "Jumpy" and
+"strobing" are different failures with different causes, and a feeling cannot
+tell you which one it was. So the first job was to turn it into something that
+could be measured, and the second was to be willing to find that the obvious
+answer was wrong.
+
+Two new tools, because it turned out to be two questions.
+
+## What the scroll actually is
+
+The poem moves by exactly one number. `setAnchorOffsets()` writes
+`--left-active-offset` on `#anchor` at the end of every `draw()`, and a CSS
+`translate3d` on that element carries all 905 spans. Everything visible about
+the scroll is downstream of that one property, so sampling it costs nothing and
+misses nothing. `judder.mjs` samples it once per frame and looks at the
+*differences* — because frame rate does not tell you whether motion looks
+smooth. A page can hold 60 fps and judder; what the eye reacts to is whether
+each step is the same size as the last.
+
+Horizontal only, on purpose: the vertical offset is the horizontal one times the
+current stanza's slope, and the slope changes stanza to stanza, so a 2D step
+would have folded stanza changes into the timing signal and looked like
+periodic judder that isn't there.
+
+## Two real defects, neither of them the strobe
+
+| CPU | fps | step (px) | step range | CV | frames hitting the 50 ms cap | actual vs intended speed |
+|---|---|---|---|---|---|---|
+| 1x | 48.6 | 0.272 | 0.200 – 0.500 | 18.3% | 0% | on target |
+| 2x | 23.3 | 0.559 | 0.500 – 0.700 | 9.2% | 1% | 1% slow |
+| 4x | 11.1 | 0.660 | 0.600 – 0.700 | 7.4% | **100%** | **44% slow** |
+
+**The 0.1px grid.** `snapOffset()` rounds the offset to one decimal before
+writing it. At the shipped speed the poem advances about 0.27px a frame, so the
+grid is coarse relative to the step: successive steps land on 0.2, then 0.3,
+then 0.2, and the ratio between them is the judder. The `no snap` arm takes the
+step coefficient of variation from 18.3% to 10.1% at 1x and from 7.4% to 0.0% at
+4x, and takes the per-frame position error to exactly zero. It is the only arm
+that beats the noise floor, and it does so on both rasterisers.
+
+The counterintuitive part is the direction. This gets **worse the healthier the
+machine**, because a higher frame rate means a smaller step against the same
+fixed grid. It is not the low-end problem; it was found while looking for one.
+
+**The 50 ms delta cap.** `tickAutoScroll` clamps the frame delta with
+`Math.min(nowMs - prev, 50)` so a backgrounded tab cannot teleport the poem.
+Sound instinct, but it is all-or-nothing and it has no idea it is firing. At
+11 fps every single frame is over 50 ms, so every frame is told less time passed
+than did, and the poem travels at **56% of its intended speed** — silently, with
+nothing in the HUD saying so. The piece is slower on a weak machine than on a
+strong one, which was never a decision anybody made.
+
+Neither of these is a strobe. Both are sub-pixel. They are worth fixing on their
+own merits and they are not what Alan saw.
+
+## The theory that was wrong
+
+`#anchor` carries `will-change: transform`, so the poem is its own compositor
+layer. A composited layer is rasterised once and then *transformed*, and a
+transform by a fractional number of pixels can be resolved by resampling that
+raster rather than re-rasterising the text at the new position. Resampling a
+glyph 0.3px sideways softens it; resampling it 1.0px sideways moves not a single
+sample. So as the offset walks 0.0, 0.2, 0.4 … the letters would walk sharp,
+soft, softer, soft, sharp — a weight oscillation locked to the fractional part
+of the offset, with no corresponding change in position.
+
+That is a strobe, it is specific to text, it only bites when the layer is
+promoted, and it fits every word of the complaint. `textshimmer.mjs` was built
+to catch it: freeze the sketch, hide the ink canvases, step the offset by hand,
+photograph each step, and measure sharpness as the mean difference between
+horizontally adjacent pixels.
+
+| step | ink spread | edge spread |
+|---|---|---|
+| 1.0px (control) | ±0.71% | ±0.56% |
+| 0.5px | ±0.17% | ±0.12% |
+| 0.22px | ±0.13% | ±0.14% |
+| 0.66px | ±0.27% | ±0.17% |
+| 0.1px | ±0.05% | ±0.11% |
+
+The integer arm is the control — whole-pixel motion cannot resample, so its
+spread is the rig's own noise. Every sub-pixel arm came in *at or below* it. The
+letters do not change shape as they move. Theory dead, and worth the build: it
+was the most plausible explanation available and there was no way to retire it
+by reading the code.
+
+Three more went the same way and cost less. `simRenderAlpha` is hard-wired to 1,
+so the box-position interpolation that could have made the ink holes jitter is a
+no-op. `enableBoxInkErase` ships `false`, so nothing is punching holes under the
+words at all. And `#poem-bg` is a *sibling* of `#poem-container`, so
+`backgroundFilterOnWrapper` — new the day before, and therefore suspect — never
+touches the text.
+
+## Where the change actually is
+
+`textshimmer.mjs --live` runs the whole piece, screencasts real composited
+frames, and splits each frame-to-frame difference three ways.
+
+| region | mean change per pixel per frame | vs open field |
+|---|---|---|
+| inside the word rectangles | 0.286 | 1.9x |
+| 10px ring around the words | 0.420 | 2.8x |
+| far from any word | 0.152 | — |
+
+The words sit in the busiest part of the picture. Particles pile up along the
+glyph edges — that is the collider design working — so the ink hugging the
+letters churns roughly three times as fast as the open field, and the glow
+flicker rides on exactly those denser particles. The letters themselves are
+static DOM text. What moves is everything immediately around them.
+
+That is a coherent match for "the letters felt like they were mildly strobing,
+whether that is a byproduct of something else or not." It is a byproduct. At
+48 fps that churn integrates into motion; at 11 fps each state is held for 90 ms
+and registers separately. Same amount of change, delivered in a quarter as many
+instalments.
+
+Stated as a limit rather than buried: this is the weakest evidence in Part 6.
+The "inside the letters" mask is the word bounding box, not the glyph outline,
+so it includes the gaps between letters where ink shows through — it says "at
+the words", not "in the ink of the letters". And the screencast encoder is
+itself the bottleneck under software rasterisation, so the presented frame rate
+is the tool's and not the piece's. Regions can be compared within a run; rates
+cannot be compared between runs. The ranking is solid, the magnitudes are not.
+
+## What is worth doing
+
+Written before the fixes went in; kept as written, with what was
+actually done recorded in the section after it.
+
+Nothing here has been changed yet. The two defects are real and independent of the
+strobe, and the strobe has no fix that is purely technical.
+
+1. **Drop the snap, or take it to two decimals.** `snapOffset` is a
+   string-churn micro-optimisation that buys nothing measurable and costs
+   measurable evenness. This is free and it does not change the look.
+2. **Make the 50 ms cap frame-rate aware** — cap at a few multiples of the
+   recent median frame time rather than a constant. It keeps the anti-teleport
+   guarantee and stops the piece running at half speed on the machine most
+   likely to be in the gallery. This *does* change the look on a weak machine:
+   the poem gets nearly twice as fast as what Alan was watching. His call.
+3. **The strobe itself is a frame-rate problem**, and the levers for it are the
+   ones already in the panel — particle count, glow flicker depth and speed. If
+   the venue machine lands near 11 fps, no amount of scroll-code tuning will
+   make the words look calm.
+
+## Both fixes, and what they measure at
+
+Alan: *"go ahead and add both and set a reasonable default for the second. I
+don't really want to tinker with it, so let's trust your judgement."*
+
+**The grid.** `snapOffset`'s default precision went from 10 to 1000 — a 0.001px
+grid instead of 0.1px. The rounding exists only to keep the CSS custom property
+string short, which the finer grid still does; three orders of magnitude below
+the step size, the error disappears. One token.
+
+**The cap.** `tickAutoScroll` now caps the frame delta at
+`max(50ms, medianRecentFrame * CONFIG.autoScrollDeltaCapMultiple)` over a
+30-frame window, recomputed every 15 frames. Median rather than mean, and that
+is the whole trick: the multi-second outliers this exists to catch are exactly
+the samples that would drag a mean upward and widen the cap enough to let the
+next one through. A median does not move.
+
+Default multiple: **4**. It leaves ordinary frames untouched everywhere — 67ms
+on a 60Hz machine, 360ms at 11 fps — while still catching a real stall, which is
+seconds and not milliseconds. The 50ms floor matters on the fast end: a 120Hz
+machine has an 8ms median, and four of those is tighter than a single dropped
+frame.
+
+Wired the three ways the project requires: constant in `config.js`, panel row
+under Text & Layout, URL param and tooltip through `CONTROL_PARAM_DEFS`. The
+floor also means a multiple of **0** reproduces the old flat-50 behaviour
+exactly, so `judder.mjs` can A/B the fix against its predecessor with a config
+value instead of a monkey patch.
+
+| | 4x CPU, software (~11 fps) | 1x CPU, GPU (~30 fps) |
+|---|---|---|
+| shipped — position error | **0.001px** | **0.001px** |
+| shipped — step unevenness | 4.2% | **2.8%** |
+| shipped — speed vs intended | **on target** | on target |
+| old scroll — position error | 0.679px | 0.061px |
+| old scroll — step unevenness | 7.4% | 11.5% |
+| old scroll — speed vs intended | **46% slow** | on target |
+
+The two fixes help opposite ends of the range and neither costs the other
+anything: the grid fix is what moves the 30 fps column, the cap fix is what
+moves the 11 fps one, and `flat 50` measures as a no-op on a healthy machine
+exactly as it should.
+
+## One metric had to be retired to land this
+
+`judder.mjs` originally ranked arms on step-size unevenness, which is the right
+instinct — judder is unevenness — and it would have graded the fix as a
+regression. Making the cap frame-rate aware took step CV from 7.4% **up** to
+4.2%–16% depending on the run, because steps that honour real frame times are
+necessarily as variable as the frame times are. Meanwhile position error fell
+from 0.679px to 0.001px.
+
+The `flat 50` arm is the clean statement of the problem: a poem that ignores
+elapsed time entirely has perfectly uniform steps, scores **CV 0.0%**, and runs
+at half speed. Evenness cannot see that; distance-from-correct can. The tool now
+ranks on position error, prints CV alongside, and carries the trap written down
+next to the code that would otherwise fall into it again.

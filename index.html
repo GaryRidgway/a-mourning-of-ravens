@@ -24,6 +24,42 @@
 </head>
 
 <body>
+  <!-- Tone curve for the background canvases. An arbitrary per-channel transfer
+       curve, which the shorthand filter functions cannot express: contrast()
+       pivots at 0.5 and brightness() is a straight multiply, so together they
+       can only ever be a line, and a line steep enough to separate the trails
+       from the haze is also steep enough to clip the bright cores to flat white.
+       A table can set the black point AND roll the highlights off short of 1.
+
+       tableValues is filled in by applyBackgroundToneStyle() — SVG primitive
+       attributes are XML, not CSS, so var() does not resolve inside them and a
+       live control has to write them directly. The 0 1 here is an identity ramp,
+       so the page is still correct if that never runs.
+
+       color-interpolation-filters="sRGB" is not optional. SVG filters default to
+       linearRGB, which would apply this curve in a different space than the one
+       the colours were authored in.
+
+       The region is pinned to the element box. It defaults to -10%/120%, which
+       on a fullscreen surface asks for 44% more pixels than there are. -->
+  <svg id="bg-filter-defs" aria-hidden="true" focusable="false"
+       style="position:absolute;width:0;height:0;overflow:hidden">
+    <filter id="bg-tone" color-interpolation-filters="sRGB"
+            x="0%" y="0%" width="100%" height="100%">
+      <feComponentTransfer>
+        <feFuncR type="table" tableValues="0 1" />
+        <feFuncG type="table" tableValues="0 1" />
+        <feFuncB type="table" tableValues="0 1" />
+        <!-- The one that actually matters on this piece. All three canvases are
+             transparent and stack over the page, so the picture's tonal range
+             lives in accumulated alpha, not in colour — the ink is only ever a
+             handful of hues. RGB filters can therefore only remap those hues;
+             they cannot make a dense drift read differently from a faint one.
+             Grading alpha grades the picture. Free: same primitive, same pass. -->
+        <feFuncA type="table" tableValues="0 1" />
+      </feComponentTransfer>
+    </filter>
+  </svg>
   <div id="poem-bg"></div>
   <div id="flow-box-overlay" aria-hidden="true"></div>
   <div id="poem-staging"></div>
@@ -76,6 +112,12 @@
           <span>Word Shadow Opacity</span>
           <input type="range" min="0" max="1" step="0.01" data-key="wordShadowOpacity" />
           <output data-value-for="wordShadowOpacity"></output>
+        </label>
+
+        <label class="control-row">
+          <span>Scroll Delta Cap (x frame)</span>
+          <input type="range" min="1" max="12" step="0.5" data-key="autoScrollDeltaCapMultiple" />
+          <output data-value-for="autoScrollDeltaCapMultiple"></output>
         </label>
 
         <details class="control-group control-subgroup">
@@ -153,7 +195,13 @@
 
           <label class="control-row">
             <span>Max Particles</span>
-            <input type="range" min="200" max="10000" step="100" data-key="particleCount" />
+            <!-- 20k rather than the old 10k. Measured, this machine runs 50k at
+                 the full 30 fps target with the adaptive system still idle, so
+                 the slider is not what limits the piece. It is capped here to
+                 stay draggable: nothing clamps particleCount in CONFIG or the
+                 URL params, so a stress test is ?particleCount=250000 away and
+                 does not need the control ruined for daily use. -->
+            <input type="range" min="200" max="20000" step="100" data-key="particleCount" />
             <output data-value-for="particleCount"></output>
           </label>
 
@@ -602,6 +650,45 @@
       <details class="control-group control-section" open>
         <summary>Background Canvas — Ink</summary>
 
+        <details class="control-group">
+          <summary>Tone Curve</summary>
+
+          <label class="control-row control-toggle">
+            <span>Enable Tone Curve</span>
+            <input type="checkbox" data-key="enableBackgroundTone" />
+          </label>
+
+          <label class="control-row">
+            <span>Black Point</span>
+            <input type="range" min="0" max="0.5" step="0.005" data-key="backgroundToneBlackPoint" />
+            <output data-value-for="backgroundToneBlackPoint"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Mid Lift (lower = brighter)</span>
+            <input type="range" min="0.2" max="1.5" step="0.01" data-key="backgroundToneGamma" />
+            <output data-value-for="backgroundToneGamma"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Level</span>
+            <input type="range" min="0.25" max="2.5" step="0.05" data-key="backgroundToneGain" />
+            <output data-value-for="backgroundToneGain"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Haze Cutoff (separation)</span>
+            <input type="range" min="0" max="0.4" step="0.005" data-key="backgroundToneAlphaBlackPoint" />
+            <output data-value-for="backgroundToneAlphaBlackPoint"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Trail Lift (brightness)</span>
+            <input type="range" min="0.25" max="2" step="0.01" data-key="backgroundToneAlphaGamma" />
+            <output data-value-for="backgroundToneAlphaGamma"></output>
+          </label>
+        </details>
+
         <label class="control-row control-toggle">
           <span>Show Ink Canvas A</span>
           <input type="checkbox" data-key="showBackgroundCanvas" />
@@ -904,6 +991,11 @@
           <span>Max Pixel Density</span>
           <input type="range" min="0" max="3" step="0.25" data-key="maxPixelDensity" />
           <output data-value-for="maxPixelDensity"></output>
+        </label>
+
+        <label class="control-row control-toggle">
+          <span>Grade Background Once</span>
+          <input type="checkbox" data-key="backgroundFilterOnWrapper" />
         </label>
 
         <label class="control-row">

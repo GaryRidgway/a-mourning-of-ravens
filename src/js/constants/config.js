@@ -46,6 +46,65 @@ const CONFIG = {
   // the particle count, or where you would rather see the piece struggle than
   // see it change.
   enableAutoPixelDensity: true,
+  // Grade the background canvases through an SVG tone curve. This is now the
+  // only grade there is: the contrast()/brightness() chain that used to live in
+  // poem.scss is gone, and turning this off applies no filter at all.
+  //
+  // Off deliberately means nothing rather than the old chain. With a second
+  // grade sitting in the stylesheet the toggle swapped one look for another,
+  // which made it impossible to see what the grade was actually contributing.
+  //
+  // The values below are a chosen grade, not a reproduction of the old chain.
+  // They shipped first as 0.1667/1/2.5, which was that chain expressed as a
+  // curve so the mechanism could land without changing the look; these replace
+  // it with the look actually wanted, dialled in against the running piece.
+  enableBackgroundTone: true,
+  // Input level below which the background colour is crushed to black.
+  // 0.165 is where contrast(1.5) put it, near enough — the black point was
+  // never the problem, so it stayed roughly where it was.
+  backgroundToneBlackPoint: 0.165,
+  // Curve shape above the black point. Below 1 lifts the mid tones. 0.55 is the
+  // half of the old chain that a straight line could not do: brightness() had
+  // to scale the whole range to lift the middle, which is what collapsed the
+  // reds into each other. A curve lifts the middle and leaves the top alone.
+  backgroundToneGamma: 0.55,
+  // Output multiplier. Down from 2.5 to 1.2 because the gamma above is now
+  // doing the lifting — leaving gain high on top of a lifted curve is what
+  // washes the colour out.
+  backgroundToneGain: 1.2,
+  // The alpha curve. These two are the controls that actually change how the
+  // background reads, and the RGB three above are colour grading by comparison.
+  //
+  // The reason: all three canvases are transparent and stack over the page, so
+  // what varies across this picture is accumulated alpha, not hue — the ink is
+  // only ever a few colours. An RGB filter can only remap those few colours,
+  // which is why contrast() and brightness() never delivered much here and why
+  // nothing in the composited frame gets within reach of white even after 1400
+  // frames of accumulation. Grading alpha grades the picture.
+  //
+  // Black point: alpha below this is erased. This is the real separation
+  // control — it clears the faint wash between drifts so the trails read as
+  // distinct strokes instead of one fog. 0.06 is deliberately small: the wash
+  // is very faint, and much above this it starts eating the trails themselves.
+  backgroundToneAlphaBlackPoint: 0.06,
+  // Curve shape above the black point. Below 1 lifts the partly-transparent
+  // middle, which is the real brightness control. 0.6 with the cutoff above is
+  // the pairing that does what the CSS filters were being asked for and could
+  // not deliver: brighter trails AND cleaner gaps between them, because the two
+  // move in opposite directions instead of together.
+  backgroundToneAlphaGamma: 0.6,
+  // Apply the grade once to the #poem-bg wrapper instead of once per canvas.
+  //
+  // Worth 12 ms/frame against a software rasteriser — 30.3 ms to 18.1 ms, the
+  // largest single saving measured anywhere in this piece.
+  //
+  // On by default, chosen rather than defaulted. It is not pixel-identical:
+  // grading three layers separately and compositing them is not the same as
+  // compositing and then grading, since the curve is non-linear. The measured
+  // difference is max 14/255 on the worst pixel, 0.08 mean, and lives only
+  // where the layers overlap — small enough to be worth 12 ms on a venue
+  // machine that turns out not to have real graphics acceleration.
+  backgroundFilterOnWrapper: true,
   particleSize: 0.25,
   particleSizeRandomNegative: 0,
   particleSizeRandomPositive: 0.42,
@@ -161,9 +220,14 @@ const CONFIG = {
   boidWindBlend: 0.45,
   boidMaxGroupSize: 4,
   boidDispersalStrength: 2.13,
-  enableWordShadow: false,
-  wordShadowBlur: 9,
-  wordShadowOpacity: 1,
+  enableWordShadow: true,
+  // Blur 4, not the 9 this started at. Measured, the shadow is free on a GPU
+  // rasteriser and 2.4 ms/frame on a software one, and radius is the whole
+  // story: 4 costs 0.8 ms where 9 costs 2.4 and 16 costs 3.3. Two stacked
+  // shadows at 4 and 10 separate the words from the ink as well as 9 and 22.5
+  // did, for a third of the price on the machines that cannot afford it.
+  wordShadowBlur: 4,
+  wordShadowOpacity: 0.87,
   enableBoxInkErase: false,
   boxInkEraseAlpha: 50,
   boxInkErasePadding: 0,
@@ -221,6 +285,23 @@ const CONFIG = {
   maxSpeed: 1.7,
   trailAlpha: 1,
   autoScrollSpeed: 0.1,
+  // The auto-scroll advances by speed x elapsed time, so it has to defend
+  // against an "elapsed time" that was not a frame at all: a backgrounded tab
+  // comes back with seconds on the clock, and spending all of it at once
+  // teleports the poem. That defence used to be a flat 50 ms cap, which cannot
+  // tell a hidden tab from a slow machine — at 11 fps every frame is over
+  // 50 ms, so every frame was told less time had passed than had, and the piece
+  // ran at 56% of its intended speed on exactly the hardware least able to
+  // disguise it. Nothing reported this; the scroll was simply a different speed
+  // depending on the machine.
+  //
+  // Capping at a multiple of what a frame normally costs HERE fixes that: the
+  // cap scales itself to the machine it is running on. 4 leaves ordinary frames
+  // untouched everywhere (67 ms on a 60 Hz machine, 360 ms at 11 fps) while
+  // still catching a real stall, which is seconds and not milliseconds. Raise
+  // it and long hitches start showing as a visible lurch; lower it towards 1
+  // and the slow-machine speed loss comes back.
+  autoScrollDeltaCapMultiple: 4,
   wordOffsetX: -2,
   wordOffsetY: 0,
   scrollFreezeDebounceMs: 50,

@@ -221,7 +221,15 @@ function perfMarkWrap(direction) {
     }
 }
 
-function snapOffset(value, precision = 10) {
+// Rounding here only exists to keep the CSS custom property string short. What
+// matters is the grid it creates relative to the step: at the shipped speed the
+// poem advances about 0.27px a frame, so the old 0.1px grid was a third of the
+// step and successive frames landed on 0.2, 0.3, 0.2 — measurably uneven motion
+// bought for nothing. 0.001px is finer than the step by three orders of
+// magnitude, still bounds the string, and takes the per-frame position error to
+// zero. Counter-intuitively the old grid hurt FAST machines most: a higher
+// frame rate means a smaller step against the same fixed grid.
+function snapOffset(value, precision = 1000) {
     return Math.round(value * precision) / precision;
 }
 
@@ -550,6 +558,51 @@ function startAutoScroll(speedMultiplier = 1) {
     // No rAF loop — auto-scroll is driven by p5's draw() via tickAutoScroll().
 }
 
+// A frame delta the auto-scroll should not believe. See the note on
+// CONFIG.autoScrollDeltaCapMultiple for why this is a multiple of the local
+// frame time rather than a constant.
+const AUTO_SCROLL_DELTA_WINDOW = 30;
+// Never cap below this. A 120Hz machine has an 8ms median, and four of those is
+// tighter than a single dropped frame — the floor keeps an ordinary hitch on a
+// fast machine from being treated as a stall.
+const AUTO_SCROLL_DELTA_CAP_FLOOR_MS = 50;
+const autoScrollRecentDeltas = [];
+let autoScrollDeltaSampleCount = 0;
+let autoScrollDeltaCapMs = AUTO_SCROLL_DELTA_CAP_FLOOR_MS;
+
+function updateAutoScrollDeltaCap(rawDeltaMs) {
+    // A zero delta is the first frame after a pause, not a measurement.
+    if (!(rawDeltaMs > 0)) {
+        return;
+    }
+
+    autoScrollRecentDeltas[autoScrollDeltaSampleCount % AUTO_SCROLL_DELTA_WINDOW] = rawDeltaMs;
+    autoScrollDeltaSampleCount += 1;
+
+    // Wait for a full window: a median of three frames taken during startup
+    // would set the cap from the least representative frames of the session.
+    if (autoScrollRecentDeltas.length < AUTO_SCROLL_DELTA_WINDOW) {
+        return;
+    }
+
+    // Recomputed on a duty cycle rather than every frame. Sorting 30 numbers is
+    // cheap but not free, and the median of a 30-frame window cannot move fast
+    // enough for a 15-frame refresh to miss anything.
+    if (autoScrollDeltaSampleCount % 15 !== 0) {
+        return;
+    }
+
+    // Median, not mean, and that is the whole trick: the outliers this is meant
+    // to catch are exactly the samples that would drag a mean up and widen the
+    // cap to let the next one through.
+    const sorted = autoScrollRecentDeltas.slice().sort((a, b) => a - b);
+    const median = sorted[sorted.length >> 1];
+    autoScrollDeltaCapMs = Math.max(
+        AUTO_SCROLL_DELTA_CAP_FLOOR_MS,
+        median * CONFIG.autoScrollDeltaCapMultiple
+    );
+}
+
 // Called once per frame from p5's draw(). Runs the auto-scroll delta in the
 // same rAF callback as the particle sim, eliminating scheduling jitter.
 window.__mournTickAutoScroll = function tickAutoScroll(nowMs) {
@@ -563,7 +616,9 @@ window.__mournTickAutoScroll = function tickAutoScroll(nowMs) {
 
     perfRecordFrame(nowMs, 'auto');
 
-    const deltaMs = Math.min(nowMs - autoScrollPrevFrameTs, 50);
+    const rawDeltaMs = nowMs - autoScrollPrevFrameTs;
+    updateAutoScrollDeltaCap(rawDeltaMs);
+    const deltaMs = Math.min(rawDeltaMs, autoScrollDeltaCapMs);
     autoScrollPrevFrameTs = nowMs;
     const deltaPx = autoScrollPixelsPerSecond * (deltaMs / 1000);
 

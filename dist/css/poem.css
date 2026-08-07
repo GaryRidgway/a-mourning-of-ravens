@@ -31,7 +31,13 @@ body {
   min-height: 100dvh;
   max-width: none;
   max-height: none;
-  filter: contrast(1.5) brightness(2);
+  filter: var(--bg-filter, none);
+}
+#poem-bg.bg-filter-wrapper {
+  filter: var(--bg-filter, none);
+}
+#poem-bg.bg-filter-wrapper canvas {
+  filter: none;
 }
 
 #dune-debug-canvas {

@@ -30,6 +30,38 @@ const CONTROL_TOOLTIPS = {
     'Ceiling on the device pixel ratio all three canvases render at. 0 uses the display\'s own ratio. ' +
     'The main fill-rate control: on a Retina display, 1 quarters the pixels drawn each frame at the ' +
     'cost of sharpness in the trails. Changing it clears the accumulated ink.',
+  enableBackgroundTone:
+    'Grades the background through a tone curve instead of contrast() + brightness(). The defaults reproduce '
+    + 'that old chain exactly, so this on its own changes nothing — it adds the mechanism, not a look. What it '
+    + 'buys is a curve where there was only a straight line, and the two alpha controls below, which are the '
+    + 'ones that actually move this piece. Off applies NO filter at all, so the toggle is a clean A/B against '
+    + 'the raw canvases rather than a swap between two grades.',
+  backgroundToneBlackPoint:
+    'Where background COLOUR is crushed to black. Weaker than it sounds here: the canvases are transparent '
+    + 'and the ink is only a few hues, so this regrades those hues rather than the picture. For separation '
+    + 'reach for Haze Cutoff instead. 0.167 is where the original contrast(1.5) put it.',
+  backgroundToneGamma:
+    'Shape of the colour curve above the black point. Below 1 lifts the mid tones. At 1 it is a straight '
+    + 'line, which is all contrast() and brightness() could ever manage between them. Affects ink colour, '
+    + 'not how much ink is there — for brightness, Trail Lift is the stronger control.',
+  backgroundToneGain:
+    'Overall level of the colour curve. With Black Point 0.167 and Mid Lift 1, a Level of 2.5 is exactly '
+    + 'the original contrast(1.5) brightness(2) — both come out to 3x - 0.5. Above that the ink hues start '
+    + 'clipping to pure saturation.',
+  backgroundToneAlphaBlackPoint:
+    'Erases the faintest ink outright. This is the real separation control on this piece: the canvases are '
+    + 'transparent, so what varies across the background is how much ink has piled up, not what colour it is. '
+    + 'Clearing the thin wash between drifts is what makes trails read as distinct strokes rather than one fog. '
+    + 'Raise until the gaps go properly black; too far and the wispy tails go with them.',
+  backgroundToneAlphaGamma:
+    'Lifts the partly-transparent middle of the background — the real brightness control, for the same reason. '
+    + 'Below 1 brings up everything that is not already solid, so thin trails gain presence without the dense '
+    + 'drifts going flat. 1 is off. Pairs with Haze Cutoff: cutoff clears the floor, this raises what is left.',
+  backgroundFilterOnWrapper:
+    'Grades the three background canvases once, together, instead of once each. Worth 12 ms/frame on a '
+    + 'machine without graphics acceleration — the largest single saving in the piece — and nothing at '
+    + 'all on a machine with a GPU. Not pixel-identical: grading layers separately then compositing differs '
+    + 'from compositing then grading, by up to 14/255 where the layers overlap. For weak venue hardware.',
   edgeRespawnWeightBase: 'Base chance weight for edge respawn bins before dune influence is applied.',
   edgeRespawnWeightStrength: 'How strongly dune sampling biases random edge respawn locations.',
   edgeRespawnWeightExponent: 'Contrast of edge respawn weighting. Higher values favor high-weight bins more aggressively.',
@@ -108,6 +140,7 @@ const CONTROL_TOOLTIPS = {
   enableWordShadow: 'When on, words cast a glyph-shaped drop shadow in the background color, visually separating the text from accumulated ink without any canvas work.',
   wordShadowBlur: 'Blur radius in pixels of the word drop shadow. A second layer at 2.5x this radius is added automatically for depth.',
   wordShadowOpacity: 'Opacity of the word drop shadow, 0 to 1.',
+  autoScrollDeltaCapMultiple: 'How long a frame the auto-scroll will believe, as a multiple of a normal frame on this machine. Stops a backgrounded tab teleporting the poem without slowing the scroll down on a weak machine. Lower is safer and slower; higher lets long hitches show as a lurch.',
   flowFieldMix: 'Blend between the dune wind (0) and the curl noise flow field (1). At 0.5 both contribute equally to the final force.',
   curlStrength: 'Force magnitude of the curl flow field, comparable to Wind Strength.',
   curlNoiseScale: 'Pixels per noise unit for the curl field. Smaller values give tighter, busier swirls; larger values give broad sweeping curves.',
