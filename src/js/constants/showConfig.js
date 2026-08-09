@@ -52,6 +52,19 @@ const SHOW_CONFIG = {
   // worse than one frozen frame and buries whatever the real error was.
   watchdogMaxReloads: 3,
   watchdogReloadWindowMs: 120000,
+  // Whether this build reports to the visitor counter. On, because a QR code is
+  // what points people here: this page, not the tuning page, is the one strangers
+  // actually open, so it is the one whose opens are worth counting.
+  //
+  // The cost of that is the watchdog above. A reload it fires is indistinguishable
+  // from a fresh visit, so a page that stalls repeatedly on someone's phone will
+  // read as several people rather than one. Bounded by watchdogMaxReloads, so the
+  // worst case is a handful of phantom opens and not a runaway count — but it is
+  // the reason this number should be read as "roughly how many", never as a fact.
+  //
+  // Turn this off if the show build ever goes back to being a projector, where
+  // the audience is the room and nothing about the page is worth counting.
+  countVisits: true,
   // Unconditional periodic reload, in minutes. 0 = off. Only worth setting if a
   // soak test shows memory actually climbing over the run length; a reload is
   // visible to anyone watching, so it should be earned, not precautionary.

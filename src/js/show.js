@@ -24,10 +24,22 @@
   // navigation. Also drops '?debug', which is what keeps setupDuneControls from
   // running at all — the panel markup is absent from this page, but the guard
   // is worth having twice.
+  //
+  // One value is rescued before the wipe rather than after it: ?src=, the label
+  // that says where a reader came from. This file is the only code that runs
+  // early enough to see it, and a beacon that cannot tell a QR code on a wall
+  // from a link sent by text is most of the reason for counting at all. Rescued
+  // as a value, not as a param — it is copied into a variable and the query
+  // string still goes, so nothing downstream can read it as configuration. It
+  // is matched against a strict shape here rather than trusted, because it ends
+  // up in a path reported to a third party.
+  const srcRaw = new URLSearchParams(window.location.search).get('src') || '';
+  window.__mournVisitSrc = /^[A-Za-z0-9_-]{1,32}$/.test(srcRaw) ? srcRaw : '';
+
   if (window.location.search || window.location.hash) {
     try {
       window.history.replaceState({}, '', window.location.pathname);
-      log('discarded URL params');
+      log('discarded URL params' + (window.__mournVisitSrc ? ` (kept src=${window.__mournVisitSrc})` : ''));
     } catch (e) {
       log('could not discard URL params', e);
     }

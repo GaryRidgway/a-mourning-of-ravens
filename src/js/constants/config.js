@@ -56,6 +56,33 @@ const CONFIG = {
   // gallery projector taking itself fullscreen on the first click would be a
   // surprise, and the show build has its own ideas about presentation.
   fullscreenOnFirstTap: true,
+  // Count page opens, for the QR code on the wall.
+  //
+  // This has to happen from the page rather than the server, because there is
+  // no server: GitHub Pages hands out this repo as static files, so nothing of
+  // ours is in the request path to do the counting. GoatCounter's beacon sets
+  // no cookies and stores nothing on the device — it posts the path, the
+  // referrer and the screen size, and derives a per-day unique from a salted
+  // hash it discards. That is worth being able to state plainly beside a QR
+  // code strangers are being asked to scan.
+  //
+  // Read once, on load. Toggling this in the panel therefore does nothing until
+  // a reload, and turning it off cannot un-count a visit already sent.
+  enableVisitorCount: true,
+  // The GoatCounter site code — the first label of the dashboard address, so
+  // 'gridgway' for gridgway.goatcounter.com. Empty is not an error, just a
+  // beacon with nowhere to report, which is what disables counting entirely.
+  //
+  // Set here rather than by URL, and that is the only thing that works for the
+  // show build: it freezes CONFIG and discards the query string before any
+  // deferred script runs, so a code passed in a URL never reaches it.
+  //
+  // Only the code, never a whole URL. The endpoint is composed from it at the
+  // call site so that it can only ever be a goatcounter.com subdomain — this
+  // value is URL-settable like everything else here, and an address taken
+  // verbatim from a query string would let a crafted link aim the beacon, and
+  // every reader's referrer with it, at any host the sender chose.
+  visitorCountSiteCode: 'gridgway',
   enableAutoRenderScale: false,
   autoRenderScaleThresholdPx: 1080,
   // Ceiling on the device pixel ratio the three canvases render at. 0 leaves

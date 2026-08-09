@@ -25,6 +25,7 @@ const CONTROL_TOOLTIPS = {
   mobilePoemScaleMaxWidthPx: 'Viewport width at or below which the poem type is scaled. 700 covers every phone in either orientation and stays clear of a small laptop window.',
   mobilePoemScale: 'How much smaller. 0.5 halves it, taking the base size from 32 to 16. Letter spacing scales with it, so the tracking stays in proportion.',
   fullscreenOnFirstTap: 'On a touchscreen, asks for real fullscreen on the first tap. This is the only way to lose the URL bar on Android. iPhones have no fullscreen outside video, so it does nothing there - Add to Home Screen is the only route on iOS. Never fires on a mouse or a projector.',
+  enableVisitorCount: 'Counts page opens through GoatCounter, so the QR code has a number behind it. No cookies and nothing stored on the device. Does nothing unless CONFIG.visitorCountSiteCode names a GoatCounter account, and only reads that on load - toggling this needs a reload, and switching it off cannot un-count a visit already sent. Blockers and Lockdown Mode will drop some beacons, so the real figure is always a little higher than the one you see.',
   boxCollisionParticipantRatio: 'Fraction of particles that participate in poem collider box interactions.',
   enableAutoRenderScale: 'Automatically caps the internal canvas size on very large screens, then CSS stretches it to fill the viewport.',
   autoRenderScaleThresholdPx: 'Maximum internal canvas size before auto render scaling caps it.',

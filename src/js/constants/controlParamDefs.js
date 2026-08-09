@@ -7,6 +7,7 @@ const CONTROL_PARAM_DEFS = [
   { key: 'mobilePoemScaleMaxWidthPx', type: 'number', digits: 0 },
   { key: 'mobilePoemScale', type: 'number', digits: 2 },
   { key: 'fullscreenOnFirstTap', type: 'bool' },
+  { key: 'enableVisitorCount', type: 'bool' },
   { key: 'enableAutoRenderScale', type: 'bool' },
   { key: 'autoRenderScaleThresholdPx', type: 'number', digits: 0 },
   { key: 'maxPixelDensity', type: 'number', digits: 2 },

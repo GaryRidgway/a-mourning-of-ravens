@@ -1109,3 +1109,119 @@ the type size — stanza widths, ring geometry, collider boxes. The panel contro
 moves the type live so the size can be judged by eye, but the layout was
 measured at the old size and needs a reload to agree. Said plainly in the
 tooltip rather than left to be discovered.
+
+---
+
+## Part 9 — counting visitors
+
+The plan changed: instead of a machine left in a coffee shop, a QR code, and the
+piece running on whatever phone scans it. That raises a question the projector
+never had — did anyone actually open it?
+
+GitHub Pages is what decides the answer. `.github/workflows/static.yml` deploys
+the repo as static files, so there is no server of ours anywhere in the request
+path to do the counting, and the repo's Insights → Traffic tab counts views of
+the *repository*, not the site. The count has to be sent from the page.
+
+GoatCounter, via a beacon injected from `sendVisitorCount()` in `main.js`. No
+cookies, nothing stored on the device, and a dashboard that can be made public —
+all worth being able to state beside a QR code strangers are asked to scan.
+
+### The site code is composed, never taken whole
+
+`visitorCountSiteCode` is URL-settable, like everything else in this piece. An
+endpoint copied verbatim out of a query string would let a crafted link aim the
+beacon — and every reader's referrer with it — at any host the sender chose. So
+the config holds only the site code, validated against `^[a-z0-9][a-z0-9-]{0,60}$`,
+and the endpoint is built from it at the call site. It can only ever resolve to
+a `goatcounter.com` subdomain.
+
+| Arm | Site code seen | Beacon endpoint | Requests |
+|---|---|---|---|
+| No code configured | `""` | none — no tag | 0 |
+| `visitorCountSiteCode=ravens-test` | `ravens-test` | `https://ravens-test.goatcounter.com/count` | 1 |
+| `visitorCountSiteCode=evil.example.com/x` | passed through to CONFIG | **none — no tag** | 0 |
+| `visitorCountSiteCode=//evil.example.com` | passed through to CONFIG | **none — no tag** | 0 |
+
+Requests to `gc.zgo.at` were blocked at the CDP layer during testing, so no real
+hits left the machine.
+
+### The reported path is pinned
+
+`syncUrlParamsFromConfig()` writes every config value into the query string. Left
+alone, a tuning session would reach the dashboard as a few hundred distinct
+thousand-character "pages" and split the count across all of them. So the beacon
+reports `location.pathname` and not the address bar.
+
+One parameter survives, and only in the shape it is expected in: `?src=`, matched
+against `^[A-Za-z0-9_-]{1,32}$`. That is the difference between "83 people opened
+this" and "83 people opened this, 61 of them standing in the shop."
+
+| URL | Reported path |
+|---|---|
+| `/index.html?debug&<600 chars of config>` | `/index.html` |
+| `/index.html?...&src=qr` | `/index.html?src=qr` |
+| `/index.html?...&src=a b/../x` | `/index.html` — rejected, not escaped |
+
+### The show build is the one that counts
+
+The plan settled on the QR code pointing at `/show/index.html`, not the tuning
+page, which inverts what the first pass assumed. `SHOW_CONFIG.countVisits` is
+therefore `true`.
+
+That put `?src=` in direct conflict with the hardening. `show.js` discards the
+whole query string before any deferred script executes — that is Part 4 working
+as designed — so by the time `sendVisitorCount()` runs there is nothing left to
+read. `show.js` is the only code that runs early enough to see it.
+
+So the label is rescued there, as a *value* and not as a param: validated against
+`^[A-Za-z0-9_-]{1,32}$`, copied into `window.__mournVisitSrc`, and the query
+string still goes. Nothing downstream can read it as configuration, and the
+validation happens at the rescue rather than at the use, because it ends up in a
+path reported to a third party. `main.js` falls back to it rather than preferring
+it, so the tuning page stays the normal case.
+
+Measured on an emulated phone, 393x659 at dpr 3, against the shipped `config.js`:
+
+| URL | Reported path | Query left | Site code |
+|---|---|---|---|
+| `/show/index.html?src=qr` | `/show/index.html?src=qr` | `""` | `gridgway` |
+| `/show/index.html` | `/show/index.html` | `""` | `gridgway` |
+| `/show/index.html?src=a b/../x` | `/show/index.html` — rejected | `""` | `gridgway` |
+| `/show/index.html?src=qr&visitorCountSiteCode=evil` | `/show/index.html?src=qr` | `""` | **`gridgway`** |
+| `/index.html?src=qr` | `/index.html?src=qr` | `?src=qr` | `gridgway` |
+
+The fourth row is the one worth keeping: the rescue did not open a hole. `src`
+survives, the injected site code does not, and the hardening still freezes
+`CONFIG` and empties the address bar.
+
+Both pages count, and the dashboard separates them by path — `/show/index.html`
+is the audience, `/index.html` is me tuning.
+
+The cost of counting here is the watchdog. A reload it fires is indistinguishable
+from a fresh visit, so a page that stalls on someone's phone reads as several
+people rather than one. `watchdogMaxReloads` bounds it to a handful, so the worst
+case is a slightly padded number and not a runaway one.
+
+### What the number is not
+
+It counts page opens, not people: one reader who scans it twice is two. And
+content blockers, Lockdown Mode and some DNS filters drop the beacon outright, so
+the true figure is always somewhat higher than the reported one. Fine for "did
+anyone look at this." Not a number to quote as a fact.
+
+### Three places
+
+Panel row **Count Visitors** (`enableVisitorCount`), URL params for both keys —
+the boolean through `CONTROL_PARAM_DEFS`, the string special-cased alongside
+`pinnedControls`, since the panel plumbing only knows bools and numbers — and
+constants entries in `config.js` with `countVisits` in `showConfig.js`.
+
+Read once, on load. The panel toggle therefore needs a reload, and switching it
+off cannot un-count a visit already sent. Said in the tooltip rather than left to
+be discovered.
+
+The site code is `gridgway`, set in `config.js` rather than by URL — the only
+thing that works for the show build, which freezes `CONFIG` and empties the query
+string before any deferred script runs. An empty code is not an error, just a
+beacon with nowhere to report, and it is what switches counting off entirely.

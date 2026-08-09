@@ -3653,6 +3653,14 @@ function applyConfigFromUrlParams() {
     CONFIG.pinnedControls = pinnedRaw;
   }
 
+  // A string, so it goes through here rather than CONTROL_PARAM_DEFS, which
+  // only knows bools and numbers. Taken raw; validated where it is used, since
+  // that is the only place that knows what shape a usable code is.
+  const visitorCodeRaw = params.get('visitorCountSiteCode');
+  if (visitorCodeRaw !== null) {
+    CONFIG.visitorCountSiteCode = visitorCodeRaw;
+  }
+
   for (let i = 0; i < COLOR_PARAM_DEFS.length; i++) {
     const def = COLOR_PARAM_DEFS[i];
     const raw = params.get(def.param);
@@ -3735,6 +3743,14 @@ function syncUrlParamsFromConfig() {
     params.set('pinnedControls', CONFIG.pinnedControls);
   } else {
     params.delete('pinnedControls');
+  }
+
+  // Same reasoning: absent rather than empty, so the usual state of this — no
+  // account configured — leaves no trace in a shared URL.
+  if (CONFIG.visitorCountSiteCode) {
+    params.set('visitorCountSiteCode', CONFIG.visitorCountSiteCode);
+  } else {
+    params.delete('visitorCountSiteCode');
   }
 
   for (let i = 0; i < COLOR_PARAM_DEFS.length; i++) {
