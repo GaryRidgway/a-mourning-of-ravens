@@ -662,6 +662,7 @@ function scrollInit() {
     initPerfProbe();
     createScrollZone();
     initTouchScroll();
+    if (typeof initPinchZoom === 'function') initPinchZoom();
     const ringSeeded = seedFixedCycleRing();
     if (!ringSeeded) {
         console.warn('Falling back to pre-ring start stanza due to seeding failure.');
@@ -691,6 +692,12 @@ function scrollInit() {
     cacheColliderPositions();
     queueFlowFieldBoxSync();
     window.addEventListener('resize', () => {
+        // The collider cache is rebuilt below from getBoundingClientRect, which
+        // reports post-transform rects — so a live pinch scale would be baked
+        // into the cache and then applied a second time by the sync. Drop the
+        // zoom back to 1 first; a resize on a phone is a rotation, where
+        // re-centring the poem is wanted anyway.
+        if (typeof window.__mournResetPoemZoom === 'function') window.__mournResetPoemZoom();
         invalidateGlyphRectCache();
         colliderCacheReady = false;
         queueRefreshRingMetrics();
@@ -1219,7 +1226,20 @@ let touchListenersBound = false;
 // reading the finger directly rather than trusting a tool's axis convention:
 // finger right 315px gives the box path -307 and, unnegated, this path +442.
 function touchDeltaFromPointer(dx, dy) {
-    return -(dx + dy * CONFIG.touchVerticalWeight) * CONFIG.touchScrollGain;
+    let delta = -(dx + dy * CONFIG.touchVerticalWeight) * CONFIG.touchScrollGain;
+    // Compensate for pinch zoom. The poem is driven in its own coordinates, so a
+    // fixed finger delta advances a fixed amount of POEM — but the glyphs are
+    // scaled, so on screen the words crawl when zoomed out (they move by
+    // delta x zoom). Dividing the delta by the zoom makes the words track the
+    // finger 1:1 at any size, which reads as "faster when zoomed out": the same
+    // swipe now covers more of the poem the smaller the type is. Fed here rather
+    // than in applyScrollDelta so the inertia glide, which is measured off this
+    // same delta, is compensated too. min is 0.4, so the divide is always safe.
+    if (CONFIG.enablePinchZoomScrollComp) {
+        const zoom = window.__mournPoemZoom && window.__mournPoemZoom.scale;
+        if (zoom > 0) delta /= zoom;
+    }
+    return delta;
 }
 
 function stopTouchInertia() {
@@ -1314,6 +1334,17 @@ function onTouchPointerDown(event) {
 
 function onTouchPointerMove(event) {
     if (touchPointerId !== event.pointerId) return;
+    // A second finger down means a pinch is in progress; the first finger's
+    // travel must not also scroll the poem, or the zoom fights a swipe. Keep the
+    // baseline current while we sit out, so that when the pinch ends and this
+    // finger takes over again it measures from where it is, not from a jump.
+    if (window.__mournPinchActive) {
+        touchLastX = event.clientX;
+        touchLastY = event.clientY;
+        touchLastMoveTs = event.timeStamp;
+        touchVelocity = 0;
+        return;
+    }
 
     // A 120Hz digitizer feeding a 30fps render loop delivers four samples per
     // frame and the browser hands over only the last one unless asked. The
@@ -1590,6 +1621,31 @@ function syncFlowFieldBoxesFromPoem() {
                 w: cache.width,
                 h: cache.height,
             });
+        }
+    }
+
+    // Pinch zoom is a composited affine on the #poem-zoom wrapper, which the
+    // cached collider positions know nothing about — they were measured at scale
+    // 1. Re-applying the identical transform to every box here keeps the ink
+    // glued to the words at any zoom without re-measuring the DOM. The wrapper
+    // maps a local point P (viewport coords minus the container origin) to
+    // S*P + T, so a box at screen (x,y) renders at origin + S*(x - origin) + T.
+    // Must match #poem-zoom's translate(tx,ty) scale(S) exactly — see
+    // window.__mournPoemZoom. Culling above ran on the untransformed positions,
+    // which is safe: a zoom only pushes off-screen boxes further off.
+    const zoom = window.__mournPoemZoom;
+    if (zoom && (zoom.scale !== 1 || zoom.tx !== 0 || zoom.ty !== 0)) {
+        const s = zoom.scale;
+        const ox = zoom.originX;
+        const oy = zoom.originY;
+        const tx = zoom.tx;
+        const ty = zoom.ty;
+        for (let i = 0; i < flowBoxes.length; i++) {
+            const b = flowBoxes[i];
+            b.x = ox + (b.x - ox) * s + tx;
+            b.y = oy + (b.y - oy) * s + ty;
+            b.w *= s;
+            b.h *= s;
         }
     }
 

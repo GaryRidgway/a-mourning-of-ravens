@@ -47,6 +47,44 @@ const CONFIG = {
   mobilePoemScaleMaxWidthPx: 700,
   // The multiplier. 0.5 takes the base 32 to 16 and the line size 24 to 12.
   mobilePoemScale: 0.5,
+
+  // --- Pinch zoom --------------------------------------------------------
+  //
+  // Let a two-finger pinch scale the poem's type live, on touch devices. This
+  // is a VISUAL transform on #poem-container, not a font-size change: the type
+  // sizes and every measurement downstream of them (stanza widths, ring
+  // geometry, collider boxes) are baked once at load — see enableMobilePoemScale
+  // — and re-deriving them mid-gesture is a teardown-and-rebuild that cannot be
+  // done smoothly per frame. A composited scale can. The collider sync applies
+  // the same focal-point scale to the boxes it hands the flow field, so the ink
+  // stays glued to the words at any zoom without anything being re-measured.
+  //
+  // The colliding particles are frozen for the duration of the gesture, exactly
+  // as they are during a scroll: the word boxes move fast while the poem scales,
+  // and a moving box shoves particles, which reads as smear. Frozen particles
+  // are instead scaled about the focal point each frame so they ride the words.
+  //
+  // Independent of mobilePoemScale and multiplies on top of it: the phone still
+  // loads at half size, and the pinch scales that rendered poem between the
+  // bounds below. 1 is the loaded size; below 1 is zoomed out (the ask — fit
+  // more of the poem on a small screen); above 1 is zoomed in.
+  enablePinchZoom: true,
+  // Floor on the pinch scale. 0.4 lets a phone reader pull back to two-fifths of
+  // the loaded size, which on a portrait phone brings a whole stanza-and-change
+  // into view where one loaded stanza filled the screen.
+  pinchZoomMin: 0.4,
+  // Ceiling on the pinch scale. 1.5 leaves room to zoom back in past the loaded
+  // size for a closer read, without letting a single word swallow the screen.
+  pinchZoomMax: 1.5,
+  // Make a swipe cover more of the poem the more it is zoomed out, by dividing
+  // the finger delta by the pinch scale. Without it the poem is driven in its
+  // own coordinates and the glyphs are scaled on top, so the words move on
+  // screen at finger x zoom — a crawl when zoomed out. With it the words track
+  // the finger 1:1 at any size, which is the direct-manipulation feel a reader
+  // expects. Off falls back to constant poem-space speed, which is how to A/B
+  // whether the compensation is doing what it should.
+  enablePinchZoomScrollComp: true,
+
   // Ask for real fullscreen on the reader's first tap. Android Chrome grants
   // this and it is the only way to lose the URL bar there without installing
   // the page. iOS has no Fullscreen API outside video, so this silently does

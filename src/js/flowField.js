@@ -1361,6 +1361,13 @@ function setup() {
   noStroke();
   const showDebugUI = new URLSearchParams(window.location.search).has('debug');
   if (showDebugUI) {
+    // Hidden inline from first paint so they never flash before setup() runs;
+    // revealed here only for the debug view. Clearing the inline value hands
+    // each back to the stylesheet rather than pinning a display mode.
+    const panel = document.getElementById('dune-controls');
+    if (panel) panel.style.display = '';
+    const pauseBtn = document.getElementById('simulation-pause-toggle');
+    if (pauseBtn) pauseBtn.style.display = '';
     setupDuneControls();
   } else {
     const panel = document.getElementById('dune-controls');
@@ -1543,6 +1550,46 @@ function setup() {
 
   window.getScrollFreezeDebounceMs = function getScrollFreezeDebounceMs() {
     return CONFIG.scrollFreezeDebounceMs;
+  };
+
+  // Pinch zoom reuses the manual-scroll freeze wholesale: the problem is the
+  // same one — word boxes moving under stationary particles read as smear — and
+  // the only difference is that a pinch scales the boxes about a focal point
+  // rather than translating them. So the snapshot and the release are literally
+  // onManualScrollStart / onManualScrollEnd, and the per-frame mover is a scale
+  // about the focal point instead of a translation.
+  //
+  // Sharing manualScrollActive is deliberate: the two gestures are mutually
+  // exclusive (the scroll path drops to one finger and stops feeding deltas the
+  // moment a second lands), and routing pinch through the same flag means the
+  // existing "release particles that drifted into a box" bookkeeping in
+  // onManualScrollEnd runs for a pinch too, for free.
+  window.onPinchStart = function onPinchStart() {
+    window.onManualScrollStart();
+  };
+
+  // Scale the frozen set about the focal point. ratio is this frame's
+  // multiplicative step (scaleNow / scalePrev), so it composes frame over frame
+  // exactly as the CSS transform does. Focal arrives in screen px and is lifted
+  // into sim space the same way applyManualScrollDelta lifts its screen delta.
+  window.applyPinchScaleDelta = function applyPinchScaleDelta(focalScreenX, focalScreenY, ratio) {
+    if (!manualScrollActive) return;
+    if (!(ratio > 0) || ratio === 1) return;
+    const focalX = focalScreenX * currentRenderScale;
+    const focalY = focalScreenY * currentRenderScale;
+    for (let i = 0; i < manualFrozenParticles.length; i++) {
+      const particle = manualFrozenParticles[i];
+      particle.pos.x = focalX + (particle.pos.x - focalX) * ratio;
+      particle.pos.y = focalY + (particle.pos.y - focalY) * ratio;
+      particle.prevX = particle.pos.x;
+      particle.prevY = particle.pos.y;
+      particle.displayX = particle.pos.x;
+      particle.displayY = particle.pos.y;
+    }
+  };
+
+  window.onPinchEnd = function onPinchEnd() {
+    window.onManualScrollEnd();
   };
 }
 

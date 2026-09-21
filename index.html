@@ -93,7 +93,7 @@
   <div id="poem-staging"></div>
   <div id="poem-container"></div>
   <div id="vignette" aria-hidden="true"></div>
-    <aside id="dune-controls" class="controls">
+    <aside id="dune-controls" class="controls" style="display:none">
       <div id="dune-resize-handle" aria-hidden="true"></div>
       <details class="control-panel" open>
       <summary>Dune Controls</summary>
@@ -324,6 +324,28 @@
             <span>Poem Scale When Narrow</span>
             <input type="range" min="0.25" max="1" step="0.05" data-key="mobilePoemScale" />
             <output data-value-for="mobilePoemScale"></output>
+          </label>
+
+          <label class="control-row control-toggle">
+            <span>Pinch To Zoom</span>
+            <input type="checkbox" data-key="enablePinchZoom" />
+          </label>
+
+          <label class="control-row">
+            <span>Pinch Zoom Min</span>
+            <input type="range" min="0.2" max="1" step="0.05" data-key="pinchZoomMin" />
+            <output data-value-for="pinchZoomMin"></output>
+          </label>
+
+          <label class="control-row">
+            <span>Pinch Zoom Max</span>
+            <input type="range" min="1" max="3" step="0.05" data-key="pinchZoomMax" />
+            <output data-value-for="pinchZoomMax"></output>
+          </label>
+
+          <label class="control-row control-toggle">
+            <span>Zoom Scroll Speed Comp</span>
+            <input type="checkbox" data-key="enablePinchZoomScrollComp" />
           </label>
 
           <label class="control-row">
@@ -1221,7 +1243,7 @@
       </details>
       </details>
     </aside>
-    <button id="simulation-pause-toggle" type="button" aria-pressed="false" title="Pause simulation">
+    <button id="simulation-pause-toggle" type="button" aria-pressed="false" title="Pause simulation" style="display:none">
       <span class="pause-icon" aria-hidden="true"></span>
       <span class="pause-label">Pause</span>
     </button>
@@ -1262,6 +1284,7 @@
   <script src="./src/js/staging.js" defer></script>
   <script src="./src/js/presenting.js" defer></script>
   <script src="./src/js/scroll.js" defer></script>
+  <script src="./src/js/pinchZoom.js" defer></script>
   <script src="./src/js/main.js" defer></script>
 </body>
 
