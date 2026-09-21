@@ -1,3 +1,32 @@
+// Stanza placement writes a transform, not left/top built from custom
+// properties. Both halves of that mattered, and both were measured on an
+// emulated phone at 4x throttle:
+//
+//   A custom property INHERITS, so setting one on a stanza invalidates style
+//   for every line and word span beneath it. The same mistake on #anchor cost
+//   10.3ms of style recalc per scroll frame against 0.97ms without it.
+//
+//   left and top are LAYOUT properties, so a ring wrap — which moves all 50
+//   stanzas at once — forced a layout of the whole poem. Every frame spike
+//   during a long scroll landed on a wrap: 67ms, 117ms, one at 200ms, against
+//   a 32ms mean.
+//
+// transform inherits nothing and composites without layout. The offsets are
+// kept on the element because the stylesheet no longer carries them.
+function setStanzaOffset(stanza, left, top) {
+    stanza._offsetLeft = left;
+    stanza._offsetTop = top;
+    stanza.style.transform = 'translate3d(' + left + 'px,' + top + 'px,0)';
+}
+
+function getStanzaOffsetLeft(stanza) {
+    return typeof stanza._offsetLeft === 'number' ? stanza._offsetLeft : null;
+}
+
+function getStanzaOffsetTop(stanza) {
+    return typeof stanza._offsetTop === 'number' ? stanza._offsetTop : null;
+}
+
 // Functions.
 function placeFirstStanza(stanza) {
 
@@ -34,8 +63,11 @@ function placeStanza(stanza, options = null) {
                 mourn.trackers.anchor.append(clonedStanza);
             }
 
-            clonedStanza.style.setProperty('--left-offset', parseFloat(options.leftOffset));
-            clonedStanza.style.setProperty('--top-offset', parseFloat(options.topOffset));
+            setStanzaOffset(
+                clonedStanza,
+                parseFloat(options.leftOffset),
+                parseFloat(options.topOffset)
+            );
         }
     }
     else {
@@ -64,14 +96,14 @@ function render(prevStanza, direction = 1) {
     passedOptions.leftOffset = direction * parseFloat(refStanza.dataset.leftOffset);
     passedOptions.topOffset = direction * parseFloat(refStanza.dataset.topOffset);
 
-    const prevHasLeftOffset = styleStanza.style.getPropertyValue('--left-offset');
-    if (prevHasLeftOffset.length > 0) {
-        passedOptions.leftOffset = parseFloat(prevHasLeftOffset) + passedOptions.leftOffset;
+    const prevLeftOffset = getStanzaOffsetLeft(styleStanza);
+    if (prevLeftOffset !== null) {
+        passedOptions.leftOffset = prevLeftOffset + passedOptions.leftOffset;
     }
 
-    const prevHasTopOffset = styleStanza.style.getPropertyValue('--top-offset');
-    if (prevHasTopOffset.length > 0) {
-        passedOptions.topOffset = parseFloat(prevHasTopOffset) + passedOptions.topOffset;
+    const prevTopOffset = getStanzaOffsetTop(styleStanza);
+    if (prevTopOffset !== null) {
+        passedOptions.topOffset = prevTopOffset + passedOptions.topOffset;
     }
 
     // console.log(passedOptions.leftOffset);

@@ -766,8 +766,9 @@ function restoreCanvasPixels(ctx, snap, w, h) {
 // ratio — the piece would half-fix itself and the layers would stop lining up.
 //
 // preserveInk carries the accumulated trails across the change. Not free: three
-// full-size snapshots and three rescaled blits, which is why the controller that
-// drives this has a long cooldown and only steps when it must.
+// rescaled blits, which is why the controller that drives this has a long
+// cooldown and only steps when it must. It is however no longer three
+// simultaneous snapshots — see the note on the interleaving below.
 function applyPixelDensity(preserveInk = false) {
   const target = getTargetPixelDensity();
   if (pixelDensity() === target &&
@@ -778,25 +779,47 @@ function applyPixelDensity(preserveInk = false) {
 
   const w = width;
   const h = height;
-  const snapMain = preserveInk && mainCanvasElt ? snapshotCanvasPixels(mainCanvasElt) : null;
-  const snapFg = preserveInk && fgGraphics ? snapshotCanvasPixels(fgGraphics.canvas) : null;
-  const snapInkB = preserveInk && inkBGraphics ? snapshotCanvasPixels(inkBGraphics.canvas) : null;
 
+  // One canvas at a time — snapshot, resize, restore, release — rather than
+  // three snapshots, then three resizes, then three restores.
+  //
+  // The old order held three old-size copies and three new-size canvases at the
+  // same instant. Stepping 3->2 on a phone that is ~34 MB of snapshots sitting
+  // on top of ~15 MB of new canvas, so the moment the piece is trying to use
+  // less memory is the moment it is using three times the steady state. iOS
+  // reaps on peaks rather than averages, which makes that spike the worst
+  // possible shape for the thing it is trying to avoid.
+  //
+  // Interleaved, one snapshot is live instead of three. The output is identical
+  // and the same ink is preserved; only the height of the spike changes.
+  //
+  // Safe because the three are independent: p5's pixelDensity() resizes the
+  // main canvas alone, and each p5.Graphics carries the _pixelDensity it was
+  // constructed with, which is why they are set by hand here. w and h are CSS
+  // units and a density change does not move them, so they stay valid across
+  // all three passes.
+  //
+  // Each block also guards its own snapshot on that canvas actually changing.
+  // The old code snapshotted and restored the main canvas even when only a
+  // Graphics layer was out of step, which was a full-size copy and blit for a
+  // canvas that was never resized.
   if (pixelDensity() !== target) {
+    const snap = preserveInk && mainCanvasElt ? snapshotCanvasPixels(mainCanvasElt) : null;
     pixelDensity(target);
+    restoreCanvasPixels(drawingContext, snap, w, h);
   }
   if (fgGraphics && fgGraphics._pixelDensity !== target) {
+    const snap = preserveInk ? snapshotCanvasPixels(fgGraphics.canvas) : null;
     fgGraphics._pixelDensity = target;
     fgGraphics.resizeCanvas(w, h, true);
+    restoreCanvasPixels(fgGraphics.drawingContext, snap, w, h);
   }
   if (inkBGraphics && inkBGraphics._pixelDensity !== target) {
+    const snap = preserveInk ? snapshotCanvasPixels(inkBGraphics.canvas) : null;
     inkBGraphics._pixelDensity = target;
     inkBGraphics.resizeCanvas(w, h, true);
+    restoreCanvasPixels(inkBGraphics.drawingContext, snap, w, h);
   }
-
-  restoreCanvasPixels(drawingContext, snapMain, w, h);
-  if (fgGraphics) restoreCanvasPixels(fgGraphics.drawingContext, snapFg, w, h);
-  if (inkBGraphics) restoreCanvasPixels(inkBGraphics.drawingContext, snapInkB, w, h);
   return true;
 }
 
@@ -1412,9 +1435,20 @@ function setup() {
     boxes.push(new FlowBox(nx, ny, w, h));
   };
 
+  // The frozen set, captured once per gesture.
+  //
+  // It is chosen here and not touched again until the gesture ends, so the
+  // per-frame delta had no reason to rediscover it by scanning the whole
+  // particle array — which is what it used to do, every frame, to move a
+  // subset that is typically a small fraction of it. Holding the references
+  // costs one array and turns that scan into a walk over exactly the particles
+  // that move.
+  let manualFrozenParticles = [];
+
   // Manual-scroll freeze: snapshot particles near boxes and freeze them in place.
   window.onManualScrollStart = function onManualScrollStart() {
     manualScrollActive = true;
+    manualFrozenParticles.length = 0;
     const band = CONFIG.surfaceSlideBand;
     for (let i = 0; i < particles.length; i++) {
       const particle = particles[i];
@@ -1440,6 +1474,7 @@ function setup() {
           // else scrollUnfrozeAtMs === 0 → not fading, scrollFadeProgress unchanged (stays 0)
           particle.scrollFrozen = true;
           particle.scrollUnfrozeAtMs = 0;
+          manualFrozenParticles.push(particle);
           break;
         }
       }
@@ -1451,9 +1486,8 @@ function setup() {
     if (!manualScrollActive) return;
     const simDx = screenDx * currentRenderScale;
     const simDy = screenDy * currentRenderScale;
-    for (let i = 0; i < particles.length; i++) {
-      const particle = particles[i];
-      if (!particle.scrollFrozen) continue;
+    for (let i = 0; i < manualFrozenParticles.length; i++) {
+      const particle = manualFrozenParticles[i];
       particle.pos.x += simDx;
       particle.pos.y += simDy;
       particle.prevX = particle.pos.x;
@@ -1467,6 +1501,12 @@ function setup() {
   window.onManualScrollEnd = function onManualScrollEnd() {
     manualScrollActive = false;
     let frozenCount = 0;
+    // Deliberately still every particle, unlike applyManualScrollDelta. This
+    // loop does two jobs, and only the first one is about the frozen set: the
+    // second marks the UNFROZEN particles that drifted inside a box during the
+    // scroll so they pass through instead of being ejected. That job has to
+    // visit the particles the frozen list does not contain. It runs once when a
+    // gesture ends rather than once a frame, so the scan is not worth removing.
     for (let i = 0; i < particles.length; i++) {
       const particle = particles[i];
       if (particle.scrollFrozen) {
@@ -1498,6 +1538,7 @@ function setup() {
         }
       }
     }
+    manualFrozenParticles.length = 0;
   };
 
   window.getScrollFreezeDebounceMs = function getScrollFreezeDebounceMs() {
@@ -2623,6 +2664,10 @@ function setupDuneControls() {
         if (def.key === 'enableMobilePoemScale') {
           applyPoemFontScale();
         }
+        if (def.key === 'enableTouchScroll' &&
+            typeof window.applyTouchScrollMode === 'function') {
+          window.applyTouchScrollMode();
+        }
       } else {
         const parsed = Number(input.value);
         if (!Number.isFinite(parsed)) return;
@@ -2635,6 +2680,14 @@ function setupDuneControls() {
           nextValue = constrain(parsed, 0, 1);
           input.value = String(nextValue);
         }
+        if (def.key === 'scrollBufferViewports') {
+          nextValue = constrain(parsed, 1.5, 20);
+          input.value = String(nextValue);
+        }
+        if (def.key === 'touchEdgeGuardPx') {
+          nextValue = constrain(floor(parsed), 0, 200);
+          input.value = String(nextValue);
+        }
         if (def.key === 'autoRenderScaleThresholdPx') {
           nextValue = max(320, floor(parsed));
           input.value = String(nextValue);
@@ -2644,6 +2697,10 @@ function setupDuneControls() {
           input.value = String(nextValue);
         }
         CONFIG[def.key] = nextValue;
+        if (def.key === 'scrollBufferViewports' &&
+            typeof window.applyScrollBufferSize === 'function') {
+          window.applyScrollBufferSize();
+        }
         updateControlOutput(def.key, nextValue, def.digits, def.display);
         if (def.key === 'particleCount' ||
             def.key === 'particleScaleReferenceMpx' ||

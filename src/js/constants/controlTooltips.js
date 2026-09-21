@@ -37,7 +37,12 @@ const CONTROL_TOOLTIPS = {
   maxPixelDensity:
     'Ceiling on the device pixel ratio all three canvases render at. 0 uses the display\'s own ratio. ' +
     'The main fill-rate control: on a Retina display, 1 quarters the pixels drawn each frame at the ' +
-    'cost of sharpness in the trails. Changing it clears the accumulated ink.',
+    'cost of sharpness in the trails. Changing it clears the accumulated ink. ' +
+    'Defaults to 2, which is inert on every display at ratio 2 or below and binds only on a ratio-3 ' +
+    'phone: there the three backing stores come to 34.2 MB, and a step of the auto ladder briefly ' +
+    'doubles that while it snapshots the ink. iOS answers a canvas-memory overrun by blanking the ' +
+    'canvas rather than by slowing down, so the frame-rate controller never sees it. The poem is DOM ' +
+    'text, so no density setting affects type sharpness - only the particle trails.',
   enableBackgroundTone:
     'Grades the background through a tone curve instead of contrast() + brightness(). The defaults reproduce '
     + 'that old chain exactly, so this on its own changes nothing — it adds the mechanism, not a look. What it '
@@ -141,6 +146,15 @@ const CONTROL_TOOLTIPS = {
   surfaceSlideBand: 'Thickness of the near-surface band where particles are encouraged to slide along collider faces.',
   staticInfluenceForwardDotMin: 'Minimum forward alignment required before a moving box starts affecting nearby particles.',
   backsideDragStrength: 'How strongly particles are slowed on the lee side of a moving collider.',
+  scrollBufferViewports: 'Viewports of slack the hidden scroll box gets per axis. The box is re-centred after every scroll event, so this sets the largest travel one event can report — scroll harder than that and the remainder is discarded, which reads as the scroll stopping. Measured at the old 1.5: a hard wheel flick delivered 62% of its distance, every clipped step landing on exactly 193.6px. The buffer is an empty div that is never painted, so raising this costs nothing. Only affects the wheel and trackpad path; the touch path does not use the box.',
+  enableTouchScroll: 'Read finger gestures straight from pointermove instead of through the hidden scroll box. The box is re-centred after every scroll event, so one event can never report more travel than the box has room for — 62.5px horizontally on a 390px phone — and a busy sim only gets two or three events per swipe. Measured on an emulated iPhone at 24fps, a 300px swipe arrived as one 193.6px step and landed anywhere from 15% to 105% of its distance. Off falls back to the box, which is how to compare the two.',
+  touchScrollGain: 'Multiplies finger displacement before Scroll Speed Multiplier is applied on top. 1.00 moves the poem as far as a wheel would for the same distance. Below 1 the poem lags the finger, above 1 it outruns it.',
+  touchVerticalWeight: 'How much a vertical swipe counts for against a horizontal one of the same length. The poem travels a shallow diagonal (slope 0.20-0.30), so the geometry says 0.23 while the hand — which reaches for a vertical swipe first on a phone — says 1. Measured: at 1 both axes match the old behaviour exactly, but a down-right swipe overshoots to 152% and an up-right one collapses to 4% because it lands on the null. 0.60 keeps horizontal exact at 1:1, leaves vertical usable, and moves the null off every cardinal and 45-degree gesture.',
+  enableTouchInertia: 'Keep the poem gliding after the finger lifts. Bypassing the scroll box also bypasses the platform momentum scrolling that used to supply this, so the glide is ours now. Off stops the poem dead on release.',
+  touchInertiaDecay: 'Fraction of glide velocity kept per 16.67ms, applied as pow(decay, dt/16.67) so the coast lasts the same wall-clock time at 30fps as at 120. 0.940 is roughly a one-second glide. Towards 1 it coasts further; low values cut it short.',
+  touchInertiaMinSpeed: 'Glide stops below this, in poem pixels per millisecond. The decay curve never actually reaches zero, so without a floor the poem creeps indefinitely underneath the auto-scroll.',
+  touchInertiaMaxSpeed: 'Ceiling on release velocity, same units. Digitizers occasionally report one absurd sample as the finger lifts; uncapped, that single sample throws the poem across several stanzas.',
+  touchEdgeGuardPx: 'Width of the strip at each screen edge where a starting touch is cancelled, to stop iOS turning the swipe into back or forward navigation. Needed because touch-action does not reach that gesture — it governs scrolling and zoom, a layer below the browser chrome. The left edge is the one that costs a reader the page: a finger moving right takes the poem backward, so iOS claims exactly the gesture used to re-read a stanza. Apple does not publish the recognition region, thought to be the leftmost 20-30px, and does not support suppressing it, so this is a best guess that can only be judged on a real iPhone. Widen it if a swipe still escapes; 0 turns the guard off.',
   scrollFreezeDebounceMs: 'Delay in milliseconds before particle movement freezes during manual scroll. Higher values make the freeze less hair-trigger.',
   scrollFreezeFadeInMs: 'Duration in milliseconds for particles to fade back in after scroll interaction ends. 0 makes them reappear instantly.',
   backgroundPulsePeriodSec: 'Length of one background pulse cycle in seconds. The fade rests at its base alpha, then briefly spikes to erase accumulated trails. Set to 0 to disable.',

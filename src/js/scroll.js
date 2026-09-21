@@ -11,6 +11,25 @@ let flowBoxesSyncRafId = null;
 let manualScrollDebounceId = null;
 let isManualScrollActive = false;
 let prevLeftActiveOffset = null;
+// The anchor's current offsets, held here rather than read back out of CSS.
+//
+// These used to live as --left-active-offset / --top-active-offset on #anchor,
+// with the stylesheet building the transform out of them. That is a nice way to
+// express it and an expensive way to run it: a custom property INHERITS, so
+// writing one on #anchor invalidates style for its whole subtree — 1155
+// elements of stanzas, lines and word spans — every single scroll frame, to
+// move one element that none of them read the value of.
+//
+// Measured on an emulated phone at 4x throttle, eight hard swipes:
+//
+//   custom properties   1.60s of recalc over 155 passes   10.3ms per pass
+//   direct transform    0.26s of recalc over 268 passes    0.97ms per pass
+//
+// The direct arm ran MORE frames and still spent a sixth of the time. That
+// 10ms a frame was the stutter on a long scroll: it does not show up in a JS
+// profile, because it is not JS.
+let currentLeftActiveOffset = 0;
+let currentTopActiveOffsetPx = 0;
 // Collider position cache — eliminates getBoundingClientRect from the per-frame sync.
 // Populated once on init and on resize; the per-frame sync uses pure arithmetic.
 let colliderAnchorBaseX = null;
@@ -291,11 +310,13 @@ function shiftRingOffsets(deltaLeft, deltaTop) {
         return;
     }
 
+    // 50 stanzas move together here, which is why this is the one place the
+    // cost of the old custom-property + left/top scheme actually showed as a
+    // visible hitch. See setStanzaOffset in presenting.js.
     mourn.scrollZoneData.ring.records.forEach((record) => {
         record.left += deltaLeft;
         record.top += deltaTop;
-        record.el.style.setProperty('--left-offset', record.left);
-        record.el.style.setProperty('--top-offset', record.top);
+        setStanzaOffset(record.el, record.left, record.top);
     });
 }
 
@@ -640,6 +661,7 @@ function scrollInit() {
 
     initPerfProbe();
     createScrollZone();
+    initTouchScroll();
     const ringSeeded = seedFixedCycleRing();
     if (!ringSeeded) {
         console.warn('Falling back to pre-ring start stanza due to seeding failure.');
@@ -735,6 +757,7 @@ function createScrollZone() {
     mourn.scrollZoneData.buffer = document.createElement("div");
     mourn.scrollZoneData.buffer.id = 'scroll-zone-buffer';
     mourn.scrollZoneData.el.append(mourn.scrollZoneData.buffer);
+    applyScrollBufferSize();
 
     // Set the scroll zone's position, but don't track the initial movement as a scroll.
     const rest = getScrollZoneRestPosition();
@@ -775,6 +798,15 @@ function scrollTick(timestamp = null) {
     const rest = getScrollZoneRestPosition();
     setScrollZone(rest.x, rest.y);
 
+    afterScrollDelta();
+}
+
+// Everything that has to happen once a scroll delta has landed in the totals,
+// regardless of which input produced it. Split out of scrollTick when the touch
+// path arrived: a finger reaches applyScrollDelta directly and never touches
+// the scroll box, but it needs the identical stanza check, ring wrap, anchor
+// write and manual-scroll bookkeeping afterwards.
+function afterScrollDelta() {
     // Check to see if we have changed stanzas.
     const stanzaChanged = checkStanzaScroll();
     if (stanzaChanged || isRingWrapCandidate()) {
@@ -809,6 +841,63 @@ function scrollTick(timestamp = null) {
     }, debounceMs);
 }
 
+// Size the buffer, and re-centre the box against the size it now has.
+//
+// This is the ceiling on a single scroll event, so it is the difference between
+// a hard flick scrolling far and a hard flick stopping dead against the wall.
+// See CONFIG.scrollBufferViewports for the measurements.
+function applyScrollBufferSize() {
+    const buffer = mourn.scrollZoneData.buffer;
+    if (!buffer) return;
+    const viewports = Number(CONFIG.scrollBufferViewports);
+    const size = (Number.isFinite(viewports) && viewports > 0 ? viewports : 1.5) * 100;
+    // Written twice on purpose, vw/vh then dvw/dvh. A CSSOM setter validates
+    // what it is given and silently no-ops on a unit the browser does not know,
+    // so on iOS below 15.4 the first assignment is what survives and on anything
+    // newer the second one replaces it. Same fallback as the stylesheets, and
+    // the stylesheet value cannot cover for a failure here because it is dvw too.
+    buffer.style.width = size + 'vw';
+    buffer.style.width = size + 'dvw';
+    buffer.style.height = size + 'vh';
+    buffer.style.height = size + 'dvh';
+    // The rest point is derived from the scrollable range, so it moved.
+    const rest = getScrollZoneRestPosition();
+    setScrollZone(rest.x, rest.y, false);
+}
+window.applyScrollBufferSize = applyScrollBufferSize;
+
+// Turn the box's two-axis movement into the poem's one scroll value.
+//
+// This used to be `|left| > |top| ? left : top` — take whichever axis moved
+// further, discard the other outright. Down and right both advance the poem, so
+// on a diagonal that throws away real travel: measured on the wheel, a 45-degree
+// gesture landed 67% of what the same distance delivered along an axis. It also
+// left the anti-diagonal unstable, because which axis "wins" can change between
+// events and flip the sign with it — that direction measured anywhere from 26%
+// to 75% across runs.
+//
+// Enlarging the scroll buffer made this worse rather than better, which is why
+// it is fixed here and not left alone: with more headroom each event carries
+// more of BOTH axes, so the axis being discarded is a bigger loss than it was.
+//
+// The fix keeps the direction of the plain sum but restores the gesture's true
+// length, so a diagonal is worth its actual distance instead of twice it:
+//
+//   vertical    104% -> 104%    (identical; the wheel feel does not change)
+//   horizontal   96% ->  96%    (identical)
+//   diagonal down-right  67% ->  96%
+//   diagonal up-right    erratic -> 4%, predictably
+//
+// That last row is the deliberate trade. Up-and-right is the one genuinely
+// ambiguous direction — rightward asks to go forward, upward asks to go back —
+// and it now answers close to zero every time instead of a different number
+// every time. A consistent nothing beats an unpredictable something.
+function combineScrollAxes(left, top) {
+    const l1 = Math.abs(left) + Math.abs(top);
+    if (l1 === 0) return 0;
+    return ((left + top) / l1) * Math.hypot(left, top);
+}
+
 // Set the scroll zone and track any movement in a rolling scroll total.
 function setScrollZone(x, y, addToTotal = true) {
     if(scrollDebugV) {
@@ -829,14 +918,9 @@ function setScrollZone(x, y, addToTotal = true) {
 
     // If we want to track the total scrolling...
     if (addToTotal) {
-
-        // Calculate the largest scroll value between vertical and horizontal.
         const left = mourn.scrollZoneData.prevX - mourn.scrollZoneData.el.scrollLeft;
         const top = mourn.scrollZoneData.prevY - mourn.scrollZoneData.el.scrollTop;
-        const leftPower = Math.abs(left);
-        const topPower = Math.abs(top);
-        const maxScroll = (leftPower > topPower ? left : top);
-        applyScrollDelta(maxScroll);
+        applyScrollDelta(combineScrollAxes(left, top));
     }
 }
 
@@ -863,7 +947,7 @@ function setAnchorOffsets(usedSlope = null) {
 
     // Set the left active offset css value.
     const snappedLeftOffset = snapOffset(mourn.scrollZoneData.total.x * -1 + aBBWO);
-    mourn.trackers.anchorStyle.setProperty('--left-active-offset', snappedLeftOffset);
+    currentLeftActiveOffset = snappedLeftOffset;
     if(scrollDebug) {
         dbp('');
         console.log('Previous scroll offset: ' + dbt(mourn.scrollStanza.currentScrollStanzaData.previousScrollOffset));
@@ -892,7 +976,11 @@ function setAnchorOffsets(usedSlope = null) {
     }
     prevLeftActiveOffset = snappedLeftOffset;
     mourn.scrollStanza.currentTopActiveOffset = newTopActiveOffset;
-    mourn.trackers.anchorStyle.setProperty('--top-active-offset', mourn.scrollStanza.currentTopActiveOffset);
+    currentTopActiveOffsetPx = newTopActiveOffset;
+    // transform is not an inherited property, so this invalidates #anchor and
+    // nothing below it. See currentLeftActiveOffset for the measurements.
+    mourn.trackers.anchorStyle.transform =
+        'translate3d(' + snappedLeftOffset + 'px,' + newTopActiveOffset + 'px,0)';
     queueFlowFieldBoxSync();
 }
 
@@ -1054,6 +1142,309 @@ function checkStanzaScroll() {
 
     return false;
 }
+// ---------------------------------------------------------------------------
+// Touch input — read the finger, not the scroll box.
+//
+// The hidden scroll box is a good input device for a wheel, which arrives as
+// many small discrete deltas, and a bad one for a finger. Two limits fall out
+// of re-centring the box after every event:
+//
+//   1. A gesture cap. No single scroll event can report more travel than the
+//      box has room for, which on a 390px phone is 62.5px across and 176px
+//      down. Everything past that is clamped away in silence.
+//   2. Events arrive on the main thread, so the capture rate is the sim's
+//      frame rate. A busy phone delivers two or three events for a whole
+//      swipe, not twenty.
+//
+// Measured on an emulated iPhone 14 at 24fps: a 300px swipe arrived as ONE
+// 193.6px step and landed between 15% and 105% of its distance depending on
+// speed and axis. The poem's velocity does not track the finger's, and that
+// non-proportionality is what a reader sees as jumping.
+//
+// pointermove already carries the displacement, so none of that indirection is
+// needed. This reads it straight and hands it to the same applyScrollDelta the
+// box path uses. With touch-action: none the browser stops scrolling the box
+// on touch, so the two paths never both fire; wheel and keys are untouched.
+// ---------------------------------------------------------------------------
+
+let touchPointerId = null;
+let touchLastX = 0;
+let touchLastY = 0;
+let touchLastMoveTs = 0;
+let touchVelocity = 0;
+let touchInertiaRafId = null;
+let touchPendingDelta = 0;
+let touchCommitRafId = null;
+let touchListenersBound = false;
+
+// How a two-axis finger becomes the poem's one-dimensional scroll value.
+//
+// setScrollZone takes whichever raw axis moved further and throws the other
+// away. That is what costs a diagonal swipe its distance — measured on desktop
+// at 61fps, with no clipping involved at all, a 45-degree swipe landed 55-80%
+// of what the same travel delivered along an axis. Every finger swipe is
+// diagonal to some degree, so the touch path cannot afford it.
+//
+// Both axes therefore contribute, but NOT equally, and not by the geometry
+// either. Three formulations were measured on an emulated phone, 300px swipes
+// in all eight directions:
+//
+//   dx + dy (equal authority). Cardinals land 101-109%, which matches the box
+//     path exactly. But down-right overshoots to 152% and up-right collapses to
+//     4% — it sits on the null line, so one of the most natural swipes on a
+//     phone does nothing at all. Rejected on that measurement.
+//
+//   Projection onto the poem's travel direction, (dx + dy*slope)/(1+slope^2).
+//     Geometrically honest and never cancels in any common direction, but the
+//     stanzas run at slopes of 0.20-0.30 — a shallow, nearly horizontal
+//     diagonal — so a vertical swipe weighs about 0.23. That is roughly four
+//     times weaker than today for the one gesture phone readers reach for
+//     first. Right for the geometry, wrong for the hand.
+//
+//   Per-axis weights, dx + dy*w, which is what ships. Horizontal stays exact at
+//     1:1, vertical keeps whatever authority w grants it, and the null moves off
+//     to dx = -w*dy where no cardinal or 45-degree gesture lands. Nothing
+//     cancels and nothing overshoots.
+//
+// w is touchVerticalWeight, and it is a feel judgement rather than a derivable
+// number, which is why it is on the panel: 1 restores equal authority and the
+// 45-degree null with it, and the stanza slope restores the pure projection.
+//
+// The result is NEGATED, which is not cosmetic and was got wrong first time.
+// The box path does not measure the gesture; it measures setScrollZone's
+// prev - current, which is how far the box travelled back toward its rest
+// point, and that is the negation of how far the gesture pushed it out. A raw
+// finger delta therefore arrives with the opposite sign to the value this
+// poem has always been driven by. Measured on the same synthesized gesture,
+// reading the finger directly rather than trusting a tool's axis convention:
+// finger right 315px gives the box path -307 and, unnegated, this path +442.
+function touchDeltaFromPointer(dx, dy) {
+    return -(dx + dy * CONFIG.touchVerticalWeight) * CONFIG.touchScrollGain;
+}
+
+function stopTouchInertia() {
+    if (touchInertiaRafId !== null) {
+        window.cancelAnimationFrame(touchInertiaRafId);
+        touchInertiaRafId = null;
+    }
+}
+
+// Reading the finger at full rate and ACTING on it at full rate are different
+// things, and conflating them is what made the first version of this stutter.
+//
+// What hangs off a committed delta is not cheap: setAnchorOffsets reaches
+// window.applyManualScrollDelta, which walks every particle in the sketch to
+// drag the frozen ones along with the poem. That is fine once a frame. It is
+// not fine once per pointermove — a digitizer runs at 60-120Hz against a sim
+// that may be drawing at 24, and when the main thread falls behind the queued
+// moves arrive in a burst, so several full particle passes land back to back
+// on a thread that was already late. The box path never had this problem
+// because queueScrollTick coalesced it into one rAF; bypassing the box dropped
+// that coalescing on the floor along with everything else.
+//
+// So the finger is still read at full resolution — every coalesced sample is
+// summed, nothing is thrown away — and the accumulated total is spent once per
+// frame. Distance is preserved exactly; only the redundant work is gone.
+function flushTouchDelta() {
+    const delta = touchPendingDelta;
+    touchPendingDelta = 0;
+    if (delta === 0) return;
+    applyScrollDelta(delta);
+    afterScrollDelta();
+}
+
+function queueTouchCommit() {
+    if (touchCommitRafId !== null) return;
+    touchCommitRafId = window.requestAnimationFrame(() => {
+        touchCommitRafId = null;
+        flushTouchDelta();
+    });
+}
+
+function startTouchInertia() {
+    stopTouchInertia();
+    if (!CONFIG.enableTouchInertia) return;
+    if (Math.abs(touchVelocity) < CONFIG.touchInertiaMinSpeed) return;
+
+    let prevTs = null;
+    const step = (ts) => {
+        if (prevTs === null) prevTs = ts;
+        // A long frame must not launch the poem across a stanza. Same reasoning
+        // as autoScrollDeltaCapMultiple, and the same failure it guards.
+        const dt = Math.min(ts - prevTs, 64);
+        prevTs = ts;
+
+        // Expressed per 16.67ms so the glide lasts the same wall-clock time on
+        // a 120Hz phone as on one struggling at 24.
+        touchVelocity *= Math.pow(CONFIG.touchInertiaDecay, dt / 16.667);
+
+        if (Math.abs(touchVelocity) < CONFIG.touchInertiaMinSpeed) {
+            touchInertiaRafId = null;
+            return;
+        }
+
+        // Already inside a rAF, so this spends the delta now rather than
+        // queueing a second frame to do it.
+        touchPendingDelta += touchVelocity * dt;
+        flushTouchDelta();
+        touchInertiaRafId = window.requestAnimationFrame(step);
+    };
+    touchInertiaRafId = window.requestAnimationFrame(step);
+}
+
+function onTouchPointerDown(event) {
+    if (!CONFIG.enableTouchScroll) return;
+    if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
+    // One finger drives the poem. A second landing mid-gesture would otherwise
+    // fight the first, and a pinch would read as an enormous swipe.
+    if (touchPointerId !== null) return;
+
+    stopTouchInertia();
+    touchPointerId = event.pointerId;
+    touchLastX = event.clientX;
+    touchLastY = event.clientY;
+    touchLastMoveTs = event.timeStamp;
+    touchVelocity = 0;
+
+    // Capture so a finger that slides off the scroll zone — onto the controls,
+    // or past the edge of the glass — keeps feeding this handler rather than
+    // silently ending the gesture wherever it crossed.
+    try { event.target.setPointerCapture(event.pointerId); } catch {}
+}
+
+function onTouchPointerMove(event) {
+    if (touchPointerId !== event.pointerId) return;
+
+    // A 120Hz digitizer feeding a 30fps render loop delivers four samples per
+    // frame and the browser hands over only the last one unless asked. The
+    // other three are real finger travel; dropping them is the same distance
+    // loss the box path was already guilty of.
+    const samples = typeof event.getCoalescedEvents === 'function'
+        ? event.getCoalescedEvents()
+        : null;
+    const points = (samples && samples.length) ? samples : [event];
+
+    let total = 0;
+    for (let i = 0; i < points.length; i++) {
+        const point = points[i];
+        const delta = touchDeltaFromPointer(point.clientX - touchLastX, point.clientY - touchLastY);
+        const dt = point.timeStamp - touchLastMoveTs;
+        touchLastX = point.clientX;
+        touchLastY = point.clientY;
+        touchLastMoveTs = point.timeStamp;
+        total += delta;
+
+        // Velocity for the glide, smoothed over the last few samples so one
+        // jittery reading near lift-off does not decide the whole throw.
+        if (dt > 0) {
+            const instant = delta / dt;
+            touchVelocity = touchVelocity * 0.7 + instant * 0.3;
+        }
+    }
+
+    if (total !== 0) {
+        touchPendingDelta += total;
+        queueTouchCommit();
+    }
+}
+
+function onTouchPointerUp(event) {
+    if (touchPointerId !== event.pointerId) return;
+    touchPointerId = null;
+    try { event.target.releasePointerCapture(event.pointerId); } catch {}
+
+    // Digitizers occasionally report one absurd sample as contact breaks.
+    const cap = CONFIG.touchInertiaMaxSpeed;
+    if (touchVelocity > cap) touchVelocity = cap;
+    else if (touchVelocity < -cap) touchVelocity = -cap;
+
+    startTouchInertia();
+}
+
+function onTouchPointerCancel(event) {
+    if (touchPointerId !== event.pointerId) return;
+    touchPointerId = null;
+    // Cancelled is not released: the system took the gesture away (a call, a
+    // system edge swipe), which is not a throw and should not glide.
+    touchVelocity = 0;
+    stopTouchInertia();
+}
+
+// iOS turns a swipe that begins at the screen edge into back/forward
+// navigation. touch-action does not reach that gesture: it governs scrolling and
+// zoom, one layer below the browser's own chrome, so the box can be locked down
+// completely and the page will still be navigated away from underneath it.
+//
+// The collision is not incidental. A finger moving right takes the poem
+// backward — touchDeltaFromPointer negates, and setAnchorOffsets writes
+// -total.x — so the gesture iOS claims from the left edge is precisely the one a
+// reader makes to go back over a stanza. The right edge is the mirror case and
+// only bites once they have already gone back at least once.
+//
+// preventDefault on touchstart, for a touch that starts inside the gutter, is
+// the only lever there is. It is undocumented WebKit behaviour rather than an
+// API, Apple has narrowed it before, and it cannot be verified anywhere but on a
+// real iPhone. Hence a control and not a constant: widen it if a swipe still
+// escapes, set it to 0 if cancelling touchstart costs more than it saves.
+//
+// Read live from CONFIG rather than cached, so the panel and the URL param take
+// effect without rebinding. pointerdown fires before touchstart, so cancelling
+// here costs the pointer path nothing — onTouchPointerDown has already run and
+// the gesture is live by the time this is reached.
+function onTouchEdgeGuard(event) {
+    const gutter = Number(CONFIG.touchEdgeGuardPx);
+    if (!(gutter > 0)) return;
+    const viewportWidth = window.innerWidth;
+    const touches = event.changedTouches;
+    for (let i = 0; i < touches.length; i++) {
+        const x = touches[i].clientX;
+        if (x <= gutter || x >= viewportWidth - gutter) {
+            if (event.cancelable) event.preventDefault();
+            return;
+        }
+    }
+}
+
+// touch-action is what stops the browser scrolling the box under our feet, so
+// it has to track the toggle rather than being set once in the stylesheet.
+// Called at init and from the control panel.
+function applyTouchScrollMode() {
+    const el = mourn.scrollZoneData.el;
+    if (!el) return;
+    el.style.touchAction = CONFIG.enableTouchScroll ? 'none' : '';
+    if (!CONFIG.enableTouchScroll) {
+        touchPointerId = null;
+        touchVelocity = 0;
+        touchPendingDelta = 0;
+        if (touchCommitRafId !== null) {
+            window.cancelAnimationFrame(touchCommitRafId);
+            touchCommitRafId = null;
+        }
+        stopTouchInertia();
+    }
+}
+window.applyTouchScrollMode = applyTouchScrollMode;
+
+function initTouchScroll() {
+    const el = mourn.scrollZoneData.el;
+    if (!el || touchListenersBound) return;
+    touchListenersBound = true;
+    // Non-passive on move: with touch-action none there is nothing left to
+    // cancel, but leaving the option open costs nothing and a browser that
+    // ignores touch-action still needs the preventDefault.
+    el.addEventListener('pointerdown', onTouchPointerDown, { passive: true });
+    el.addEventListener('pointermove', onTouchPointerMove, { passive: false });
+    el.addEventListener('pointerup', onTouchPointerUp, { passive: true });
+    el.addEventListener('pointercancel', onTouchPointerCancel, { passive: true });
+    // Bound regardless of what enableTouchScroll says, and non-passive because
+    // a passive listener's preventDefault is ignored. The navigation gesture
+    // takes the page away from the box path just as readily as from this one,
+    // so the guard is about the browser rather than about which input path is
+    // in force; touchEdgeGuardPx set to 0 is what turns it off.
+    el.addEventListener('touchstart', onTouchEdgeGuard, { passive: false });
+    applyTouchScrollMode();
+}
+
 function queueScrollTick() {
     if (scrollTickRafId !== null) {
         return;
@@ -1099,15 +1490,9 @@ function cacheColliderPositions() {
 
     // One getBoundingClientRect on the anchor to establish the base position.
     const anchorBB = mourn.trackers.anchor.getBoundingClientRect();
-    const leftActive = parseFloat(
-        mourn.trackers.anchorStyle.getPropertyValue('--left-active-offset')
-    ) || 0;
-    const topActive = parseFloat(
-        mourn.trackers.anchorStyle.getPropertyValue('--top-active-offset')
-    ) || 0;
     // Base position = screen position minus the current transform offsets.
-    colliderAnchorBaseX = anchorBB.left - leftActive;
-    colliderAnchorBaseY = anchorBB.top - topActive;
+    colliderAnchorBaseX = anchorBB.left - currentLeftActiveOffset;
+    colliderAnchorBaseY = anchorBB.top - currentTopActiveOffsetPx;
 
     // Cache each stanza's word positions relative to the stanza's top-left corner.
     for (let i = 0; i < ring.stanzas.length; i++) {
@@ -1147,15 +1532,9 @@ function syncFlowFieldBoxesFromPoem() {
     const ring = mourn.scrollZoneData.ring;
     if (!ring || !colliderCacheReady) return;
 
-    // Read current active offsets from the values JS already set (no layout).
-    const leftActive = parseFloat(
-        mourn.trackers.anchorStyle.getPropertyValue('--left-active-offset')
-    ) || 0;
-    const topActive = parseFloat(
-        mourn.trackers.anchorStyle.getPropertyValue('--top-active-offset')
-    ) || 0;
-    const anchorX = colliderAnchorBaseX + leftActive;
-    const anchorY = colliderAnchorBaseY + topActive;
+    // The values JS already set, straight from the variables holding them.
+    const anchorX = colliderAnchorBaseX + currentLeftActiveOffset;
+    const anchorY = colliderAnchorBaseY + currentTopActiveOffsetPx;
 
     const viewportMargin = 240;
     const minX = -viewportMargin;

@@ -1,11 +1,45 @@
+// Every dvh/dvw in this file is preceded by the same declaration in vh/vw.
+// That pair is the whole fallback: dvh needs iOS 15.4 (March 2022), and an older
+// parser drops the line it cannot read at parse time and keeps the one above it,
+// while anything newer takes the later of the two. No @supports needed, and the
+// build is plain sass with no autoprefixer, so nothing adds this for us.
+//
+// The two are NOT equivalent, which is the point of the unit: vh is the LARGE
+// viewport, measured with the URL bar retracted, so on an old iPhone 100vh is
+// taller than what the reader can see. That is the behaviour this piece shipped
+// with before dvh, and with overflow: hidden and fixed positioning throughout,
+// the difference costs nothing visible. It is a floor, not a second best.
+
 html,
 body {
     margin: 0;
     width: 100vw;
+    width: 100dvw;
     height: 100vh;
+    height: 100dvh;
     min-width: 100vw;
+    min-width: 100dvw;
     min-height: 100vh;
+    min-height: 100dvh;
     overflow: hidden;
+    // WebKit may inflate text of its own accord — "text autosizing", meant to
+    // rescue desktop-width pages on a phone. It is very likely already inert
+    // here, because it keys off a layout viewport wider than the screen and
+    // the viewport meta pins that to device-width. This is a guard against the
+    // versions where it is not, and against rotation, which is where it has
+    // historically been seen to fire.
+    //
+    // It matters more here than on an ordinary page: the collider boxes are
+    // measured once from the laid-out text and never re-measured, so type that
+    // changes size after load leaves every box describing a word that is no
+    // longer that size. Cheap insurance against an invariant that has no other
+    // defence.
+    //
+    // 100% and not none: none disabled pinch-zoom outright in older iOS Safari,
+    // which trades a hypothetical layout bug for a real accessibility one.
+    // 100% stops the inflation and leaves the reader's own zoom alone.
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     // background: rgb(130 0 0);
     // background: radial-gradient(circle, rgb(130 0 0) 0%, rgb(98 8 8) 76%, rgb(64 7 7) 100%);
     background: black;
@@ -16,9 +50,13 @@ body {
     position: fixed;
     inset: 0;
     width: 100vw;
+    width: 100dvw;
     height: 100vh;
+    height: 100dvh;
     min-width: 100vw;
+    min-width: 100dvw;
     min-height: 100vh;
+    min-height: 100dvh;
     z-index: 0;
     pointer-events: none;
     overflow: hidden;
@@ -28,8 +66,12 @@ body {
         inset: 0;
         display: block;
         width: 100vw !important;
+        width: 100dvw !important;
+        height: 100vh !important;
         height: 100dvh !important;
         min-width: 100vw;
+        min-width: 100dvw;
+        min-height: 100vh;
         min-height: 100dvh;
         max-width: none;
         max-height: none;
@@ -71,6 +113,8 @@ body {
     inset: 0;
     display: block;
     width: 100vw;
+    width: 100dvw;
+    height: 100vh;
     height: 100dvh;
     z-index: 4;
     pointer-events: none;
@@ -82,6 +126,8 @@ body {
     inset: 0;
     display: block;
     width: 100vw;
+    width: 100dvw;
+    height: 100vh;
     height: 100dvh;
     z-index: 5;
     pointer-events: none;
@@ -251,8 +297,12 @@ body {
 
     .stanza {
         position: absolute;
-        left: calc((var(--left-offset, 0px)* 1px));
-        top: calc((var(--top-offset, 0px)* 1px));
+        // Written by setStanzaOffset as a transform. Not left/top from custom
+        // properties: those inherit (invalidating every word below) and
+        // left/top force layout, which made every ring wrap a frame spike.
+        left: 0;
+        top: 0;
+        transform: translate3d(0, 0, 0);
 
         span {
             filter: var(--word-shadow, none);
@@ -274,16 +324,18 @@ body {
     }
 
     #anchor {
-        --left-active-offset: 0;
-        --top-active-offset: 0;
+
         position: relative;
         left: 0;
         top: 0;
-        transform: translate3d(
-            calc(var(--left-active-offset, 0) * 1px),
-            calc((var(--top-active-offset, 0) + var(--static-offset, 0)) * 1px),
-            0
-        );
+        // Written by setAnchorOffsets as a whole transform, not assembled here
+        // from custom properties. Those inherit, so writing one on #anchor cost
+        // a style recalc of all 1155 elements beneath it on every scroll frame
+        // — 10.3ms a frame against 0.97ms for this. See scroll.js.
+        //
+        // --static-offset went with them: it was read here with a fallback of 0
+        // and set precisely nowhere, so it had always been 0.
+        transform: translate3d(0, 0, 0);
         will-change: transform;
 
         display: flex;
@@ -308,6 +360,7 @@ body {
     z-index: 99999;
     width: 300px;
     max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
     overflow: auto;
     padding: 12px;
     border-radius: 8px;
@@ -865,6 +918,7 @@ body {
 @media (max-width: 900px) {
     #dune-controls {
         width: min(86vw, 320px);
+        width: min(86dvw, 320px);
     }
 }
 

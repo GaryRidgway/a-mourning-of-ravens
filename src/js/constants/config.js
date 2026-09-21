@@ -101,7 +101,27 @@ const CONFIG = {
   //
   // Distinct from Auto Render Scale, which shrinks the canvas in CSS pixels and
   // lets the browser upscale. The two multiply.
-  maxPixelDensity: 0,
+  //
+  // 2 rather than 0, and the reason is memory rather than fill rate. min() means
+  // this is inert on every display at ratio 2 or below, which is all of desktop
+  // and every projector — it binds only on a ratio-3 phone. Measured on an
+  // iPhone 14: at the display's own ratio the three backing stores are
+  // 1170x2532 each, 34.2 MB together, and applyPixelDensity(true) snapshots all
+  // three before resizing, so a single step of the auto ladder peaks near 60 MB.
+  // Capping at 2 takes the steady state to 15.2 MB.
+  //
+  // The reason a frame-rate controller cannot be left to handle this: iOS
+  // Safari has an unpublished per-tab canvas budget, and crossing it does not
+  // make the piece slow, it makes WebKit stop honouring the allocation. The
+  // canvas goes blank or the tab is reloaded, with frame times healthy right up
+  // to the moment there is nothing left to draw. enableAutoPixelDensity watches
+  // avgFrameMs and the cull depth, so it never sees this coming.
+  //
+  // Cheap in a way it would not be for most pieces: the poem is DOM text, so
+  // the canvases carry only the particle and ink field. Type sharpness is
+  // untouched at any density. Set 0 to lift the cap where memory is not the
+  // constraint and trail sharpness is worth more.
+  maxPixelDensity: 2,
   // Let the piece drop its own resolution when it cannot hold the target frame
   // rate, and pick it back up when it can. Steps down through 1x, 0.75x, 0.6x
   // and 0.5x of whatever maxPixelDensity and the display allow, so the last rung
@@ -389,6 +409,72 @@ const CONFIG = {
   wordOffsetY: 0,
   scrollFreezeDebounceMs: 50,
   scrollFreezeFadeInMs: 1960,
+
+  // --- Touch input -------------------------------------------------------
+  //
+  // The hidden scroll box is a good input device for a wheel, which arrives as
+  // many small discrete deltas, and a poor one for a finger. The box is
+  // re-centred after every scroll event, so no single event can report more
+  // travel than the box has room for — 62.5px horizontally on a 390px phone —
+  // and the browser fires those events on the main thread, so a loaded sim gets
+  // two or three of them for a whole swipe rather than twenty.
+  //
+  // Measured on an emulated iPhone 14 at 24fps: a 300px swipe arrived as ONE
+  // 193.6px step, and delivered between 15% and 105% of its distance depending
+  // on speed and axis. That non-proportionality is what reads as jumping — the
+  // poem's velocity simply does not track the finger's.
+  //
+  // A finger needs none of that indirection. pointermove already carries the
+  // displacement. Off falls back to the scroll box, which is how to A/B it.
+  // How many viewports of slack the hidden scroll box gets per axis, which is
+  // the ceiling on how much travel ONE scroll event can report.
+  //
+  // The box is re-centred after every event, so its headroom is the largest
+  // delta the wheel path can ever see. At the old 1.5 that was 62.5px across
+  // and 176px down on a 390px phone, and scrolling harder than that did not
+  // scroll further — it hit the wall and the remainder was discarded in
+  // silence. Measured, 600px of wheel at rising speed: 103% delivered at
+  // 1500px/s, 74% at 4000, 62% at 10000, with every clipped step landing on
+  // exactly 193.6px (176 x the 1.1 speed multiplier). That is the scroll
+  // stopping under a hard flick.
+  //
+  // 5 buys 745px across and 1653px down, which no single event reaches. The
+  // buffer is an empty div: it is never painted and costs nothing to enlarge,
+  // which is why this is generous rather than merely sufficient.
+  scrollBufferViewports: 5,
+  enableTouchScroll: true,
+  // Multiplies finger displacement before it reaches applyScrollDelta, which
+  // then applies scrollSpeedMultiplier on top exactly as it does for a wheel.
+  // 1 means a finger moves the poem as far as the box path would have, had the
+  // box had room. Below 1 the poem lags the finger; above 1 it outruns it.
+  touchScrollGain: 1,
+  // How much a vertical finger counts for against a horizontal one. The poem
+  // runs at a slope of 0.20-0.30, so the geometry says 0.23 and the hand says 1;
+  // see touchDeltaFromPointer for the measurements behind splitting them. 1
+  // gives both axes equal authority and puts a null on the up-right diagonal.
+  touchVerticalWeight: 0.6,
+  // A finger that leaves the glass mid-gesture should not stop the poem dead —
+  // the box path got its glide free from the platform's momentum scrolling, and
+  // bypassing the box means bringing our own.
+  enableTouchInertia: true,
+  // Velocity retained per 16.67ms, applied as pow(decay, dt/16.67) so the glide
+  // lasts the same wall-clock time at 30fps as at 120. 0.94 is about a second.
+  // Towards 1 the poem coasts further; at 0 the glide is gone.
+  touchInertiaDecay: 0.88,
+  // Glide stops below this, in poem px per ms. Without a floor the exponential
+  // never reaches zero and the poem creeps for minutes under the auto-scroll.
+  touchInertiaMinSpeed: 0.02,
+  // Ceiling on release velocity, same units. A digitizer occasionally reports
+  // one absurd sample as the finger lifts; uncapped, that one sample throws the
+  // poem across several stanzas.
+  touchInertiaMaxSpeed: 3,
+  // Width in CSS px of the strip at each screen edge where touchstart is
+  // cancelled, to stop iOS reading an edge swipe as back/forward navigation.
+  // See onTouchEdgeGuard for why this is the only available lever and why it
+  // cannot be tested off-device. iOS's own recognition region is roughly the
+  // leftmost 20-30px and is not published, so 28 is an educated guess with room
+  // on the slider either side of it. 0 disables the guard entirely.
+  touchEdgeGuardPx: 28,
   backgroundPulsePeriodSec: 30.7,
   // Phase→strength keyframes 'x,y|x,y|…' (both 0..1), monotone-cubic sampled.
   // y maps directly to fade alpha: 1.0 = full 255 wipe.

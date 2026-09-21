@@ -2,10 +2,16 @@ html,
 body {
   margin: 0;
   width: 100vw;
+  width: 100dvw;
   height: 100vh;
+  height: 100dvh;
   min-width: 100vw;
+  min-width: 100dvw;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   background: black;
   font-family: "Cinzel", serif;
 }
@@ -14,9 +20,13 @@ body {
   position: fixed;
   inset: 0;
   width: 100vw;
+  width: 100dvw;
   height: 100vh;
+  height: 100dvh;
   min-width: 100vw;
+  min-width: 100dvw;
   min-height: 100vh;
+  min-height: 100dvh;
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
@@ -26,8 +36,12 @@ body {
   inset: 0;
   display: block;
   width: 100vw !important;
+  width: 100dvw !important;
+  height: 100vh !important;
   height: 100dvh !important;
   min-width: 100vw;
+  min-width: 100dvw;
+  min-height: 100vh;
   min-height: 100dvh;
   max-width: none;
   max-height: none;
@@ -45,6 +59,8 @@ body {
   inset: 0;
   display: block;
   width: 100vw;
+  width: 100dvw;
+  height: 100vh;
   height: 100dvh;
   z-index: 4;
   pointer-events: none;
@@ -55,6 +71,8 @@ body {
   inset: 0;
   display: block;
   width: 100vw;
+  width: 100dvw;
+  height: 100vh;
   height: 100dvh;
   z-index: 5;
   pointer-events: none;
@@ -182,8 +200,9 @@ body {
 }
 #poem-container .stanza {
   position: absolute;
-  left: calc(var(--left-offset, 0px) * 1px);
-  top: calc(var(--top-offset, 0px) * 1px);
+  left: 0;
+  top: 0;
+  transform: translate3d(0, 0, 0);
 }
 #poem-container .stanza span {
   filter: var(--word-shadow, none);
@@ -201,12 +220,10 @@ body {
   color: transparent;
 }
 #poem-container #anchor {
-  --left-active-offset: 0;
-  --top-active-offset: 0;
   position: relative;
   left: 0;
   top: 0;
-  transform: translate3d(calc(var(--left-active-offset, 0) * 1px), calc((var(--top-active-offset, 0) + var(--static-offset, 0)) * 1px), 0);
+  transform: translate3d(0, 0, 0);
   will-change: transform;
   display: flex;
 }
@@ -228,6 +245,7 @@ body {
   z-index: 99999;
   width: 300px;
   max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
   overflow: auto;
   padding: 12px;
   border-radius: 8px;
@@ -719,6 +737,7 @@ body {
 @media (max-width: 900px) {
   #dune-controls {
     width: min(86vw, 320px);
+    width: min(86dvw, 320px);
   }
 }
 #simulation-pause-toggle {

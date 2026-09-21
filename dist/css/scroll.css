@@ -82,7 +82,9 @@
   overflow: scroll;
 }
 #scroll-zone #scroll-zone-buffer {
+  width: 150vw;
   width: 150dvw;
+  height: 150vh;
   height: 150dvh;
 }
 

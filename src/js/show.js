@@ -132,8 +132,11 @@
   // wheel and touchmove must be non-passive or preventDefault is ignored and
   // the page scrolls anyway.
   const PASSIVE_FALSE = { capture: true, passive: false };
+  // pointerdown/move/up are here because the touch scroll path reads those
+  // rather than touchstart/touchmove — without them lockScroll would still
+  // block a wheel and let a finger through.
   for (const type of ['wheel', 'touchstart', 'touchmove', 'touchend', 'gesturestart',
-    'gesturechange', 'gestureend']) {
+    'gesturechange', 'gestureend', 'pointerdown', 'pointermove', 'pointerup']) {
     window.addEventListener(type, killScroll, PASSIVE_FALSE);
   }
   // Only the press, plus the interactions that ride on it. mousedown is what

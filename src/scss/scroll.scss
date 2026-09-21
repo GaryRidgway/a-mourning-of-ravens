@@ -91,8 +91,14 @@
     top: 0;
     overflow: scroll;
 
+    // vh/vw first, then dvh/dvw — see the note at the top of poem.scss. This
+    // one is load-bearing rather than belt-and-braces: with no size here the box
+    // has no scrollable range at all, so the wheel path stops working outright.
+    // applyScrollBufferSize() overwrites both of these, the same way.
     #scroll-zone-buffer {
+        width: 150vw;
         width: 150dvw;
+        height: 150vh;
         height: 150dvh;
     }
 }
