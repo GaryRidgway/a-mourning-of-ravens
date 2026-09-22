@@ -144,10 +144,19 @@
   // drag is dead at the source and mousemove can still reach the sketch — which
   // is what keeps the wake swirl following the cursor.
   //
-  // Note what is absent: 'scroll'. That is the consequence, fired by the poem's
-  // own auto-scroll, and swallowing it would break the piece rather than protect
-  // it the day anything starts listening for it.
-  for (const type of ['pointerdown', 'mousedown', 'click', 'dblclick', 'auxclick',
+  // Note what is absent: 'pointerdown'. p5 does not listen to pointer events at
+  // all — it drives the collider drag off mousedown/touchstart — so blocking
+  // pointerdown does nothing for the drag. What it DOES do is stop the finger
+  // reaching the scroll zone, which reads pointer events, killing the pinch-zoom
+  // and finger-scroll the show build means to allow. So pointerdown belongs to
+  // the scroll lock (below), not here. mousedown still guards the mouse drag;
+  // the touch drag rides p5's touchstart, which this list never governed, so
+  // removing pointerdown changes nothing about drag protection either way.
+  //
+  // Also absent: 'scroll'. That is the consequence, fired by the poem's own
+  // auto-scroll, and swallowing it would break the piece rather than protect it
+  // the day anything starts listening for it.
+  for (const type of ['mousedown', 'click', 'dblclick', 'auxclick',
     'contextmenu', 'dragstart', 'selectstart']) {
     window.addEventListener(type, killDrag, CAPTURE);
   }
